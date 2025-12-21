@@ -1,7 +1,8 @@
+
 import React from 'react';
 import { Button } from './Button';
 import { AspectRatio, ImageSize } from '../types';
-import { Settings2, GitMerge, Video, Layers, Zap, LayoutGrid, ChevronRight, ChevronLeft } from 'lucide-react';
+import { Settings2, GitMerge, Video, Layers, Zap, LayoutGrid, ChevronRight, ChevronLeft, XCircle, PlusCircle, Square } from 'lucide-react';
 
 interface DirectorDeckProps {
   gridRows: number;
@@ -15,10 +16,12 @@ interface DirectorDeckProps {
   prompt: string;
   setPrompt: (text: string) => void;
   onGenerate: () => void;
+  onStop?: () => void;
   isGenerating: boolean;
   onEnhancePrompt?: () => void;
   onGenerateCamera?: () => void;
   isContinuing?: boolean;
+  onDeselect?: () => void;
 }
 
 export const DirectorDeck: React.FC<DirectorDeckProps> = ({
@@ -33,10 +36,12 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
   prompt,
   setPrompt,
   onGenerate,
+  onStop,
   isGenerating,
   onEnhancePrompt,
   onGenerateCamera,
-  isContinuing = false
+  isContinuing = false,
+  onDeselect
 }) => {
   
   const getQualityLabel = () => {
@@ -178,15 +183,24 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
                 创作指令 (DIRECTOR PROMPT)
             </label>
             
-            {isContinuing && (
-                <div className="flex items-center gap-1.5 bg-cine-accent/5 text-cine-accent px-2.5 py-1 rounded-full border border-cine-accent/20 animate-in fade-in duration-500 shadow-[0_0_10px_rgba(255,122,0,0.05)]">
-                    <GitMerge size={10} />
-                    <span className="text-[8px] font-mono tracking-widest font-bold">CONTINUITY ON</span>
+            {isContinuing ? (
+                <button 
+                  onClick={onDeselect}
+                  className="flex items-center gap-1.5 bg-cine-accent/5 text-cine-accent px-2.5 py-1 rounded-full border border-cine-accent/40 animate-in fade-in duration-500 shadow-[0_0_10px_rgba(255,122,0,0.1)] hover:bg-cine-accent/20 transition-all group"
+                >
+                    <GitMerge size={10} className="group-hover:rotate-180 transition-transform duration-500" />
+                    <span className="text-[8px] font-mono tracking-widest font-bold">续写模式 (CONTINUE)</span>
+                    <XCircle size={10} className="opacity-60" />
+                </button>
+            ) : (
+                <div className="flex items-center gap-1.5 text-zinc-600 px-2.5 py-1 font-mono text-[8px] tracking-widest">
+                    <PlusCircle size={10} />
+                    <span>独立创作模式 (NEW)</span>
                 </div>
             )}
         </div>
         
-        <div className={`relative flex-1 group transition-all duration-500 overflow-hidden rounded-sm ${isContinuing ? 'ring-1 ring-cine-accent/20' : 'ring-1 ring-zinc-800/50 focus-within:ring-cine-accent/30'}`}>
+        <div className={`relative flex-1 group transition-all duration-500 overflow-hidden rounded-sm ${isContinuing ? 'ring-1 ring-cine-accent/20 border border-cine-accent/30' : 'ring-1 ring-zinc-800/50 focus-within:ring-cine-accent/30 border border-transparent'}`}>
             <textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
@@ -215,19 +229,32 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
           </div>
       )}
 
-      {/* Generate Button */}
-      <Button 
-        variant="accent" 
-        className="w-full py-4.5 tracking-[0.25em] uppercase font-mono text-[10px] font-bold relative overflow-hidden group transition-all duration-500 h-12"
-        onClick={onGenerate}
-        disabled={isGenerating || !prompt.trim()}
-      >
-        <span className="relative z-10 flex items-center justify-center gap-3">
-            {isGenerating ? <Zap size={14} className="animate-spin" /> : (isContinuing ? <GitMerge size={14} /> : <Layers size={14} />)}
-            {isGenerating ? '系统渲染中...' : (isContinuing ? '连续创作 (CONTINUE)' : '执行 渲染 (EXECUTE)')}
-        </span>
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:animate-[shimmer_2s_infinite] pointer-events-none" />
-      </Button>
+      {/* Action Button Group */}
+      <div className="flex gap-2">
+        {isGenerating && onStop ? (
+            <Button 
+                variant="primary"
+                className="flex-1 py-4.5 tracking-[0.25em] uppercase font-mono text-[10px] font-bold h-12 border-red-900/30 text-red-500 hover:bg-red-500/10"
+                onClick={onStop}
+            >
+                <Square size={14} className="mr-2" fill="currentColor" /> 停止渲染 (STOP)
+            </Button>
+        ) : (
+            <Button 
+                variant="accent" 
+                className="w-full py-4.5 tracking-[0.25em] uppercase font-mono text-[10px] font-bold relative overflow-hidden group transition-all duration-500 h-12"
+                onClick={onGenerate}
+                disabled={isGenerating || !prompt.trim()}
+            >
+                <span className="relative z-10 flex items-center justify-center gap-3">
+                    {isGenerating ? <Zap size={14} className="animate-spin" /> : (isContinuing ? <GitMerge size={14} /> : <Layers size={14} />)}
+                    {isGenerating ? '渲染中...' : (isContinuing ? '续写当前分镜' : '执行 新渲染')}
+                </span>
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:animate-[shimmer_2s_infinite] pointer-events-none" />
+            </Button>
+        )}
+      </div>
+
       <style>{`
           @keyframes shimmer {
             100% { transform: translateX(100%); }

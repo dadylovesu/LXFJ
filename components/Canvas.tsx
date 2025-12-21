@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useLayoutEffect } from 'react';
 import { GeneratedImage, Asset } from '../types';
 import { Trash2, Archive, LayoutGrid, List, UploadCloud, MonitorPlay, Workflow, Type, Images, Video, X, Maximize2, ArrowLeft } from 'lucide-react';
@@ -11,6 +12,7 @@ interface CanvasProps {
   onDelete: (id: string) => void;
   onUpdateNodePosition: (id: string, x: number, y: number) => void;
   onDownloadAll: () => void;
+  onDeselectAll?: () => void;
 }
 
 type ViewMode = 'grid' | 'table' | 'workflow';
@@ -336,7 +338,7 @@ const DetailViewOverlay: React.FC<{ image: GeneratedImage; onClose: () => void }
     );
 };
 
-export const Canvas: React.FC<CanvasProps> = ({ images, assets, onSelect, selectedId, onDelete, onUpdateNodePosition, onDownloadAll }) => {
+export const Canvas: React.FC<CanvasProps> = ({ images, assets, onSelect, selectedId, onDelete, onUpdateNodePosition, onDownloadAll, onDeselectAll }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('workflow');
   const [pan, setPan] = useState({ x: 100, y: 100 });
   const [scale, setScale] = useState(1);
@@ -358,6 +360,8 @@ export const Canvas: React.FC<CanvasProps> = ({ images, assets, onSelect, select
       if (e.target === containerRef.current) {
         setIsDraggingCanvas(true);
         lastMousePos.current = { x: e.clientX, y: e.clientY };
+        // Clear selection when background clicked
+        if (onDeselectAll) onDeselectAll();
       }
   };
 

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AssetBay } from './components/AssetBay';
 import { DirectorDeck } from './components/DirectorDeck';
 import { Canvas } from './components/Canvas';
@@ -6,7 +7,9 @@ import { Inspector } from './components/Inspector';
 import { CollageEditor } from './components/CollageEditor';
 import { Asset, GeneratedImage, AspectRatio, ImageSize } from './types';
 import { generateMultiViewGrid, fileToBase64, enhancePrompt, analyzeAsset, ReferenceImageData, generateCameraMovement, stitchImages } from './services/geminiService';
-import { AlertCircle, X as XIcon, ShieldCheck } from 'lucide-react';
+import { saveToStorage, loadFromStorage, clearStorage } from './services/persistenceService';
+import { AlertCircle, X as XIcon, ShieldCheck, Trash2 } from 'lucide-react';
+import { Button } from './components/Button';
 // @ts-ignore
 import JSZip from 'jszip';
 
@@ -14,11 +17,12 @@ const App: React.FC = () => {
   // --- State ---
   const [assets, setAssets] = useState<Asset[]>([]);
   const [images, setImages] = useState<GeneratedImage[]>([]);
+  const [history, setHistory] = useState<GeneratedImage[][]>([]); // Undo stack
   
   const [selectedImageId, setSelectedImageId] = useState<string | undefined>(undefined);
   const [selectedAssetId, setSelectedAssetId] = useState<string | undefined>(undefined);
   
-  // Generation Settings (Modified for dynamic grid)
+  // Generation Settings
   const [gridRows, setGridRows] = useState(2);
   const [gridCols, setGridCols] = useState(2);
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>(AspectRatio.WIDE);
@@ -32,8 +36,66 @@ const App: React.FC = () => {
   const [analysisResult, setAnalysisResult] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
 
+  // Stop Signal
+  const abortControllerRef = useRef<AbortController | null>(null);
+
   // Collage Editor State
   const [isCollageEditorOpen, setIsCollageEditorOpen] = useState(false);
+
+  // --- Persistence ---
+  useEffect(() => {
+    const initPersistence = async () => {
+      const savedImages = await loadFromStorage<GeneratedImage[]>('cine_images');
+      if (savedImages && savedImages.length > 0) {
+        setImages(savedImages);
+      }
+    };
+    initPersistence();
+  }, []);
+
+  useEffect(() => {
+    // Automatically persist workflow changes to IndexedDB
+    if (images.length >= 0) {
+      saveToStorage('cine_images', images);
+    }
+  }, [images]);
+
+  // --- Keyboard Shortcuts ---
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // 排除输入框
+      if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement) return;
+
+      // DELETE 键删除选中项
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedImageId) {
+          handleDeleteImage(selectedImageId);
+        } else if (selectedAssetId) {
+          handleRemoveAsset(selectedAssetId);
+        }
+      }
+
+      // CTRL+Z 撤销
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        e.preventDefault();
+        handleUndo();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedImageId, selectedAssetId, images, history]);
+
+  const saveHistory = useCallback((currentImages: GeneratedImage[]) => {
+    setHistory(prev => [...prev.slice(-19), [...currentImages]]); // 保持最近20步
+  }, []);
+
+  const handleUndo = () => {
+    if (history.length === 0) return;
+    const previous = history[history.length - 1];
+    setHistory(prev => prev.slice(0, -1));
+    setImages(previous);
+  };
 
   // --- Handlers ---
 
@@ -93,6 +155,12 @@ const App: React.FC = () => {
   const handleSelectImage = (image: GeneratedImage) => {
       setSelectedImageId(image.id);
       setSelectedAssetId(undefined); 
+      setAnalysisResult('');
+  };
+
+  const handleDeselectAll = () => {
+      setSelectedImageId(undefined);
+      setSelectedAssetId(undefined);
       setAnalysisResult('');
   };
 
@@ -156,8 +224,6 @@ const App: React.FC = () => {
 
   const handleGenerateCamera = async () => {
     if (!prompt.trim()) return;
-    setSelectedImageId(undefined);
-    setSelectedAssetId(undefined);
     setIsAnalyzing(true);
     try {
         const result = await generateCameraMovement(prompt);
@@ -176,11 +242,22 @@ const App: React.FC = () => {
       return (lastRoot.position?.x || 100) + 420; 
   };
 
+  const handleStopGeneration = () => {
+      if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+          setIsGenerating(false);
+          setGenerationStep("");
+          setError("渲染已手动停止。");
+      }
+  };
+
   const handleGenerate = async () => {
     setError(null);
     setIsGenerating(true);
+    abortControllerRef.current = new AbortController();
 
     try {
+      saveHistory(images); // 生成前保存历史
       const timestamp = Date.now();
       const imageAssets = assets.filter(a => a.type === 'image');
       const parentNode = images.find(i => i.id === selectedImageId && i.nodeType === 'render');
@@ -215,7 +292,7 @@ const App: React.FC = () => {
       }
 
       const assetsToUse = prioritizedAssets.slice(0, 5);
-      setGenerationStep(parentNode ? "正在进行连续创作渲染..." : `正在渲染 ${imageSize} 分镜母版...`);
+      setGenerationStep(parentNode ? "正在进行连续创作渲染..." : `正在渲染新分组 ${imageSize} 分镜母版...`);
       
       const referenceData: ReferenceImageData[] = [];
       for (const asset of assetsToUse) {
@@ -224,6 +301,9 @@ const App: React.FC = () => {
              mimeType: asset.file.type
           });
       }
+
+      // 检查是否已中断
+      if (abortControllerRef.current.signal.aborted) throw new Error("Aborted");
 
       const finalResult = await generateMultiViewGrid(
           prompt, 
@@ -235,6 +315,8 @@ const App: React.FC = () => {
           previousContextImage 
       );
       
+      if (abortControllerRef.current.signal.aborted) throw new Error("Aborted");
+
       setGenerationStep("计算镜头运动轨迹...");
       const cameraMove = await generateCameraMovement(prompt);
 
@@ -260,10 +342,15 @@ const App: React.FC = () => {
       handleSelectImage(finalNode);
 
     } catch (err: any) {
-      handleError(err);
+      if (err.message === "Aborted") {
+          console.log("Generation Aborted by User");
+      } else {
+          handleError(err);
+      }
     } finally {
       setIsGenerating(false);
       setGenerationStep("");
+      abortControllerRef.current = null;
     }
   };
 
@@ -281,8 +368,18 @@ const App: React.FC = () => {
   };
 
   const handleDeleteImage = (id: string) => {
+      saveHistory(images); // 删除前保存历史
       setImages(prev => prev.filter(img => img.id !== id));
       if (selectedImageId === id) setSelectedImageId(undefined);
+  };
+
+  const handleClearWorkspace = () => {
+    if (window.confirm("确定要清空所有分镜并重置工作区吗？此操作无法撤销。")) {
+      saveHistory(images);
+      setImages([]);
+      setSelectedImageId(undefined);
+      clearStorage();
+    }
   };
 
   const handleDownloadBatch = async () => {
@@ -337,7 +434,7 @@ const App: React.FC = () => {
 
       {/* 1. Left Sidebar: Assets & Controls (340px) */}
       <aside className="w-[340px] flex flex-col border-r border-cine-border bg-cine-dark z-20 shadow-2xl flex-shrink-0">
-        <div className="p-5 pb-4 border-b border-cine-border bg-cine-black/50 backdrop-blur-md">
+        <div className="p-5 pb-4 border-b border-cine-border bg-cine-black/50 backdrop-blur-md flex justify-between items-center">
             <h1 className="text-white text-xs font-bold tracking-[0.15em] uppercase font-mono flex items-center gap-2.5">
                 <div className="relative">
                   <span className="block w-2.5 h-2.5 bg-cine-accent rounded-[1px] shadow-[0_0_12px_rgba(255,122,0,0.6)]"></span>
@@ -345,6 +442,24 @@ const App: React.FC = () => {
                 </div>
                 橙意机构 - 连续分镜创作器
             </h1>
+            <div className="flex items-center gap-2">
+                {history.length > 0 && (
+                    <button 
+                        onClick={handleUndo} 
+                        className="text-zinc-500 hover:text-cine-accent transition-colors p-1"
+                        title="撤销 (Ctrl+Z)"
+                    >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
+                    </button>
+                )}
+                <button 
+                  onClick={handleClearWorkspace} 
+                  className="text-zinc-700 hover:text-red-500 transition-colors p-1"
+                  title="清空工作区 (Reset Workspace)"
+                >
+                  <Trash2 size={14} />
+                </button>
+            </div>
         </div>
 
         <div className="flex-1 flex flex-col p-4 gap-7 overflow-y-auto custom-scrollbar bg-gradient-to-b from-cine-dark to-cine-black">
@@ -372,16 +487,18 @@ const App: React.FC = () => {
                     prompt={prompt}
                     setPrompt={setPrompt}
                     onGenerate={handleGenerate}
+                    onStop={handleStopGeneration}
                     isGenerating={isGenerating}
                     onEnhancePrompt={handleEnhancePrompt}
                     onGenerateCamera={handleGenerateCamera}
                     isContinuing={!!(selectedImageId && images.find(i => i.id === selectedImageId)?.nodeType === 'render')}
+                    onDeselect={handleDeselectAll}
                 />
             </div>
             
             <div className="mt-auto pt-6 border-t border-cine-border opacity-30 flex items-center justify-center gap-2">
                 <ShieldCheck size={12} />
-                <span className="text-[9px] font-mono tracking-widest uppercase">Professional Edition v2.2</span>
+                <span className="text-[9px] font-mono tracking-widest uppercase">Professional Edition v2.3</span>
             </div>
         </div>
       </aside>
@@ -396,10 +513,11 @@ const App: React.FC = () => {
             onUpdateNodePosition={handleUpdateNodePosition}
             onDownloadAll={handleDownloadBatch}
             assets={assets} 
+            onDeselectAll={handleDeselectAll}
         />
         
         {isGenerating && (
-            <div className="absolute inset-0 bg-cine-black/90 backdrop-blur-xl z-50 flex flex-col items-center justify-center space-y-8 pointer-events-none animate-in fade-in duration-500">
+            <div className="absolute inset-0 bg-cine-black/90 backdrop-blur-xl z-50 flex flex-col items-center justify-center space-y-8 animate-in fade-in duration-500">
                  <div className="relative scale-110">
                     <div className="w-20 h-20 border-t-2 border-r-2 border-transparent border-t-cine-accent border-r-cine-accent rounded-full animate-spin"></div>
                     <div className="absolute inset-0 flex items-center justify-center">
@@ -413,6 +531,14 @@ const App: React.FC = () => {
                      <p className="text-cine-accent/50 font-mono text-[10px] tracking-widest animate-pulse">
                          AI MODEL: GEMINI 3 PRO VISUALIZATION
                      </p>
+                     <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={handleStopGeneration}
+                        className="mt-4 border border-red-900/50 text-red-500 hover:bg-red-500 hover:text-white px-6"
+                     >
+                        强制停止渲染 (STOP)
+                     </Button>
                  </div>
             </div>
         )}
