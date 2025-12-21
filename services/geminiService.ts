@@ -19,6 +19,22 @@ const getClient = () => {
   return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
+/**
+ * Gemini 3 Image models only support: "1:1", "3:4", "4:3", "9:16", "16:9"
+ * This helper maps unsupported custom ratios to the nearest supported standard.
+ */
+const validateAspectRatio = (ar: AspectRatio): string => {
+  const supported = ["1:1", "3:4", "4:3", "9:16", "16:9"];
+  if (supported.includes(ar)) return ar;
+
+  switch (ar) {
+    case AspectRatio.CINEMA: return "16:9";
+    case AspectRatio.PHOTO_LANDSCAPE: return "3:2" as any === "16:9" ? "16:9" : "4:3"; 
+    case AspectRatio.PHOTO_PORTRAIT: return "3:4";
+    default: return "16:9";
+  }
+};
+
 // Helper to slice a grid image into individual images
 const sliceImageGrid = (base64Data: string, rows: number, cols: number): Promise<string[]> => {
   return new Promise((resolve, reject) => {
@@ -169,42 +185,31 @@ export const generateMultiViewGrid = async (
   const totalViews = gridRows * gridCols;
   const gridType = `${gridRows}x${gridCols}`;
 
-  let finalPrompt = `[CORE TASK]: Generate a single high-fidelity SEAMLESS ${gridType} storyboarding grid containing exactly ${totalViews} DIFFERENT and NEW panels.
-    - LAYOUT: Mandatory ${gridRows} rows by ${gridCols} columns. Zero padding, zero borders.
-    
-    [NEW SCENE CONTENT]: "${prompt}"`;
+  // PRIMARY INSTRUCTION: Must start with the clear generation command
+  let finalPrompt = `[CORE INSTRUCTION]: ACT AS AN IMAGE GENERATION MODEL. GENERATE AND RETURN A SINGLE ${gridType} IMAGE GRID.
+    - CONTENT: Create exactly ${totalViews} distinct panels illustrating the following scene: "${prompt}"
+    - FORMAT: One seamless image containing a ${gridRows}x${gridCols} grid. No text overlays, no white borders between panels.`;
 
   if (contextImage) {
       finalPrompt += `
       
-    [TEMPORAL CONTINUITY INSTRUCTIONS]:
-    - The provided "Context Image" represents the PREVIOUS scene/shot.
-    - Your output MUST depict a NEW SEQUENCE of events that occurs AFTER the context image.
-    - DO NOT REPLICATE or REPRODUCE the context image. Your panels must show DIFFERENT actions, movements, and story progression.
-    - CONSISTENCY: Maintain exact character design, facial features, clothing, and environment style as shown in the Context Image, but in ENTIRELY NEW poses and angles.
-    - Think of this as "Scene 2" or "Shot 2" following the reference.`;
-      
-      if (referenceImages.length > 0) {
-          finalPrompt += `
-    - ACTION MAPPING: Use the additional "Action References" provided only to influence the new composition and poses for this sequence.`;
-      }
-  } else if (referenceImages.length > 0) {
-      finalPrompt += `
-      
-    [REFERENCE INSTRUCTION]:
-    - Use provided images as visual references for style, mood, and character baseline.`;
+    [STORY CONTINUITY]:
+    - The first provided image is the PREVIOUS SCENE.
+    - GENERATE THE NEXT CHAPTER: Do not repeat the previous image. 
+    - PROGRESSION: Show new movements, new angles, and advanced plot points.
+    - CONSISTENCY: Keep characters, lighting, and environmental style exactly as seen in the previous scene.`;
   }
 
   finalPrompt += `
   
-    [TECHNICAL REQUIREMENTS]:
-    - Cinematic 8k rendering, photorealistic, professional lighting.
-    - Varied camera angles within the grid (e.g., mix of close-ups, medium shots, and wide shots as defined by the flow).
-    - No text, no captions, no watermarks.`;
+    [TECHNICAL SPEC]:
+    - Photorealistic cinematic style, high dynamic range, detailed textures.
+    - Varied camera blocking: Mix close-ups and wide shots for cinematic flow.
+    - NO TEXT, NO SPEECH BUBBLES, NO CAPTIONS.`;
 
   const parts: any[] = [];
   
-  // 1. Context (Previous Shot)
+  // Important: Reference images first for model to understand context before instructions
   if (contextImage) {
       const cleanBase64 = contextImage.includes(',') ? contextImage.split(',')[1] : contextImage;
       parts.push({
@@ -215,7 +220,6 @@ export const generateMultiViewGrid = async (
       });
   }
   
-  // 2. Style/Action References
   for (const ref of referenceImages) {
     parts.push({
       inlineData: {
@@ -225,7 +229,7 @@ export const generateMultiViewGrid = async (
     });
   }
   
-  // 3. The Final Prompt
+  // The Instruction Part
   parts.push({ text: finalPrompt });
 
   try {
@@ -236,26 +240,35 @@ export const generateMultiViewGrid = async (
       },
       config: {
         imageConfig: {
-          aspectRatio: aspectRatio,
+          aspectRatio: validateAspectRatio(aspectRatio) as any,
           imageSize: imageSize as any 
         }
       }
     });
 
     let fullImageBase64 = '';
+    let responseText = '';
+
     for (const part of response.candidates?.[0]?.content?.parts || []) {
       if (part.inlineData) {
         fullImageBase64 = `data:image/png;base64,${part.inlineData.data}`;
-        break;
+      } else if (part.text) {
+        responseText += part.text;
       }
     }
 
-    if (!fullImageBase64) throw new Error("未能生成 Grid 图片");
+    if (!fullImageBase64) {
+      // If no image but we have text, the model might be refusing or explaining something
+      if (responseText) {
+        throw new Error(`渲染引擎拒绝生成: ${responseText}`);
+      }
+      throw new Error("模型未返回图像数据，请尝试简化提示词或检查内容安全。");
+    }
 
     const panels = await sliceImageGrid(fullImageBase64, gridRows, gridCols);
     return { fullImage: fullImageBase64, slices: panels };
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Grid generation error:", error);
     throw error;
   }
