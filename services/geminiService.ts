@@ -1,3 +1,4 @@
+
 import { GoogleGenAI } from "@google/genai";
 import { AspectRatio, ImageSize } from "../types";
 
@@ -168,40 +169,42 @@ export const generateMultiViewGrid = async (
   const totalViews = gridRows * gridCols;
   const gridType = `${gridRows}x${gridCols}`;
 
-  let finalPrompt = `MANDATORY LAYOUT: Create a SEAMLESS ${gridType} COLLAGE containing exactly ${totalViews} distinct panels.
-    - The output image MUST be a single image divided into a ${gridRows} (rows) by ${gridCols} (columns) matrix.
-    - There must be EXACTLY ${gridRows} horizontal rows and ${gridCols} vertical columns.
-    - LAYOUT: ZERO PADDING. NO THICK BORDERS. NO FRAMES. 
-    - The grid should be tight and seamless, maximizing the visual area of each panel.
-    - SEPARATORS: Extremely thin 1px line or direct contact between images.
+  let finalPrompt = `[CORE TASK]: Generate a single high-fidelity SEAMLESS ${gridType} storyboarding grid containing exactly ${totalViews} DIFFERENT and NEW panels.
+    - LAYOUT: Mandatory ${gridRows} rows by ${gridCols} columns. Zero padding, zero borders.
     
-    Subject Content: "${prompt}"
-    
-    Styling Instructions:
-    - Each panel shows the SAME subject/scene from a DIFFERENT angle or action moment.
-    - Cinematic lighting, high fidelity, 8k resolution, photorealistic.
-    - No text, no UI elements.`;
+    [NEW SCENE CONTENT]: "${prompt}"`;
 
   if (contextImage) {
-      finalPrompt += `\n\nCONTINUITY INSTRUCTION (Context Image Provided):
-      - The first image provided is the "Context Reference" (Previous Shot).
-      - GOAL: VISUAL CONSISTENCY. Keep the same character design, clothing, lighting, and environment style as the Context Reference.`;
+      finalPrompt += `
+      
+    [TEMPORAL CONTINUITY INSTRUCTIONS]:
+    - The provided "Context Image" represents the PREVIOUS scene/shot.
+    - Your output MUST depict a NEW SEQUENCE of events that occurs AFTER the context image.
+    - DO NOT REPLICATE or REPRODUCE the context image. Your panels must show DIFFERENT actions, movements, and story progression.
+    - CONSISTENCY: Maintain exact character design, facial features, clothing, and environment style as shown in the Context Image, but in ENTIRELY NEW poses and angles.
+    - Think of this as "Scene 2" or "Shot 2" following the reference.`;
       
       if (referenceImages.length > 0) {
-          finalPrompt += `\n\nNEW ACTION INSTRUCTION (Reference Images Provided):
-          - The other images provided are "Action/Layout References".
-          - ACTION/COMPOSITION: Adopt the composition, camera angle, and character pose from these new reference images.
-          - SYNTHESIS: Re-draw the scene using the STYLE/CHARACTER from the Context Reference, but performing the ACTION/LAYOUT of the Reference Images.`;
-      } else {
-          finalPrompt += `\n- This is a direct sequel. Advance the action naturally based on the prompt.`;
+          finalPrompt += `
+    - ACTION MAPPING: Use the additional "Action References" provided only to influence the new composition and poses for this sequence.`;
       }
   } else if (referenceImages.length > 0) {
-      finalPrompt += `\n\nREFERENCE INSTRUCTION:
-      - Use the provided images as visual references for style, composition, and character design.`;
+      finalPrompt += `
+      
+    [REFERENCE INSTRUCTION]:
+    - Use provided images as visual references for style, mood, and character baseline.`;
   }
+
+  finalPrompt += `
+  
+    [TECHNICAL REQUIREMENTS]:
+    - Cinematic 8k rendering, photorealistic, professional lighting.
+    - Varied camera angles within the grid (e.g., mix of close-ups, medium shots, and wide shots as defined by the flow).
+    - No text, no captions, no watermarks.`;
 
   const parts: any[] = [];
   
+  // 1. Context (Previous Shot)
   if (contextImage) {
       const cleanBase64 = contextImage.includes(',') ? contextImage.split(',')[1] : contextImage;
       parts.push({
@@ -212,6 +215,7 @@ export const generateMultiViewGrid = async (
       });
   }
   
+  // 2. Style/Action References
   for (const ref of referenceImages) {
     parts.push({
       inlineData: {
@@ -221,6 +225,7 @@ export const generateMultiViewGrid = async (
     });
   }
   
+  // 3. The Final Prompt
   parts.push({ text: finalPrompt });
 
   try {
@@ -232,7 +237,7 @@ export const generateMultiViewGrid = async (
       config: {
         imageConfig: {
           aspectRatio: aspectRatio,
-          imageSize: imageSize as any // Uses K1, K2, or K4
+          imageSize: imageSize as any 
         }
       }
     });
@@ -264,13 +269,7 @@ export const generateCameraMovement = async (
     const model = 'gemini-2.5-flash';
 
     const systemInstruction = `You are a specialized AI Video prompter assistant. 
-    Analyze the scene description and provide a technical Camera Movement Prompt that can be used for video generation models (like Veo or Sora).
-    
-    Examples:
-    - "Slow dolly in, focusing on the character's eyes."
-    - "Truck left, following the car at high speed, motion blur."
-    - "Crane up establishing the vast landscape."
-    - "Handheld camera, shaky footage, chaotic atmosphere."
+    Analyze the scene description and provide a technical Camera Movement Prompt that can be used for video generation models.
     
     Output ONLY the camera movement description. Max 15 words. English.`;
 
@@ -345,18 +344,9 @@ export const generateCinematicPrompt = async (
   const model = 'gemini-2.5-flash';
 
   const systemInstruction = `You are a professional Director of Photography assistant.
-  Your goal is to ENHANCE the user's existing idea with technical camera keywords, NOT to rewrite or replace their idea.
+  Your goal is to ENHANCE the user's existing idea with technical camera keywords.
   
-  Analyze the provided images (if any) and the user's text.
-  Return a concise, comma-separated list of technical descriptors that can be appended to the prompt to make it look cinematic.
-  Include: Camera Angle, Shot Size, Lens Type, Lighting Style.
-  
-  Format: [Original User Idea] + ", " + [Technical Keywords]
-  
-  Example Input: "A cyber samurai"
-  Example Output: "A cyber samurai, low angle shot, anamorphic lens, neon rim lighting, volumetric fog, high contrast, 85mm"
-  
-  Do NOT write full sentences. Do NOT describe the subject again if the user already did. Just add the technical sauce.`;
+  Format: [Original User Idea] + ", " + [Technical Keywords]`;
 
   const contents: any[] = [];
   
