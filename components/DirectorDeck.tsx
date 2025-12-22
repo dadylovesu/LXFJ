@@ -2,7 +2,7 @@
 import React from 'react';
 import { Button } from './Button';
 import { AspectRatio, ImageSize } from '../types';
-import { Settings2, GitMerge, Video, Layers, Zap, LayoutGrid, ChevronRight, ChevronLeft, XCircle, PlusCircle, Square } from 'lucide-react';
+import { Settings2, GitMerge, Video, Layers, Zap, LayoutGrid, ChevronRight, ChevronLeft, XCircle, PlusCircle, Square, Wand2 } from 'lucide-react';
 
 interface DirectorDeckProps {
   gridRows: number;
@@ -63,7 +63,7 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
          {isGenerating && (
              <div className="flex items-center gap-2">
                  <div className="w-1.5 h-1.5 bg-cine-accent rounded-full animate-subtle-pulse shadow-[0_0_8px_#FF7A00]"></div>
-                 <span className="text-[9px] text-cine-accent font-mono tracking-widest font-bold">RENDERING</span>
+                 <span className="text-[9px] text-cine-accent font-mono tracking-widest font-bold">渲染中 (RENDERING)</span>
              </div>
          )}
       </div>
@@ -76,14 +76,12 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
         </label>
         
         <div className="space-y-4 p-4 bg-zinc-900/40 border border-zinc-800/40 rounded-sm backdrop-blur-md">
-             {/* Dynamic Grid Controls */}
             <div className="space-y-3">
                 <div className="flex justify-between items-center">
                    <span className="text-[8px] text-zinc-600 font-mono uppercase tracking-widest">宫格行列 (ROWS x COLS)</span>
                    <span className="text-[10px] text-cine-accent font-mono font-bold">{gridRows} x {gridCols}</span>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                    {/* Rows */}
                     <div className="flex items-center bg-black/40 border border-zinc-800 rounded-sm p-1">
                         <button 
                             onClick={() => setGridRows(Math.max(1, gridRows - 1))}
@@ -91,7 +89,7 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
                         >
                             <ChevronLeft size={14} />
                         </button>
-                        <div className="flex-1 text-center font-mono text-xs text-zinc-300">R: {gridRows}</div>
+                        <div className="flex-1 text-center font-mono text-xs text-zinc-300">行: {gridRows}</div>
                         <button 
                             onClick={() => setGridRows(Math.min(4, gridRows + 1))}
                             className="p-1 text-zinc-600 hover:text-white transition-colors"
@@ -99,7 +97,6 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
                             <ChevronRight size={14} />
                         </button>
                     </div>
-                    {/* Cols */}
                     <div className="flex items-center bg-black/40 border border-zinc-800 rounded-sm p-1">
                         <button 
                             onClick={() => setGridCols(Math.max(1, gridCols - 1))}
@@ -107,7 +104,7 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
                         >
                             <ChevronLeft size={14} />
                         </button>
-                        <div className="flex-1 text-center font-mono text-xs text-zinc-300">C: {gridCols}</div>
+                        <div className="flex-1 text-center font-mono text-xs text-zinc-300">列: {gridCols}</div>
                         <button 
                             onClick={() => setGridCols(Math.min(4, gridCols + 1))}
                             className="p-1 text-zinc-600 hover:text-white transition-colors"
@@ -118,7 +115,6 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
                 </div>
             </div>
 
-            {/* Aspect Ratio */}
              <div className="space-y-2 pt-2.5 border-t border-zinc-800/50">
                 <div className="flex justify-between items-center">
                    <span className="text-[8px] text-zinc-600 font-mono uppercase tracking-widest">画面比例 (RATIO)</span>
@@ -143,17 +139,16 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
         </div>
       </div>
 
-      {/* Quality Group */}
       <div className="space-y-2.5">
         <label className="text-[9px] text-zinc-600 font-mono uppercase tracking-[0.15em] flex items-center gap-2.5">
             <span className="w-1 h-3 bg-zinc-800 rounded-full"></span>
-            输出引擎 & 分辨率 (ENGINE & RES)
+            输出引擎 & 分辨率 (ENGINE)
         </label>
         <div className="p-3 bg-black/40 border border-zinc-800/60 rounded-sm space-y-3">
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <LayoutGrid size={9} className="text-zinc-700" />
-                    <span className="text-[9px] text-zinc-600 font-mono uppercase tracking-widest">GEN 3 PRO ENGINE</span>
+                    <span className="text-[9px] text-zinc-600 font-mono uppercase tracking-widest">GEN 3 PRO 渲染核心</span>
                 </div>
                 <span className="text-[9px] text-cine-accent font-bold font-mono">{getQualityLabel()}</span>
             </div>
@@ -175,7 +170,6 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
         </div>
       </div>
 
-      {/* Prompt Area */}
       <div className="space-y-2.5 flex-1 flex flex-col min-h-[200px]">
         <div className="flex justify-between items-end">
             <label className="text-[9px] text-zinc-600 font-mono uppercase tracking-[0.15em] flex items-center gap-2.5">
@@ -189,13 +183,13 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
                   className="flex items-center gap-1.5 bg-cine-accent/5 text-cine-accent px-2.5 py-1 rounded-full border border-cine-accent/40 animate-in fade-in duration-500 shadow-[0_0_10px_rgba(255,122,0,0.1)] hover:bg-cine-accent/20 transition-all group"
                 >
                     <GitMerge size={10} className="group-hover:rotate-180 transition-transform duration-500" />
-                    <span className="text-[8px] font-mono tracking-widest font-bold">续写模式 (CONTINUE)</span>
+                    <span className="text-[8px] font-mono tracking-widest font-bold">续写模式</span>
                     <XCircle size={10} className="opacity-60" />
                 </button>
             ) : (
                 <div className="flex items-center gap-1.5 text-zinc-600 px-2.5 py-1 font-mono text-[8px] tracking-widest">
                     <PlusCircle size={10} />
-                    <span>独立创作模式 (NEW)</span>
+                    <span>独立创作模式</span>
                 </div>
             )}
         </div>
@@ -210,26 +204,32 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
                 }`}
                 spellCheck={false}
             />
-            <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-black/40 to-transparent pointer-events-none"></div>
         </div>
       </div>
 
-      {/* Tools Row */}
-      {onGenerateCamera && (
-          <div className="flex">
+      <div className="flex gap-2">
+          <Button 
+            variant="secondary" 
+            size="sm" 
+            onClick={onEnhancePrompt} 
+            disabled={isGenerating || !prompt.trim()} 
+            className="flex-1 text-[9px] h-9 border-dashed border-zinc-800 hover:border-zinc-700 bg-zinc-900/20"
+          >
+              <Wand2 size={12} className="mr-2 text-cine-accent" /> 提示词增强
+          </Button>
+          {onGenerateCamera && (
               <Button 
                 variant="secondary" 
                 size="sm" 
                 onClick={onGenerateCamera} 
                 disabled={isGenerating || !prompt.trim()} 
-                className="w-full text-[9px] h-9 border-dashed border-zinc-800 hover:border-zinc-700 bg-zinc-900/20 group"
+                className="flex-1 text-[9px] h-9 border-dashed border-zinc-800 hover:border-zinc-700 bg-zinc-900/20"
               >
-                  <Video size={12} className="mr-2 text-zinc-500 group-hover:text-cine-accent transition-colors" /> 生成镜头运动轨迹 (CAM-GEN)
+                  <Video size={12} className="mr-2 text-zinc-500" /> 镜头轨迹
               </Button>
-          </div>
-      )}
+          )}
+      </div>
 
-      {/* Action Button Group */}
       <div className="flex gap-2">
         {isGenerating && onStop ? (
             <Button 
@@ -248,7 +248,7 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
             >
                 <span className="relative z-10 flex items-center justify-center gap-3">
                     {isGenerating ? <Zap size={14} className="animate-spin" /> : (isContinuing ? <GitMerge size={14} /> : <Layers size={14} />)}
-                    {isGenerating ? '渲染中...' : (isContinuing ? '续写当前分镜' : '执行 新渲染')}
+                    {isGenerating ? '正在执行渲染...' : (isContinuing ? '续写当前分镜' : '执行 新分镜渲染')}
                 </span>
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:animate-[shimmer_2s_infinite] pointer-events-none" />
             </Button>

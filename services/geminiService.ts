@@ -73,7 +73,7 @@ export const generateMultiViewGrid = async (
   imageSize: ImageSize, 
   categorizedRefs: ReferenceImageData[] = [],
   contextImage?: string 
-): Promise<{ fullImage: string, slices: string[] }> => {
+): Promise<{ fullImage: string, slices: string[], slicePrompts: string[] }> => {
   await ensureApiKey();
   const ai = getClient();
   const model = 'gemini-3-pro-image-preview';
@@ -84,41 +84,38 @@ export const generateMultiViewGrid = async (
   const roles = categorizedRefs.filter(r => r.category === 'role');
   const bgs = categorizedRefs.filter(r => r.category === 'background');
 
-  let systemPrompt = `[CORE TASK]: GENERATE A SINGLE ${gridType} CINEMATIC STORYBOARD GRID.
-    - CONTENT: "${prompt}"
-    - VIEWS: Exactly ${totalViews} unique panels showing progression.`;
+  let systemPrompt = `[核心任务]: 生成一个单张 ${gridType} 的电影级故事板网格图。
+    - 内容主题: "${prompt}"
+    - 画面数量: 必须包含精确的 ${totalViews} 个画面，展示剧情或动作的推进。
+    - 输出要求: 必须返回两个部分：
+      1. 一个包含 ${totalViews} 个字符串的 JSON 数组，每个字符串用中文简短描述该画面的具体内容（导演笔记）。
+      2. 生成的图像网格部分。
+    - 语言要求: 所有文本输出必须使用中文。`;
 
   if (roles.length > 0) {
-      systemPrompt += `\n\n[CHARACTER CONSISTENCY]:
-      ${roles.map((r, i) => `- Reference Image ${i+1} is "ROLE ${r.roleIndex}". Keep this character's face, clothing, and features exactly as shown in all panels.`).join('\n')}`;
+      systemPrompt += `\n\n[角色一致性]:
+      ${roles.map((r, i) => `- 参考图 ${i+1} 是 "角色 ${r.roleIndex}"。在所有画面中保持该角色的面部、服装和特征完全一致。`).join('\n')}`;
   }
 
   if (bgs.length > 0) {
-      systemPrompt += `\n\n[ENVIRONMENT]:
-      - Use the provided background reference for global scene mood, lighting, and architecture. Adapt the characters into this setting.`;
-  } else {
-      systemPrompt += `\n\n[ENVIRONMENT]: Design a professional cinematic setting based on the text prompt if no reference is provided.`;
+      systemPrompt += `\n\n[环境设定]:
+      - 使用提供的背景参考作为全局场景色调、光影和建筑风格的基准。将角色自然融入此环境中。`;
   }
 
   if (contextImage) {
-      systemPrompt += `\n\n[STORY CONTINUITY]:
-      - The separate context image is the previous shot. Progress the narrative from that point.`;
+      systemPrompt += `\n\n[叙事连贯性]:
+      - 提供的上下文图像是前序镜头。请基于此图像推进剧情。`;
   }
 
-  systemPrompt += `\n\n[STYLING]: Photorealistic, 35mm film look, volumetric lighting, deep depth of field. NO TEXT.`;
+  systemPrompt += `\n\n[风格控制]: 电影级写实，35mm 胶片感，体积光，深景深。画面中严禁出现任何文字或水印。`;
 
   const parts: any[] = [];
-  
-  // 1. Roles first
   roles.forEach(r => parts.push({ inlineData: { mimeType: r.mimeType, data: r.data } }));
-  // 2. Backgrounds
   bgs.forEach(b => parts.push({ inlineData: { mimeType: b.mimeType, data: b.data } }));
-  // 3. Continuity
   if (contextImage) {
       const cleanBase64 = contextImage.includes(',') ? contextImage.split(',')[1] : contextImage;
       parts.push({ inlineData: { mimeType: 'image/png', data: cleanBase64 } });
   }
-  // 4. Instructions
   parts.push({ text: systemPrompt });
 
   try {
@@ -134,17 +131,33 @@ export const generateMultiViewGrid = async (
     });
 
     let fullImageBase64 = '';
+    let slicePrompts: string[] = [];
+
     for (const part of response.candidates?.[0]?.content?.parts || []) {
       if (part.inlineData) {
         fullImageBase64 = `data:image/png;base64,${part.inlineData.data}`;
+      } else if (part.text) {
+        try {
+          const jsonMatch = part.text.match(/\[.*\]/s);
+          if (jsonMatch) {
+            slicePrompts = JSON.parse(jsonMatch[0]);
+          }
+        } catch (e) {
+          console.warn("解析分镜描述 JSON 失败:", e);
+        }
       }
     }
 
-    if (!fullImageBase64) throw new Error("Render engine returned no image data.");
+    if (!fullImageBase64) throw new Error("渲染引擎未返回图像数据。");
+    
+    while (slicePrompts.length < totalViews) {
+      slicePrompts.push(`画面 ${slicePrompts.length + 1}: ${prompt}`);
+    }
+
     const panels = await sliceImageGrid(fullImageBase64, gridRows, gridCols);
-    return { fullImage: fullImageBase64, slices: panels };
+    return { fullImage: fullImageBase64, slices: panels, slicePrompts };
   } catch (error: any) {
-    console.error("Grid gen error:", error);
+    console.error("网格生成错误:", error);
     throw error;
   }
 };
@@ -154,12 +167,12 @@ export const generateCameraMovement = async (prompt: string): Promise<string> =>
     const ai = getClient();
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: { parts: [{ text: `Scene: ${prompt}` }] },
-            config: { systemInstruction: "Output ONLY a technical camera movement description. Max 10 words. English." }
+            model: 'gemini-3-flash-preview',
+            contents: { parts: [{ text: `场景内容: ${prompt}` }] },
+            config: { systemInstruction: "你是一个专业的电影摄影师。请输出一段简短的技术性镜头运动描述。不超过15个汉字。必须使用中文。" }
         });
-        return response.text || "Static shot.";
-    } catch { return "Cinematic move."; }
+        return response.text || "固定镜头。";
+    } catch { return "电影感运镜。"; }
 };
 
 export const enhancePrompt = async (rawPrompt: string): Promise<string> => {
@@ -167,8 +180,8 @@ export const enhancePrompt = async (rawPrompt: string): Promise<string> => {
   const ai = getClient();
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: `Enhance this cinematic storyboard prompt. Keep it under 60 words. Input: "${rawPrompt}"`,
+      model: 'gemini-3-flash-preview',
+      contents: `请优化这段电影故事板提示词，使其更具视觉表现力，包含光影、构图和氛围细节。保持在60字以内。输入: "${rawPrompt}"。请输出中文。`,
     });
     return response.text || rawPrompt;
   } catch { return rawPrompt; }
@@ -180,10 +193,11 @@ export const analyzeAsset = async (fileBase64: string, mimeType: string, prompt:
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-pro-preview',
-      contents: { parts: [{ inlineData: { mimeType, data: fileBase64 } }, { text: prompt }] }
+      contents: { parts: [{ inlineData: { mimeType, data: fileBase64 } }, { text: prompt }] },
+      config: { systemInstruction: "你是一个资深的视觉分析专家，请使用中文进行分析。" }
     });
-    return response.text || "No analysis result.";
-  } catch { return "Analysis failed."; }
+    return response.text || "无分析结果。";
+  } catch { return "分析失败。"; }
 };
 
 export const fileToBase64 = (file: File): Promise<string> => {
@@ -193,14 +207,4 @@ export const fileToBase64 = (file: File): Promise<string> => {
     reader.onload = () => resolve((reader.result as string).split(',')[1]);
     reader.onerror = reject;
   });
-};
-
-export const stitchImages = (files: File[], rows: number, cols: number, ar: string): Promise<string> => {
-    // This is a simplified version of stitching for the collage tool
-    return new Promise((resolve) => {
-        const canvas = document.createElement('canvas');
-        canvas.width = 1920;
-        canvas.height = 1080; // Placeholder
-        resolve(canvas.toDataURL('image/jpeg'));
-    });
 };
