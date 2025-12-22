@@ -9,11 +9,13 @@ import { generateMultiViewGrid, fileToBase64, enhancePrompt, analyzeAsset, Refer
 import { saveToStorage, loadFromStorage, clearStorage } from './services/persistenceService';
 import { AlertCircle, X as XIcon, Trash2 } from 'lucide-react';
 import { Button } from './components/Button';
-import JSZip from 'jszip';
 
 const App: React.FC = () => {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [images, setImages] = useState<GeneratedImage[]>([]);
+  // 历史记录栈用于撤回
+  const [history, setHistory] = useState<GeneratedImage[][]>([]);
+  
   const [selectedImageId, setSelectedImageId] = useState<string | undefined>(undefined);
   const [selectedAssetId, setSelectedAssetId] = useState<string | undefined>(undefined);
   
@@ -22,7 +24,6 @@ const App: React.FC = () => {
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>(AspectRatio.WIDE);
   const [imageSize, setImageSize] = useState<ImageSize>(ImageSize.K4);
   const [prompt, setPrompt] = useState<string>('');
-  const [cameraTrack, setCameraTrack] = useState<string>('');
   
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStep, setGenerationStep] = useState<string>(''); 
@@ -32,15 +33,67 @@ const App: React.FC = () => {
 
   const abortControllerRef = useRef<AbortController | null>(null);
 
+  // 初始化加载
   useEffect(() => {
     loadFromStorage<GeneratedImage[]>('cine_images').then(saved => {
-        if (saved) setImages(saved);
+        if (saved) {
+          setImages(saved);
+        }
     });
   }, []);
 
+  // 状态变更保存
   useEffect(() => {
     saveToStorage('cine_images', images);
   }, [images]);
+
+  // 更新图片状态并记录历史
+  const updateImagesWithHistory = useCallback((newImages: GeneratedImage[]) => {
+    setHistory(prev => [...prev, images].slice(-30)); // 最多保留30步历史
+    setImages(newImages);
+  }, [images]);
+
+  // 快捷键监听
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // 删除功能 (Delete 或 Backspace)
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedImageId) {
+        // 防止在输入框中误删
+        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+        
+        handleDeleteNode(selectedImageId);
+      }
+      
+      // 撤回功能 (Ctrl+Z 或 Cmd+Z)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+        e.preventDefault();
+        undo();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedImageId, history, images]);
+
+  const undo = useCallback(() => {
+    if (history.length > 0) {
+      const prev = history[history.length - 1];
+      setImages(prev);
+      setHistory(prevStack => prevStack.slice(0, -1));
+      setSelectedImageId(undefined);
+    }
+  }, [history]);
+
+  const handleDeleteNode = useCallback((id: string) => {
+    updateImagesWithHistory(images.filter(i => i.id !== id));
+    setSelectedImageId(undefined);
+  }, [images, updateImagesWithHistory]);
+
+  const handleUpdateNodePosition = useCallback((id: string, x: number, y: number) => {
+    // 拖拽时不记录历史，否则历史栈会溢出，只更新当前状态
+    setImages(prev => prev.map(img => img.id === id ? { ...img, position: { x, y } } : img));
+  }, []);
 
   const handleAddAsset = (files: FileList, category: AssetCategory) => {
     Array.from(files).forEach((file) => {
@@ -73,10 +126,6 @@ const App: React.FC = () => {
   };
 
   const handleGenerate = async () => {
-    if (!prompt.trim()) {
-        setError("请输入创作指令。");
-        return;
-    }
     setError(null);
     setIsGenerating(true);
     abortControllerRef.current = new AbortController();
@@ -117,12 +166,11 @@ const App: React.FC = () => {
           aspectRatio, 
           imageSize, 
           referenceData,
-          previousContextImage,
-          cameraTrack
+          previousContextImage 
       );
       
-      setGenerationStep("正在同步镜头数据...");
-      const finalCameraDescription = cameraTrack.trim() || await generateCameraMovement(prompt);
+      setGenerationStep("正在分析画面动线...");
+      const cameraMove = await generateCameraMovement(prompt);
 
       const finalNode: GeneratedImage = {
           id: crypto.randomUUID(),
@@ -136,14 +184,13 @@ const App: React.FC = () => {
           nodeType: 'render',
           parentId: parentNode?.id, 
           position: { x: startX, y: startY },
-          cameraDescription: finalCameraDescription,
+          cameraDescription: cameraMove,
           slices: finalResult.slices,
-          slicePrompts: finalResult.slicePrompts,
           gridRows,
           gridCols
       };
 
-      setImages(prev => [...prev, finalNode]);
+      updateImagesWithHistory([...images, finalNode]);
       setSelectedImageId(finalNode.id);
 
     } catch (err: any) {
@@ -154,40 +201,6 @@ const App: React.FC = () => {
     }
   };
 
-  const handleDownloadAll = async () => {
-    if (images.length === 0) return;
-    
-    const zip = new JSZip();
-    const renderNodes = images.filter(i => i.nodeType === 'render');
-    
-    for (let i = 0; i < renderNodes.length; i++) {
-        const node = renderNodes[i];
-        const sceneFolder = zip.folder(`场景_${i + 1}`);
-        if (!sceneFolder) continue;
-
-        // 保存主网格图
-        const masterData = (node.fullGridUrl || node.url).split(',')[1];
-        sceneFolder.file(`完整分镜网格.png`, masterData, { base64: true });
-
-        // 保存切分后的单图
-        if (node.slices) {
-            for (let s = 0; s < node.slices.length; s++) {
-                const sliceData = node.slices[s].split(',')[1];
-                sceneFolder.file(`单帧_${s + 1}.png`, sliceData, { base64: true });
-            }
-        }
-        
-        // 保存描述文本
-        sceneFolder.file(`导演描述.txt`, `总提示词: ${node.prompt}\n\n镜头运动: ${node.cameraDescription || '无'}\n\n分镜描述:\n${node.slicePrompts?.join('\n') || ''}`);
-    }
-
-    const content = await zip.generateAsync({ type: "blob" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(content);
-    link.download = `橙意机构-分镜导出-${new Date().getTime()}.zip`;
-    link.click();
-  };
-
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-cine-black text-zinc-400 font-sans">
       <aside className="w-[340px] flex flex-col border-r border-cine-border bg-cine-dark z-20 shadow-2xl">
@@ -196,7 +209,7 @@ const App: React.FC = () => {
                 <span className="w-2.5 h-2.5 bg-cine-accent rounded-[1px]"></span>
                 橙意机构 - 连续分镜
             </h1>
-            <button onClick={() => { if(confirm("确定要重置当前工作区吗？所有进度将丢失。")) { setImages([]); clearStorage(); } }} className="text-zinc-700 hover:text-red-500 transition-colors" title="重置工作区">
+            <button onClick={() => { if(confirm("重置工作区？")) { setImages([]); setHistory([]); clearStorage(); } }} className="text-zinc-700 hover:text-red-500 transition-colors">
               <Trash2 size={14} />
             </button>
         </div>
@@ -216,16 +229,11 @@ const App: React.FC = () => {
                 aspectRatio={aspectRatio} setAspectRatio={setAspectRatio}
                 imageSize={imageSize} setImageSize={setImageSize}
                 prompt={prompt} setPrompt={setPrompt}
-                cameraTrack={cameraTrack} setCameraTrack={setCameraTrack}
                 onGenerate={handleGenerate}
                 onStop={() => setIsGenerating(false)}
                 isGenerating={isGenerating}
                 onEnhancePrompt={async () => setPrompt(await enhancePrompt(prompt))}
-                onGenerateCamera={async () => {
-                    const cam = await generateCameraMovement(prompt);
-                    setAnalysisResult(cam);
-                    setCameraTrack(cam);
-                }}
+                onGenerateCamera={async () => setAnalysisResult(await generateCameraMovement(prompt))}
                 isContinuing={!!(selectedImageId && images.find(i => i.id === selectedImageId)?.nodeType === 'render')}
                 onDeselect={() => { setSelectedImageId(undefined); setSelectedAssetId(undefined); }}
             />
@@ -237,9 +245,9 @@ const App: React.FC = () => {
             images={images} 
             onSelect={(i) => { setSelectedImageId(i.id); setSelectedAssetId(undefined); }} 
             selectedId={selectedImageId}
-            onDelete={(id) => setImages(prev => prev.filter(i => i.id !== id))} 
-            onUpdateNodePosition={(id, x, y) => setImages(prev => prev.map(img => img.id === id ? { ...img, position: { x, y } } : img))}
-            onDownloadAll={handleDownloadAll}
+            onDelete={handleDeleteNode} 
+            onUpdateNodePosition={handleUpdateNodePosition}
+            onDownloadAll={() => {}}
             assets={assets} 
             onDeselectAll={() => { setSelectedImageId(undefined); setSelectedAssetId(undefined); }}
         />
@@ -249,7 +257,7 @@ const App: React.FC = () => {
                  <div className="w-16 h-16 border-t-2 border-cine-accent rounded-full animate-spin"></div>
                  <div className="text-center space-y-2">
                      <p className="text-white font-mono tracking-[0.3em] text-sm uppercase font-bold">{generationStep}</p>
-                     <p className="text-cine-accent/50 font-mono text-[10px]">AI 引擎: GEMINI 3 PRO</p>
+                     <p className="text-cine-accent/50 font-mono text-[10px]">AI ENGINE: GEMINI 3 PRO</p>
                  </div>
             </div>
         )}

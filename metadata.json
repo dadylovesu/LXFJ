@@ -1,5 +1,5 @@
 {
-  "name": "橙意机构 - 连续分镜创作器",
-  "description": "为导演和创作者打造的专业影视视觉化工具。支持高保真分镜生成、资产参考分析，并利用 Gemini 3 Pro 辅助视觉叙事。",
+  "name": "连续分镜创作agent",
+  "description": "A professional cinematic visualization tool for directors and creators. Generates high-fidelity storyboards, analyzes reference assets, and assists in visual storytelling using Gemini 3 Pro.",
   "requestFramePermissions": []
 }

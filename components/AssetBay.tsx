@@ -50,14 +50,13 @@ export const AssetBay: React.FC<AssetBayProps> = ({
                 {icon}
                 {title}
             </span>
-            <span className="text-[8px] font-mono text-zinc-700">{list.length} 个资产</span>
+            <span className="text-[8px] font-mono text-zinc-700">{list.length} REF</span>
         </div>
 
         <div className="grid grid-cols-3 gap-2">
             <div 
                 className="aspect-square border border-dashed border-zinc-800 bg-zinc-900/20 rounded-sm hover:border-cine-accent/50 hover:bg-cine-accent/5 transition-all cursor-pointer flex items-center justify-center group"
                 onClick={() => inputRef.current?.click()}
-                title="上传参考图"
             >
                 <input 
                     type="file" 
@@ -85,14 +84,15 @@ export const AssetBay: React.FC<AssetBayProps> = ({
                 >
                     <img src={asset.previewUrl} alt="asset" className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-all" />
                     
+                    {/* Role Index Badge */}
                     {category === 'role' && (
                         <div className="absolute top-1 left-1 bg-cine-accent text-black text-[7px] font-bold px-1 py-0.5 rounded-[1px] shadow-sm">
-                            角色 {asset.index}
+                            R{asset.index}
                         </div>
                     )}
                     {category === 'background' && (
                         <div className="absolute top-1 left-1 bg-zinc-700 text-white text-[7px] font-bold px-1 py-0.5 rounded-[1px] shadow-sm">
-                            场景
+                            BG
                         </div>
                     )}
 

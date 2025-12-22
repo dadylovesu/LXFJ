@@ -38,7 +38,6 @@ export interface GeneratedImage {
   textData?: string; 
   cameraDescription?: string; 
   slices?: string[]; 
-  slicePrompts?: string[]; // Added: Individual prompts for each panel
   gridRows?: number;
   gridCols?: number;
 }
