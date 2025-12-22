@@ -72,7 +72,8 @@ export const generateMultiViewGrid = async (
   aspectRatio: AspectRatio,
   imageSize: ImageSize, 
   categorizedRefs: ReferenceImageData[] = [],
-  contextImage?: string 
+  contextImage?: string,
+  panelInstructions?: string[] // Added panel specific instructions
 ): Promise<{ fullImage: string, slices: string[] }> => {
   await ensureApiKey();
   const ai = getClient();
@@ -85,8 +86,13 @@ export const generateMultiViewGrid = async (
   const bgs = categorizedRefs.filter(r => r.category === 'background');
 
   let systemPrompt = `[CORE TASK]: GENERATE A SINGLE ${gridType} CINEMATIC STORYBOARD GRID.
-    - CONTENT: "${prompt}"
-    - VIEWS: Exactly ${totalViews} unique panels showing progression.`;
+    - MAIN THEME: "${prompt}"
+    - VIEWS: Exactly ${totalViews} unique panels showing narrative progression in a single image grid.`;
+
+  if (panelInstructions && panelInstructions.length > 0) {
+      systemPrompt += `\n\n[PANEL SPECIFICS]: Follow these specific camera and composition instructions for each panel index:
+      ${panelInstructions.map((instr, idx) => `- Panel ${idx + 1}: ${instr || 'AI Choice'}`).join('\n')}`;
+  }
 
   if (roles.length > 0) {
       systemPrompt += `\n\n[CHARACTER CONSISTENCY]:
@@ -95,30 +101,28 @@ export const generateMultiViewGrid = async (
 
   if (bgs.length > 0) {
       systemPrompt += `\n\n[ENVIRONMENT]:
-      - Use the provided background reference for global scene mood, lighting, and architecture. Adapt the characters into this setting.`;
+      - Use the provided background reference for global scene mood, lighting, and architecture. Adapt the characters into this setting consistently across all panels.`;
   } else {
-      systemPrompt += `\n\n[ENVIRONMENT]: Design a professional cinematic setting based on the text prompt if no reference is provided.`;
+      systemPrompt += `\n\n[ENVIRONMENT]: Design a professional cinematic setting based on the text prompt.`;
   }
 
   if (contextImage) {
       systemPrompt += `\n\n[STORY CONTINUITY]:
-      - The separate context image is the previous shot. Progress the narrative from that point.`;
+      - The separate context image is the previous shot. Progress the narrative from that point while maintaining visual style.`;
   }
 
-  systemPrompt += `\n\n[STYLING]: Photorealistic, 35mm film look, volumetric lighting, deep depth of field. NO TEXT.`;
+  systemPrompt += `\n\n[STYLING]: Photorealistic, 35mm film look, volumetric lighting, deep depth of field. NO TEXT overlay on images. High-fidelity cinematic rendering.`;
 
   const parts: any[] = [];
   
-  // 1. Roles first
   roles.forEach(r => parts.push({ inlineData: { mimeType: r.mimeType, data: r.data } }));
-  // 2. Backgrounds
   bgs.forEach(b => parts.push({ inlineData: { mimeType: b.mimeType, data: b.data } }));
-  // 3. Continuity
+  
   if (contextImage) {
       const cleanBase64 = contextImage.includes(',') ? contextImage.split(',')[1] : contextImage;
       parts.push({ inlineData: { mimeType: 'image/png', data: cleanBase64 } });
   }
-  // 4. Instructions
+  
   parts.push({ text: systemPrompt });
 
   try {
@@ -188,6 +192,23 @@ export const editImage = async (
   }
 };
 
+export const generateCameraSuggestions = async (prompt: string, panelCount: number): Promise<string[]> => {
+    await ensureApiKey();
+    const ai = getClient();
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: { parts: [{ text: `Based on the following cinematic scene, suggest ${panelCount} logical, progressive camera movements or compositions for a storyboard sequence. 
+            Format: List only the suggestions, one per line. No numbering.
+            Scene: ${prompt}` }] }
+        });
+        const text = response.text || "";
+        return text.split('\n').filter(line => line.trim().length > 0).slice(0, panelCount);
+    } catch { 
+        return new Array(panelCount).fill("Cinematic composition."); 
+    }
+};
+
 export const generateCameraMovement = async (prompt: string): Promise<string> => {
     await ensureApiKey();
     const ai = getClient();
@@ -195,7 +216,7 @@ export const generateCameraMovement = async (prompt: string): Promise<string> =>
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: { parts: [{ text: `Scene: ${prompt}` }] },
-            config: { systemInstruction: "Output ONLY a technical camera movement description. Max 10 words. English." }
+            config: { systemInstruction: "Output ONLY a technical camera movement description for the overall scene. Max 10 words. English." }
         });
         return response.text || "Static shot.";
     } catch { return "Cinematic move."; }

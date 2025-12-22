@@ -4,6 +4,7 @@ import { AssetBay } from './components/AssetBay';
 import { DirectorDeck } from './components/DirectorDeck';
 import { Canvas } from './components/Canvas';
 import { Inspector } from './components/Inspector';
+import { CameraEditor } from './components/CameraEditor';
 import { Asset, GeneratedImage, AspectRatio, ImageSize, AssetCategory } from './types';
 import { generateMultiViewGrid, fileToBase64, enhancePrompt, analyzeAsset, ReferenceImageData, generateCameraMovement, editImage } from './services/geminiService';
 import { saveToStorage, loadFromStorage, clearStorage } from './services/persistenceService';
@@ -15,7 +16,6 @@ import JSZip from 'jszip';
 const App: React.FC = () => {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [images, setImages] = useState<GeneratedImage[]>([]);
-  // 历史记录栈用于撤回
   const [history, setHistory] = useState<GeneratedImage[][]>([]);
   
   const [selectedImageId, setSelectedImageId] = useState<string | undefined>(undefined);
@@ -26,6 +26,8 @@ const App: React.FC = () => {
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>(AspectRatio.WIDE);
   const [imageSize, setImageSize] = useState<ImageSize>(ImageSize.K4);
   const [prompt, setPrompt] = useState<string>('');
+  const [panelPrompts, setPanelPrompts] = useState<string[]>([]);
+  const [isCameraEditorOpen, setIsCameraEditorOpen] = useState(false);
   
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStep, setGenerationStep] = useState<string>(''); 
@@ -51,22 +53,18 @@ const App: React.FC = () => {
 
   // 更新图片状态并记录历史
   const updateImagesWithHistory = useCallback((newImages: GeneratedImage[]) => {
-    setHistory(prev => [...prev, images].slice(-30)); // 最多保留30步历史
+    setHistory(prev => [...prev, images].slice(-30)); 
     setImages(newImages);
   }, [images]);
 
   // 快捷键监听
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // 删除功能 (Delete 或 Backspace)
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedImageId) {
-        // 防止在输入框中误删
         if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-        
         handleDeleteNode(selectedImageId);
       }
       
-      // 撤回功能 (Ctrl+Z 或 Cmd+Z)
       if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
         if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
         e.preventDefault();
@@ -93,7 +91,6 @@ const App: React.FC = () => {
   }, [images, updateImagesWithHistory]);
 
   const handleUpdateNodePosition = useCallback((id: string, x: number, y: number) => {
-    // 拖拽时不记录历史，否则历史栈会溢出，只更新当前状态
     setImages(prev => prev.map(img => img.id === id ? { ...img, position: { x, y } } : img));
   }, []);
 
@@ -149,7 +146,7 @@ const App: React.FC = () => {
           startX = rootNodes.length === 0 ? 100 : (rootNodes[rootNodes.length-1].position?.x || 100) + 420;
       }
 
-      setGenerationStep("正在根据角色与背景资产构思分镜...");
+      setGenerationStep("正在根据镜头逻辑与视觉资产执行渲染...");
       
       const referenceData: ReferenceImageData[] = [];
       for (const asset of assets) {
@@ -168,10 +165,11 @@ const App: React.FC = () => {
           aspectRatio, 
           imageSize, 
           referenceData,
-          previousContextImage 
+          previousContextImage,
+          panelPrompts // Pass custom panel prompts
       );
       
-      setGenerationStep("正在分析画面动线...");
+      setGenerationStep("正在分析最终画面动线...");
       const cameraMove = await generateCameraMovement(prompt);
 
       const finalNode: GeneratedImage = {
@@ -195,6 +193,8 @@ const App: React.FC = () => {
 
       updateImagesWithHistory([...images, finalNode]);
       setSelectedImageId(finalNode.id);
+      // Clear panel prompts after use to avoid accidental repetition in next new render
+      // setPanelPrompts([]); 
 
     } catch (err: any) {
       setError(err.message || "生成失败");
@@ -216,7 +216,6 @@ const App: React.FC = () => {
       
       const newSliceUrl = await editImage(currentSlice, editPrompt, model, image.aspectRatio);
 
-      // Update state: add old slice to history, replace current slice
       const newImages = images.map(img => {
         if (img.id === imageId) {
           const newSlices = [...(img.slices || [])];
@@ -248,11 +247,9 @@ const App: React.FC = () => {
         const newSlices = [...(img.slices || [])];
         const newHistoryList = [...history];
         
-        // Push current into history and set target as current
         const current = newSlices[sliceIndex];
         newSlices[sliceIndex] = targetUrl;
-        newHistoryList[historyIndex] = current; // Swap or just move? Usually move is cleaner. 
-        // Let's just swap for simplicity in this specific action
+        newHistoryList[historyIndex] = current; 
         
         const updatedHistory = { ...(img.sliceHistory || {}) };
         updatedHistory[sliceIndex] = newHistoryList;
@@ -284,20 +281,17 @@ const App: React.FC = () => {
 
       const zip = new JSZip();
 
-      // Helper to convert data URL to Blob
       const addToZip = async (url: string, filename: string) => {
         const response = await fetch(url);
         const blob = await response.blob();
         zip.file(filename, blob);
       };
 
-      // 1. Add full grid image
       const fullImageUrl = selected.fullGridUrl || selected.url;
       if (fullImageUrl) {
         await addToZip(fullImageUrl, `full_grid_${groupIndex}.png`);
       }
 
-      // 2. Add individual slices
       if (selected.slices) {
         for (let i = 0; i < selected.slices.length; i++) {
           await addToZip(selected.slices[i], `panel_${i + 1}.png`);
@@ -327,7 +321,7 @@ const App: React.FC = () => {
                 <span className="w-2.5 h-2.5 bg-cine-accent rounded-[1px]"></span>
                 橙意机构 - 连续分镜
             </h1>
-            <button onClick={() => { if(confirm("重置工作区？")) { setImages([]); setHistory([]); clearStorage(); } }} className="text-zinc-700 hover:text-red-500 transition-colors">
+            <button onClick={() => { if(confirm("重置工作区？")) { setImages([]); setHistory([]); setPanelPrompts([]); clearStorage(); } }} className="text-zinc-700 hover:text-red-500 transition-colors">
               <Trash2 size={14} />
             </button>
         </div>
@@ -351,7 +345,7 @@ const App: React.FC = () => {
                 onStop={() => setIsGenerating(false)}
                 isGenerating={isGenerating}
                 onEnhancePrompt={async () => setPrompt(await enhancePrompt(prompt))}
-                onGenerateCamera={async () => setAnalysisResult(await generateCameraMovement(prompt))}
+                onGenerateCamera={() => setIsCameraEditorOpen(true)}
                 isContinuing={!!(selectedImageId && images.find(i => i.id === selectedImageId)?.nodeType === 'render')}
                 onDeselect={() => { setSelectedImageId(undefined); setSelectedAssetId(undefined); }}
             />
@@ -387,6 +381,17 @@ const App: React.FC = () => {
                 <button onClick={() => setError(null)}><XIcon size={14} /></button>
             </div>
         )}
+
+        {/* New Camera Logic Editor Modal */}
+        <CameraEditor 
+          isOpen={isCameraEditorOpen}
+          onClose={() => setIsCameraEditorOpen(false)}
+          rows={gridRows}
+          cols={gridCols}
+          mainPrompt={prompt}
+          initialPrompts={panelPrompts}
+          onSave={(newPrompts) => setPanelPrompts(newPrompts)}
+        />
       </main>
 
       <aside className="w-[400px] bg-cine-dark border-l border-cine-border z-20">

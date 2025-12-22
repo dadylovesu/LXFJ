@@ -2,7 +2,7 @@
 import React from 'react';
 import { Button } from './Button';
 import { AspectRatio, ImageSize } from '../types';
-import { Settings2, GitMerge, Video, Layers, Zap, LayoutGrid, ChevronRight, ChevronLeft, XCircle, PlusCircle, Square } from 'lucide-react';
+import { Settings2, GitMerge, Video, Layers, Zap, LayoutGrid, ChevronRight, ChevronLeft, XCircle, PlusCircle, Square, Sparkles } from 'lucide-react';
 
 interface DirectorDeckProps {
   gridRows: number;
@@ -176,7 +176,7 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
       </div>
 
       {/* Prompt Area */}
-      <div className="space-y-2.5 flex-1 flex flex-col min-h-[200px]">
+      <div className="space-y-2.5 flex-1 flex flex-col min-h-[160px]">
         <div className="flex justify-between items-end">
             <label className="text-[9px] text-zinc-600 font-mono uppercase tracking-[0.15em] flex items-center gap-2.5">
                 <span className="w-1 h-3 bg-cine-accent rounded-full shadow-[0_0_8px_#FF7A00]"></span>
@@ -222,9 +222,11 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
                 size="sm" 
                 onClick={onGenerateCamera} 
                 disabled={isGenerating || !prompt.trim()} 
-                className="w-full text-[9px] h-9 border-dashed border-zinc-800 hover:border-zinc-700 bg-zinc-900/20 group"
+                className="w-full text-[9px] h-10 border-dashed border-zinc-800 hover:border-zinc-700 bg-zinc-900/20 group relative overflow-hidden"
               >
-                  <Video size={12} className="mr-2 text-zinc-500 group-hover:text-cine-accent transition-colors" /> 生成镜头运动轨迹 (CAM-GEN)
+                  <Video size={12} className="mr-2 text-zinc-500 group-hover:text-cine-accent transition-colors" /> 
+                  配置分镜镜头逻辑 (CAM-LOGIC)
+                  <Sparkles size={8} className="absolute top-2 right-2 text-cine-accent opacity-40 group-hover:opacity-100 transition-opacity" />
               </Button>
           </div>
       )}
