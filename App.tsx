@@ -17,10 +17,17 @@ const App: React.FC = () => {
   const [selectedImageId, setSelectedImageId] = useState<string | undefined>(undefined);
   const [selectedAssetId, setSelectedAssetId] = useState<string | undefined>(undefined);
   
+  // 历史记录栈
+  const [undoStack, setUndoStack] = useState<GeneratedImage[][]>([]);
+  const [redoStack, setRedoStack] = useState<GeneratedImage[][]>([]);
+
   const [gridRows, setGridRows] = useState(2);
   const [gridCols, setGridCols] = useState(2);
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>(AspectRatio.WIDE);
-  const [imageSize, setImageSize] = useState<ImageSize>(ImageSize.K4);
+  const [imageSize, setImageSize] = useState<ImageSize>(AspectRatio.WIDE as any === '16:9' ? ImageSize.K4 : ImageSize.K1); 
+  // 初始化补偿
+  useEffect(() => { setImageSize(ImageSize.K4); }, []);
+
   const [prompt, setPrompt] = useState<string>('');
   const [cameraTrack, setCameraTrack] = useState<string>('');
   
@@ -32,6 +39,12 @@ const App: React.FC = () => {
 
   const abortControllerRef = useRef<AbortController | null>(null);
 
+  // 辅助函数：保存当前状态到历史
+  const pushToHistory = useCallback((currentImages: GeneratedImage[]) => {
+    setUndoStack(prev => [...prev, currentImages]);
+    setRedoStack([]); // 发生新动作，清空重做栈
+  }, []);
+
   useEffect(() => {
     loadFromStorage<GeneratedImage[]>('cine_images').then(saved => {
         if (saved) setImages(saved);
@@ -41,6 +54,59 @@ const App: React.FC = () => {
   useEffect(() => {
     saveToStorage('cine_images', images);
   }, [images]);
+
+  // 键盘快捷键监听
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // 如果焦点在输入框内，不触发快捷键
+      const isTyping = e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement;
+      if (isTyping) return;
+
+      // 删除键
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedImageId) {
+          handleDelete(selectedImageId);
+        }
+      }
+
+      // Ctrl + Z (撤销)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        handleUndo();
+      }
+
+      // Ctrl + Shift + Z 或 Ctrl + Y (重做)
+      if ((e.ctrlKey || e.metaKey) && ((e.shiftKey && e.key.toLowerCase() === 'z') || e.key.toLowerCase() === 'y')) {
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedImageId, undoStack, redoStack, images]);
+
+  const handleUndo = useCallback(() => {
+    if (undoStack.length === 0) return;
+    const previous = undoStack[undoStack.length - 1];
+    setRedoStack(prev => [...prev, images]);
+    setUndoStack(prev => prev.slice(0, -1));
+    setImages(previous);
+  }, [undoStack, images]);
+
+  const handleRedo = useCallback(() => {
+    if (redoStack.length === 0) return;
+    const next = redoStack[redoStack.length - 1];
+    setUndoStack(prev => [...prev, images]);
+    setRedoStack(prev => prev.slice(0, -1));
+    setImages(next);
+  }, [redoStack, images]);
+
+  const handleDelete = (id: string) => {
+    pushToHistory(images);
+    setImages(prev => prev.filter(i => i.id !== id));
+    if (selectedImageId === id) setSelectedImageId(undefined);
+  };
 
   const handleAddAsset = (files: FileList, category: AssetCategory) => {
     Array.from(files).forEach((file) => {
@@ -143,6 +209,8 @@ const App: React.FC = () => {
           gridCols
       };
 
+      // 保存历史
+      pushToHistory(images);
       setImages(prev => [...prev, finalNode]);
       setSelectedImageId(finalNode.id);
 
@@ -165,11 +233,9 @@ const App: React.FC = () => {
         const sceneFolder = zip.folder(`场景_${i + 1}`);
         if (!sceneFolder) continue;
 
-        // 保存主网格图
         const masterData = (node.fullGridUrl || node.url).split(',')[1];
         sceneFolder.file(`完整分镜网格.png`, masterData, { base64: true });
 
-        // 保存切分后的单图
         if (node.slices) {
             for (let s = 0; s < node.slices.length; s++) {
                 const sliceData = node.slices[s].split(',')[1];
@@ -177,7 +243,6 @@ const App: React.FC = () => {
             }
         }
         
-        // 保存描述文本
         sceneFolder.file(`导演描述.txt`, `总提示词: ${node.prompt}\n\n镜头运动: ${node.cameraDescription || '无'}\n\n分镜描述:\n${node.slicePrompts?.join('\n') || ''}`);
     }
 
@@ -196,7 +261,7 @@ const App: React.FC = () => {
                 <span className="w-2.5 h-2.5 bg-cine-accent rounded-[1px]"></span>
                 橙意机构 - 连续分镜
             </h1>
-            <button onClick={() => { if(confirm("确定要重置当前工作区吗？所有进度将丢失。")) { setImages([]); clearStorage(); } }} className="text-zinc-700 hover:text-red-500 transition-colors" title="重置工作区">
+            <button onClick={() => { if(confirm("确定要重置当前工作区吗？所有进度将丢失。")) { setImages([]); clearStorage(); setUndoStack([]); setRedoStack([]); } }} className="text-zinc-700 hover:text-red-500 transition-colors" title="重置工作区">
               <Trash2 size={14} />
             </button>
         </div>
@@ -237,8 +302,11 @@ const App: React.FC = () => {
             images={images} 
             onSelect={(i) => { setSelectedImageId(i.id); setSelectedAssetId(undefined); }} 
             selectedId={selectedImageId}
-            onDelete={(id) => setImages(prev => prev.filter(i => i.id !== id))} 
-            onUpdateNodePosition={(id, x, y) => setImages(prev => prev.map(img => img.id === id ? { ...img, position: { x, y } } : img))}
+            onDelete={handleDelete} 
+            onUpdateNodePosition={(id, x, y) => {
+                // 拖拽位置更新不频繁记录历史，仅更新当前状态
+                setImages(prev => prev.map(img => img.id === id ? { ...img, position: { x, y } } : img));
+            }}
             onDownloadAll={handleDownloadAll}
             assets={assets} 
             onDeselectAll={() => { setSelectedImageId(undefined); setSelectedAssetId(undefined); }}
@@ -253,6 +321,15 @@ const App: React.FC = () => {
                  </div>
             </div>
         )}
+
+        {/* 快捷操作提示 (撤销/重做) */}
+        <div className="absolute bottom-6 right-6 flex items-center gap-3 z-30 pointer-events-none opacity-40 hover:opacity-100 transition-opacity">
+            <div className="bg-zinc-900 border border-zinc-800 px-3 py-1 rounded-sm text-[9px] font-mono text-zinc-500 uppercase tracking-widest flex items-center gap-4 pointer-events-auto">
+                <span className={undoStack.length > 0 ? "text-cine-accent" : ""}>Undo: Ctrl+Z</span>
+                <span className={redoStack.length > 0 ? "text-cine-accent" : ""}>Redo: Ctrl+Y</span>
+                {selectedImageId && <span className="text-red-500/70">Delete: Del</span>}
+            </div>
+        </div>
 
         {error && (
             <div className="absolute bottom-8 left-8 z-50 bg-red-950/80 backdrop-blur border border-red-500/30 text-red-200 p-4 rounded-md text-xs flex gap-3">
