@@ -1,3 +1,4 @@
+
 export enum AspectRatio {
   SQUARE = '1:1',
   STANDARD = '4:3',
@@ -5,8 +6,8 @@ export enum AspectRatio {
   WIDE = '16:9',
   MOBILE = '9:16',
   CINEMA = '21:9',
-  PHOTO_LANDSCAPE = '3:2', // Added
-  PHOTO_PORTRAIT = '2:3'   // Added
+  PHOTO_LANDSCAPE = '3:2',
+  PHOTO_PORTRAIT = '2:3'
 }
 
 export enum ImageSize {
@@ -16,6 +17,8 @@ export enum ImageSize {
 }
 
 export type NodeType = 'prompt' | 'asset_group' | 'render' | 'slice';
+
+export type AssetCategory = 'role' | 'background';
 
 export interface GeneratedImage {
   id: string;
@@ -44,6 +47,8 @@ export interface Asset {
   file: File;
   previewUrl: string;
   type: 'image' | 'video';
+  category: AssetCategory;
+  index?: number; // For Role 1, Role 2 labeling
   analysis?: string;
 }
 
