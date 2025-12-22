@@ -38,6 +38,7 @@ export interface GeneratedImage {
   textData?: string; 
   cameraDescription?: string; 
   slices?: string[]; 
+  sliceHistory?: Record<number, string[]>; // Map slice index to array of past image URLs
   gridRows?: number;
   gridCols?: number;
 }

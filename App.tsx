@@ -5,7 +5,7 @@ import { DirectorDeck } from './components/DirectorDeck';
 import { Canvas } from './components/Canvas';
 import { Inspector } from './components/Inspector';
 import { Asset, GeneratedImage, AspectRatio, ImageSize, AssetCategory } from './types';
-import { generateMultiViewGrid, fileToBase64, enhancePrompt, analyzeAsset, ReferenceImageData, generateCameraMovement } from './services/geminiService';
+import { generateMultiViewGrid, fileToBase64, enhancePrompt, analyzeAsset, ReferenceImageData, generateCameraMovement, editImage } from './services/geminiService';
 import { saveToStorage, loadFromStorage, clearStorage } from './services/persistenceService';
 import { AlertCircle, X as XIcon, Trash2 } from 'lucide-react';
 import { Button } from './components/Button';
@@ -186,6 +186,7 @@ const App: React.FC = () => {
           position: { x: startX, y: startY },
           cameraDescription: cameraMove,
           slices: finalResult.slices,
+          sliceHistory: {}, 
           gridRows,
           gridCols
       };
@@ -199,6 +200,66 @@ const App: React.FC = () => {
       setIsGenerating(false);
       setGenerationStep("");
     }
+  };
+
+  const handleEditSlice = async (imageId: string, sliceIndex: number, editPrompt: string, usePro: boolean) => {
+    setIsGenerating(true);
+    setGenerationStep("正在应用AI局部重绘...");
+    try {
+      const image = images.find(img => img.id === imageId);
+      if (!image || !image.slices) return;
+
+      const currentSlice = image.slices[sliceIndex];
+      const model = usePro ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
+      
+      const newSliceUrl = await editImage(currentSlice, editPrompt, model, image.aspectRatio);
+
+      // Update state: add old slice to history, replace current slice
+      const newImages = images.map(img => {
+        if (img.id === imageId) {
+          const newSlices = [...(img.slices || [])];
+          const newHistory = { ...(img.sliceHistory || {}) };
+          
+          if (!newHistory[sliceIndex]) newHistory[sliceIndex] = [];
+          newHistory[sliceIndex].push(currentSlice);
+          
+          newSlices[sliceIndex] = newSliceUrl;
+          
+          return { ...img, slices: newSlices, sliceHistory: newHistory };
+        }
+        return img;
+      });
+
+      updateImagesWithHistory(newImages);
+    } catch (err: any) {
+      setError(err.message || "重绘失败");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleRevertSlice = (imageId: string, sliceIndex: number, historyIndex: number) => {
+    const newImages = images.map(img => {
+      if (img.id === imageId) {
+        const history = img.sliceHistory?.[sliceIndex] || [];
+        const targetUrl = history[historyIndex];
+        const newSlices = [...(img.slices || [])];
+        const newHistoryList = [...history];
+        
+        // Push current into history and set target as current
+        const current = newSlices[sliceIndex];
+        newSlices[sliceIndex] = targetUrl;
+        newHistoryList[historyIndex] = current; // Swap or just move? Usually move is cleaner. 
+        // Let's just swap for simplicity in this specific action
+        
+        const updatedHistory = { ...(img.sliceHistory || {}) };
+        updatedHistory[sliceIndex] = newHistoryList;
+
+        return { ...img, slices: newSlices, sliceHistory: updatedHistory };
+      }
+      return img;
+    });
+    updateImagesWithHistory(newImages);
   };
 
   return (
@@ -257,7 +318,7 @@ const App: React.FC = () => {
                  <div className="w-16 h-16 border-t-2 border-cine-accent rounded-full animate-spin"></div>
                  <div className="text-center space-y-2">
                      <p className="text-white font-mono tracking-[0.3em] text-sm uppercase font-bold">{generationStep}</p>
-                     <p className="text-cine-accent/50 font-mono text-[10px]">AI ENGINE: GEMINI 3 PRO</p>
+                     <p className="text-cine-accent/50 font-mono text-[10px]">AI ENGINE: GEMINI MULTIMODAL</p>
                  </div>
             </div>
         )}
@@ -271,7 +332,7 @@ const App: React.FC = () => {
         )}
       </main>
 
-      <aside className="w-[360px] bg-cine-dark border-l border-cine-border z-20">
+      <aside className="w-[400px] bg-cine-dark border-l border-cine-border z-20">
          <Inspector 
             selectedImage={images.find(i => i.id === selectedImageId) || null}
             selectedAsset={assets.find(a => a.id === selectedAssetId) || null}
@@ -284,6 +345,8 @@ const App: React.FC = () => {
             }}
             isAnalyzing={isAnalyzing}
             analysisResult={analysisResult}
+            onEditSlice={handleEditSlice}
+            onRevertSlice={handleRevertSlice}
          />
       </aside>
     </div>

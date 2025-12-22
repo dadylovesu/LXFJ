@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useLayoutEffect, useCallback, memo } from 'react';
 import { GeneratedImage, Asset } from '../types';
-import { Trash2, Archive, LayoutGrid, List, MonitorPlay, Workflow, Type, Images, Video, X, Maximize2, ArrowLeft } from 'lucide-react';
+import { Trash2, Archive, LayoutGrid, List, MonitorPlay, Workflow, Type, Images, Video, X, Maximize2, ArrowLeft, History } from 'lucide-react';
 import { Button } from './Button';
 
 interface CanvasProps {
@@ -91,7 +91,6 @@ const Node = memo(({ image, selected, onSelect, onDelete, onMouseDown, allAssets
                 width: width,
             }}
             onMouseDown={(e) => {
-                // 重要：阻止事件冒泡到画布背景，防止触发反选逻辑
                 e.stopPropagation(); 
                 onMouseDown(e); 
                 onSelect();
@@ -201,10 +200,17 @@ const Node = memo(({ image, selected, onSelect, onDelete, onMouseDown, allAssets
                                             <div 
                                                 key={idx} 
                                                 className="relative w-full h-full overflow-hidden cursor-pointer group/slice"
-                                                onClick={(e) => { e.stopPropagation(); setExpandedSlice(sliceUrl); }}
+                                                onClick={(e) => { e.stopPropagation(); setExpandedSlice(sliceUrl); onSelect(); }}
                                             >
-                                                <img src={sliceUrl} className="w-full h-full object-cover hover:scale-110 transition-transform duration-300" />
+                                                <img src={sliceUrl} className="w-full h-full object-cover group-hover/slice:scale-110 transition-transform duration-500" />
                                                 <div className="absolute inset-0 bg-white/0 group-hover/slice:bg-white/10 transition-colors pointer-events-none" />
+                                                
+                                                {/* History Indicator Overlay */}
+                                                {image.sliceHistory?.[idx] && image.sliceHistory[idx].length > 0 && (
+                                                    <div className="absolute bottom-1 right-1 px-1 py-0.5 bg-black/70 backdrop-blur-md rounded-[1px] text-cine-accent opacity-0 group-hover/slice:opacity-100 transition-opacity">
+                                                        <History size={8} />
+                                                    </div>
+                                                )}
                                             </div>
                                         ))}
                                     </div>
@@ -283,7 +289,7 @@ const DetailViewOverlay: React.FC<{ image: GeneratedImage; onClose: () => void }
                 <div className="flex items-center gap-4">
                      <button onClick={onClose} className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors text-xs font-mono uppercase tracking-wider">
                         <ArrowLeft size={16} />
-                        返回列表 (Back)
+                        返回 (Back)
                     </button>
                     <div className="h-4 w-[1px] bg-zinc-700"></div>
                     <span className="text-white text-xs font-bold">{image.prompt.substring(0, 50)}...</span>
@@ -318,6 +324,12 @@ const DetailViewOverlay: React.FC<{ image: GeneratedImage; onClose: () => void }
                                             <div className="absolute inset-0 bg-black/0 group-hover/slice:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover/slice:opacity-100">
                                                 <Maximize2 className="text-white drop-shadow-md" size={32} />
                                             </div>
+                                            {image.sliceHistory?.[idx] && image.sliceHistory[idx].length > 0 && (
+                                                <div className="absolute top-4 left-4 flex items-center gap-2 bg-cine-accent/90 text-black px-2 py-1 rounded-sm text-[10px] font-bold font-mono tracking-widest shadow-lg animate-pulse">
+                                                    <History size={12} />
+                                                    v.{image.sliceHistory[idx].length + 1}
+                                                </div>
+                                            )}
                                         </div>
                                     ))}
                                 </div>
@@ -351,7 +363,6 @@ export const Canvas: React.FC<CanvasProps> = ({ images, assets, onSelect, select
   }, []);
 
   const handleMouseDown = (e: React.MouseEvent) => {
-      // 只有点击画布背景才触发全画布拖拽和反选
       if (e.target === e.currentTarget) {
         setIsDraggingCanvas(true);
         lastMousePos.current = { x: e.clientX, y: e.clientY };
@@ -447,7 +458,7 @@ export const Canvas: React.FC<CanvasProps> = ({ images, assets, onSelect, select
                         OrangeStudio 橙意机构
                     </h1>
                     <p className="text-zinc-500 text-sm max-w-md mx-auto leading-relaxed">
-                        专业的连续分镜创作器。现支持 <span className="text-cine-accent">动态宫格配置</span>，自动生成成片并智能切分。
+                        专业的连续分镜创作器。现支持 <span className="text-cine-accent">动态宫格配置</span>，以及 <span className="text-white">智能局部版本重绘</span>。
                     </p>
                 </div>
             </div>

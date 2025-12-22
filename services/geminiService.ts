@@ -18,7 +18,7 @@ const getClient = () => {
   return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
-const validateAspectRatio = (ar: AspectRatio): string => {
+const validateAspectRatio = (ar: AspectRatio | string): string => {
   const supported = ["1:1", "3:4", "4:3", "9:16", "16:9"];
   if (supported.includes(ar)) return ar;
   switch (ar) {
@@ -149,6 +149,45 @@ export const generateMultiViewGrid = async (
   }
 };
 
+export const editImage = async (
+  base64Image: string,
+  editPrompt: string,
+  modelName: 'gemini-2.5-flash-image' | 'gemini-3-pro-image-preview',
+  aspectRatio: string = '1:1'
+): Promise<string> => {
+  await ensureApiKey();
+  const ai = getClient();
+  
+  const cleanBase64 = base64Image.includes(',') ? base64Image.split(',')[1] : base64Image;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: modelName,
+      contents: {
+        parts: [
+          { inlineData: { mimeType: 'image/png', data: cleanBase64 } },
+          { text: `Edit this image according to the instruction: "${editPrompt}". Keep the overall cinematic style, character features, and composition as consistent as possible with the source. Photorealistic cinematic render.` }
+        ]
+      },
+      config: {
+        imageConfig: {
+          aspectRatio: validateAspectRatio(aspectRatio) as any
+        }
+      }
+    });
+
+    for (const part of response.candidates?.[0]?.content?.parts || []) {
+      if (part.inlineData) {
+        return `data:image/png;base64,${part.inlineData.data}`;
+      }
+    }
+    throw new Error("No image data returned from edit engine.");
+  } catch (error: any) {
+    console.error("Image edit error:", error);
+    throw error;
+  }
+};
+
 export const generateCameraMovement = async (prompt: string): Promise<string> => {
     await ensureApiKey();
     const ai = getClient();
@@ -193,14 +232,4 @@ export const fileToBase64 = (file: File): Promise<string> => {
     reader.onload = () => resolve((reader.result as string).split(',')[1]);
     reader.onerror = reject;
   });
-};
-
-export const stitchImages = (files: File[], rows: number, cols: number, ar: string): Promise<string> => {
-    // This is a simplified version of stitching for the collage tool
-    return new Promise((resolve) => {
-        const canvas = document.createElement('canvas');
-        canvas.width = 1920;
-        canvas.height = 1080; // Placeholder
-        resolve(canvas.toDataURL('image/jpeg'));
-    });
 };
