@@ -9,6 +9,8 @@ import { generateMultiViewGrid, fileToBase64, enhancePrompt, analyzeAsset, Refer
 import { saveToStorage, loadFromStorage, clearStorage } from './services/persistenceService';
 import { AlertCircle, X as XIcon, Trash2 } from 'lucide-react';
 import { Button } from './components/Button';
+// @ts-ignore
+import JSZip from 'jszip';
 
 const App: React.FC = () => {
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -262,6 +264,61 @@ const App: React.FC = () => {
     updateImagesWithHistory(newImages);
   };
 
+  const handleDownloadSelected = async () => {
+    const selected = images.find(i => i.id === selectedImageId);
+    if (!selected || selected.nodeType !== 'render') {
+      alert("请先在画布中选择一个分镜组（RENDER NODE）进行下载。");
+      return;
+    }
+
+    try {
+      setGenerationStep("正在准备 ZIP 下载文件...");
+      setIsGenerating(true);
+
+      const renderNodes = images
+        .filter(i => i.nodeType === 'render')
+        .sort((a, b) => a.timestamp - b.timestamp);
+      
+      const groupIndex = renderNodes.findIndex(i => i.id === selected.id) + 1;
+      const zipName = `组${groupIndex}.zip`;
+
+      const zip = new JSZip();
+
+      // Helper to convert data URL to Blob
+      const addToZip = async (url: string, filename: string) => {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        zip.file(filename, blob);
+      };
+
+      // 1. Add full grid image
+      const fullImageUrl = selected.fullGridUrl || selected.url;
+      if (fullImageUrl) {
+        await addToZip(fullImageUrl, `full_grid_${groupIndex}.png`);
+      }
+
+      // 2. Add individual slices
+      if (selected.slices) {
+        for (let i = 0; i < selected.slices.length; i++) {
+          await addToZip(selected.slices[i], `panel_${i + 1}.png`);
+        }
+      }
+
+      const content = await zip.generateAsync({ type: "blob" });
+      const downloadLink = document.createElement('a');
+      downloadLink.href = URL.createObjectURL(content);
+      downloadLink.download = zipName;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+    } catch (err: any) {
+      setError("下载 ZIP 失败: " + err.message);
+    } finally {
+      setIsGenerating(false);
+      setGenerationStep("");
+    }
+  };
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-cine-black text-zinc-400 font-sans">
       <aside className="w-[340px] flex flex-col border-r border-cine-border bg-cine-dark z-20 shadow-2xl">
@@ -308,7 +365,7 @@ const App: React.FC = () => {
             selectedId={selectedImageId}
             onDelete={handleDeleteNode} 
             onUpdateNodePosition={handleUpdateNodePosition}
-            onDownloadAll={() => {}}
+            onDownloadAll={handleDownloadSelected}
             assets={assets} 
             onDeselectAll={() => { setSelectedImageId(undefined); setSelectedAssetId(undefined); }}
         />
