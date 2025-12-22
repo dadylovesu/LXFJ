@@ -104,7 +104,7 @@ const App: React.FC = () => {
         previewUrl: url,
         type: 'image',
         category,
-        index: category === 'role' ? categoryCount + 1 : undefined
+        index: (category === 'role' || category === 'prop') ? categoryCount + 1 : undefined
       };
       setAssets((prev) => [...prev, newAsset]);
     });
@@ -114,9 +114,13 @@ const App: React.FC = () => {
     setAssets((prev) => {
         const filtered = prev.filter((a) => a.id !== id);
         let roleIdx = 1;
+        let propIdx = 1;
         return filtered.map(a => {
             if (a.category === 'role') {
                 return { ...a, index: roleIdx++ };
+            }
+            if (a.category === 'prop') {
+                return { ...a, index: propIdx++ };
             }
             return a;
         });
@@ -146,7 +150,7 @@ const App: React.FC = () => {
           startX = rootNodes.length === 0 ? 100 : (rootNodes[rootNodes.length-1].position?.x || 100) + 420;
       }
 
-      setGenerationStep("正在根据镜头逻辑与视觉资产执行渲染...");
+      setGenerationStep("正在根据镜头逻辑、核心道具与视觉资产执行渲染...");
       
       const referenceData: ReferenceImageData[] = [];
       for (const asset of assets) {

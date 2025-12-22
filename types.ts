@@ -18,7 +18,7 @@ export enum ImageSize {
 
 export type NodeType = 'prompt' | 'asset_group' | 'render' | 'slice';
 
-export type AssetCategory = 'role' | 'background';
+export type AssetCategory = 'role' | 'background' | 'prop';
 
 export interface GeneratedImage {
   id: string;
@@ -49,7 +49,7 @@ export interface Asset {
   previewUrl: string;
   type: 'image' | 'video';
   category: AssetCategory;
-  index?: number; // For Role 1, Role 2 labeling
+  index?: number; // For Role 1, Role 2 or Prop 1, Prop 2 labeling
   analysis?: string;
 }
 

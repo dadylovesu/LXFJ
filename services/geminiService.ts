@@ -61,7 +61,7 @@ const sliceImageGrid = (base64Data: string, rows: number, cols: number): Promise
 export interface ReferenceImageData {
   mimeType: string;
   data: string;
-  category: 'role' | 'background';
+  category: 'role' | 'background' | 'prop';
   roleIndex?: number;
 }
 
@@ -84,6 +84,7 @@ export const generateMultiViewGrid = async (
 
   const roles = categorizedRefs.filter(r => r.category === 'role');
   const bgs = categorizedRefs.filter(r => r.category === 'background');
+  const props = categorizedRefs.filter(r => r.category === 'prop');
 
   let systemPrompt = `[CORE TASK]: GENERATE A SINGLE ${gridType} CINEMATIC STORYBOARD GRID.
     - MAIN THEME: "${prompt}"
@@ -96,26 +97,30 @@ export const generateMultiViewGrid = async (
 
   if (roles.length > 0) {
       systemPrompt += `\n\n[CHARACTER CONSISTENCY]:
-      ${roles.map((r, i) => `- Reference Image ${i+1} is "ROLE ${r.roleIndex}". Keep this character's face, clothing, and features exactly as shown in all panels.`).join('\n')}`;
+      ${roles.map((r, i) => `- Reference Image ${i+1} is "ROLE ${r.roleIndex}". Maintain this character's specific facial features, hairstyle, and clothing across all panels.`).join('\n')}`;
+  }
+
+  if (props.length > 0) {
+      systemPrompt += `\n\n[PROP/OBJECT CONSISTENCY]:
+      ${props.map((p, i) => `- Reference Image ${roles.length + i + 1} is "KEY PROP ${p.roleIndex}". This is a critical object (e.g., a specific boat, weapon, tool). Whenever this object appears in a scene, it MUST precisely match the visual design, material, and details of this reference.`).join('\n')}`;
   }
 
   if (bgs.length > 0) {
       systemPrompt += `\n\n[ENVIRONMENT]:
-      - Use the provided background reference for global scene mood, lighting, and architecture. Adapt the characters into this setting consistently across all panels.`;
-  } else {
-      systemPrompt += `\n\n[ENVIRONMENT]: Design a professional cinematic setting based on the text prompt.`;
+      - Use the provided background reference for global scene mood, lighting, and architecture. Adapt characters and props into this setting consistently.`;
   }
 
   if (contextImage) {
       systemPrompt += `\n\n[STORY CONTINUITY]:
-      - The separate context image is the previous shot. Progress the narrative from that point while maintaining visual style.`;
+      - The separate context image is the previous shot. Progress the narrative while maintaining visual style and object/character designs.`;
   }
 
-  systemPrompt += `\n\n[STYLING]: Photorealistic, 35mm film look, volumetric lighting, deep depth of field. NO TEXT overlay on images. High-fidelity cinematic rendering.`;
+  systemPrompt += `\n\n[STYLING]: Photorealistic, 35mm film look, volumetric lighting, cinematic rendering. NO TEXT overlays.`;
 
   const parts: any[] = [];
   
   roles.forEach(r => parts.push({ inlineData: { mimeType: r.mimeType, data: r.data } }));
+  props.forEach(p => parts.push({ inlineData: { mimeType: p.mimeType, data: p.data } }));
   bgs.forEach(b => parts.push({ inlineData: { mimeType: b.mimeType, data: b.data } }));
   
   if (contextImage) {

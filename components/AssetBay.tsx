@@ -1,6 +1,6 @@
 
 import React, { useRef, useState } from 'react';
-import { X, Film, Image as ImageIcon, Plus, UploadCloud, UserSquare2, Mountain, Database } from 'lucide-react';
+import { X, Film, Image as ImageIcon, Plus, UploadCloud, UserSquare2, Mountain, Database, Box } from 'lucide-react';
 import { Asset, AssetCategory } from '../types';
 
 interface AssetBayProps {
@@ -20,10 +20,12 @@ export const AssetBay: React.FC<AssetBayProps> = ({
 }) => {
   const roleInputRef = useRef<HTMLInputElement>(null);
   const bgInputRef = useRef<HTMLInputElement>(null);
+  const propInputRef = useRef<HTMLInputElement>(null);
   const [dragOverCategory, setDragOverCategory] = useState<AssetCategory | null>(null);
 
   const roles = assets.filter(a => a.category === 'role');
   const bgs = assets.filter(a => a.category === 'background');
+  const props = assets.filter(a => a.category === 'prop');
 
   const handleDragOver = (e: React.DragEvent, category: AssetCategory) => {
     e.preventDefault();
@@ -84,10 +86,15 @@ export const AssetBay: React.FC<AssetBayProps> = ({
                 >
                     <img src={asset.previewUrl} alt="asset" className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-all" />
                     
-                    {/* Role Index Badge */}
+                    {/* Badge */}
                     {category === 'role' && (
                         <div className="absolute top-1 left-1 bg-cine-accent text-black text-[7px] font-bold px-1 py-0.5 rounded-[1px] shadow-sm">
                             R{asset.index}
+                        </div>
+                    )}
+                    {category === 'prop' && (
+                        <div className="absolute top-1 left-1 bg-blue-600 text-white text-[7px] font-bold px-1 py-0.5 rounded-[1px] shadow-sm">
+                            P{asset.index}
                         </div>
                     )}
                     {category === 'background' && (
@@ -109,7 +116,7 @@ export const AssetBay: React.FC<AssetBayProps> = ({
   );
 
   return (
-    <div className="flex flex-col space-y-6">
+    <div className="flex flex-col space-y-4">
       <div className="flex items-center gap-2 px-1 text-zinc-400">
          <Database size={10} />
          <span className="text-[10px] uppercase tracking-[0.25em] font-mono font-bold">01. 核心资产库 (ASSETS)</span>
@@ -117,6 +124,8 @@ export const AssetBay: React.FC<AssetBayProps> = ({
 
       <div className="space-y-4">
           {renderSection("角色/演员 (ROLES)", <UserSquare2 size={10} />, 'role', roles, roleInputRef)}
+          <div className="h-[1px] bg-zinc-800/50 mx-2"></div>
+          {renderSection("关键道具 (PROPS)", <Box size={10} />, 'prop', props, propInputRef)}
           <div className="h-[1px] bg-zinc-800/50 mx-2"></div>
           {renderSection("环境/场景 (BACKGROUNDS)", <Mountain size={10} />, 'background', bgs, bgInputRef)}
       </div>
