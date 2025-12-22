@@ -1,8 +1,8 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from './Button';
 import { AspectRatio, ImageSize } from '../types';
-import { Settings2, GitMerge, Video, Layers, Zap, LayoutGrid, ChevronRight, ChevronLeft, XCircle, PlusCircle, Square, Wand2 } from 'lucide-react';
+import { Settings2, GitMerge, Video, Layers, Zap, LayoutGrid, ChevronRight, ChevronLeft, XCircle, PlusCircle, Square, Wand2, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface DirectorDeckProps {
   gridRows: number;
@@ -15,6 +15,8 @@ interface DirectorDeckProps {
   setImageSize: (size: ImageSize) => void;
   prompt: string;
   setPrompt: (text: string) => void;
+  cameraTrack: string;
+  setCameraTrack: (text: string) => void;
   onGenerate: () => void;
   onStop?: () => void;
   isGenerating: boolean;
@@ -35,6 +37,8 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
   setImageSize,
   prompt,
   setPrompt,
+  cameraTrack,
+  setCameraTrack,
   onGenerate,
   onStop,
   isGenerating,
@@ -43,6 +47,7 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
   isContinuing = false,
   onDeselect
 }) => {
+  const [showCameraTrack, setShowCameraTrack] = useState(false);
   
   const getQualityLabel = () => {
       switch(imageSize) {
@@ -170,7 +175,35 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
         </div>
       </div>
 
-      <div className="space-y-2.5 flex-1 flex flex-col min-h-[200px]">
+      {/* Manual Camera Track Section */}
+      <div className="space-y-2.5">
+        <button 
+          onClick={() => setShowCameraTrack(!showCameraTrack)}
+          className={`w-full flex items-center justify-between p-2.5 rounded-sm border transition-all ${
+            showCameraTrack ? 'bg-cine-accent/5 border-cine-accent/30 text-cine-accent' : 'bg-zinc-900/40 border-zinc-800/60 text-zinc-600 hover:text-zinc-400'
+          }`}
+        >
+          <div className="flex items-center gap-2.5">
+            <Video size={10} className={showCameraTrack ? 'text-cine-accent' : 'text-zinc-600'} />
+            <span className="text-[9px] font-mono uppercase tracking-[0.15em] font-bold">高级镜头轨迹 (CAMERA TRACK)</span>
+          </div>
+          {showCameraTrack ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+        </button>
+
+        {showCameraTrack && (
+          <div className="p-3 bg-black/40 border border-cine-accent/20 rounded-sm animate-in slide-in-from-top-2 duration-300">
+             <textarea
+                value={cameraTrack}
+                onChange={(e) => setCameraTrack(e.target.value)}
+                placeholder="例如：第1格特写，第2格中景，带轻微推移。若留空则AI智能决定..."
+                className="w-full h-16 bg-transparent border-none p-0 text-[11px] text-zinc-400 focus:ring-0 resize-none font-mono leading-relaxed placeholder:text-zinc-800 custom-scrollbar"
+                spellCheck={false}
+             />
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-2.5 flex-1 flex flex-col min-h-[160px]">
         <div className="flex justify-between items-end">
             <label className="text-[9px] text-zinc-600 font-mono uppercase tracking-[0.15em] flex items-center gap-2.5">
                 <span className="w-1 h-3 bg-cine-accent rounded-full shadow-[0_0_8px_#FF7A00]"></span>
@@ -217,17 +250,15 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
           >
               <Wand2 size={12} className="mr-2 text-cine-accent" /> 提示词增强
           </Button>
-          {onGenerateCamera && (
-              <Button 
-                variant="secondary" 
-                size="sm" 
-                onClick={onGenerateCamera} 
-                disabled={isGenerating || !prompt.trim()} 
-                className="flex-1 text-[9px] h-9 border-dashed border-zinc-800 hover:border-zinc-700 bg-zinc-900/20"
-              >
-                  <Video size={12} className="mr-2 text-zinc-500" /> 镜头轨迹
-              </Button>
-          )}
+          <Button 
+            variant="secondary" 
+            size="sm" 
+            onClick={onGenerateCamera} 
+            disabled={isGenerating || !prompt.trim()} 
+            className="flex-1 text-[9px] h-9 border-dashed border-zinc-800 hover:border-zinc-700 bg-zinc-900/20"
+          >
+              <Video size={12} className="mr-2 text-zinc-500" /> 生成参考轨迹
+          </Button>
       </div>
 
       <div className="flex gap-2">

@@ -72,7 +72,8 @@ export const generateMultiViewGrid = async (
   aspectRatio: AspectRatio,
   imageSize: ImageSize, 
   categorizedRefs: ReferenceImageData[] = [],
-  contextImage?: string 
+  contextImage?: string,
+  cameraTrack?: string
 ): Promise<{ fullImage: string, slices: string[], slicePrompts: string[] }> => {
   await ensureApiKey();
   const ai = getClient();
@@ -91,6 +92,15 @@ export const generateMultiViewGrid = async (
       1. 一个包含 ${totalViews} 个字符串的 JSON 数组，每个字符串用中文简短描述该画面的具体内容（导演笔记）。
       2. 生成的图像网格部分。
     - 语言要求: 所有文本输出必须使用中文。`;
+
+  if (cameraTrack && cameraTrack.trim()) {
+      systemPrompt += `\n\n[镜头与景别要求]:
+      - 必须严格遵守以下指定的镜头运动或景别拍摄方案: "${cameraTrack}"。
+      - 如果提供了分镜别的详细说明，请确保网格中每个画面对应的景别（特写、中景、全景等）与描述一致。`;
+  } else {
+      systemPrompt += `\n\n[自动镜头生成]:
+      - 请根据剧情内容自动设计最具电影感的运镜和景别变换（如从全景切入特写，或者环绕推移）。`;
+  }
 
   if (roles.length > 0) {
       systemPrompt += `\n\n[角色一致性]:

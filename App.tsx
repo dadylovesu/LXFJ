@@ -22,6 +22,7 @@ const App: React.FC = () => {
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>(AspectRatio.WIDE);
   const [imageSize, setImageSize] = useState<ImageSize>(ImageSize.K4);
   const [prompt, setPrompt] = useState<string>('');
+  const [cameraTrack, setCameraTrack] = useState<string>('');
   
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStep, setGenerationStep] = useState<string>(''); 
@@ -116,11 +117,12 @@ const App: React.FC = () => {
           aspectRatio, 
           imageSize, 
           referenceData,
-          previousContextImage 
+          previousContextImage,
+          cameraTrack
       );
       
-      setGenerationStep("正在分析画面动线...");
-      const cameraMove = await generateCameraMovement(prompt);
+      setGenerationStep("正在同步镜头数据...");
+      const finalCameraDescription = cameraTrack.trim() || await generateCameraMovement(prompt);
 
       const finalNode: GeneratedImage = {
           id: crypto.randomUUID(),
@@ -134,7 +136,7 @@ const App: React.FC = () => {
           nodeType: 'render',
           parentId: parentNode?.id, 
           position: { x: startX, y: startY },
-          cameraDescription: cameraMove,
+          cameraDescription: finalCameraDescription,
           slices: finalResult.slices,
           slicePrompts: finalResult.slicePrompts,
           gridRows,
@@ -214,6 +216,7 @@ const App: React.FC = () => {
                 aspectRatio={aspectRatio} setAspectRatio={setAspectRatio}
                 imageSize={imageSize} setImageSize={setImageSize}
                 prompt={prompt} setPrompt={setPrompt}
+                cameraTrack={cameraTrack} setCameraTrack={setCameraTrack}
                 onGenerate={handleGenerate}
                 onStop={() => setIsGenerating(false)}
                 isGenerating={isGenerating}
@@ -221,6 +224,7 @@ const App: React.FC = () => {
                 onGenerateCamera={async () => {
                     const cam = await generateCameraMovement(prompt);
                     setAnalysisResult(cam);
+                    setCameraTrack(cam);
                 }}
                 isContinuing={!!(selectedImageId && images.find(i => i.id === selectedImageId)?.nodeType === 'render')}
                 onDeselect={() => { setSelectedImageId(undefined); setSelectedAssetId(undefined); }}
