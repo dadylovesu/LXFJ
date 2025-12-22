@@ -1,6 +1,6 @@
 
-import { GoogleGenAI } from "@google/genai";
-import { AspectRatio, ImageSize, Asset } from "../types";
+import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
+import { AspectRatio, ImageSize, Asset, CollageData } from "../types";
 
 export const ensureApiKey = async () => {
   // @ts-ignore
@@ -17,6 +17,33 @@ export const ensureApiKey = async () => {
 const getClient = () => {
   return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
+
+/**
+ * Helper to wrap Gemini API calls with exponential backoff retry logic.
+ * Handles 503 (Overloaded) and 429 (Rate Limit) errors.
+ */
+async function withRetry<T>(operation: () => Promise<T>, maxRetries = 3): Promise<T> {
+  let lastError: any;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error: any) {
+      lastError = error;
+      // Check if error is a 503 (UNAVAILABLE) or 429 (RESOURCE_EXHAUSTED)
+      const isOverloaded = error?.status === 'UNAVAILABLE' || error?.code === 503;
+      const isRateLimited = error?.status === 'RESOURCE_EXHAUSTED' || error?.code === 429;
+
+      if ((isOverloaded || isRateLimited) && attempt < maxRetries) {
+        const delay = Math.pow(2, attempt) * 2000 + Math.random() * 1000;
+        console.warn(`Gemini API ${isOverloaded ? 'overloaded' : 'rate limited'}. Retrying in ${Math.round(delay)}ms... (Attempt ${attempt + 1}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw lastError;
+}
 
 const validateAspectRatio = (ar: AspectRatio | string): string => {
   const supported = ["1:1", "3:4", "4:3", "9:16", "16:9"];
@@ -73,11 +100,10 @@ export const generateMultiViewGrid = async (
   imageSize: ImageSize, 
   categorizedRefs: ReferenceImageData[] = [],
   contextImage?: string,
-  panelInstructions?: string[] 
+  panelInstructions?: string[],
+  collageRef?: CollageData 
 ): Promise<{ fullImage: string, slices: string[] }> => {
   await ensureApiKey();
-  const ai = getClient();
-  const model = 'gemini-3-pro-image-preview';
   
   const totalViews = gridRows * gridCols;
   const gridType = `${gridRows}x${gridCols}`;
@@ -90,7 +116,13 @@ export const generateMultiViewGrid = async (
     - MAIN THEME: "${prompt}"
     - VIEWS: Exactly ${totalViews} unique panels showing narrative progression in a single image grid.`;
 
-  if (panelInstructions && panelInstructions.length > 0) {
+  if (collageRef) {
+      systemPrompt += `\n\n[STRICT COMPOSITION MODE]: 
+      - The provided Collage Reference image contains a grid of ${collageRef.rows}x${collageRef.cols}.
+      - IMPORTANT: Replicate the EXACT camera angles, framing, and compositions of each corresponding panel from this reference.
+      - Replace the visual content with the current story prompt: "${prompt}". 
+      - Ignore any other camera instructions if they conflict with this collage.`;
+  } else if (panelInstructions && panelInstructions.length > 0) {
       systemPrompt += `\n\n[PANEL SPECIFICS]: Follow these specific camera and composition instructions for each panel index:
       ${panelInstructions.map((instr, idx) => `- Panel ${idx + 1}: ${instr || 'AI Choice'}`).join('\n')}`;
   }
@@ -102,23 +134,28 @@ export const generateMultiViewGrid = async (
 
   if (props.length > 0) {
       systemPrompt += `\n\n[PROP/OBJECT CONSISTENCY]:
-      ${props.map((p, i) => `- Reference Image ${roles.length + i + 1} is "KEY PROP ${p.roleIndex}". This is a critical object (e.g., a specific boat, weapon, tool). Whenever this object appears in a scene, it MUST precisely match the visual design, material, and details of this reference.`).join('\n')}`;
+      ${props.map((p, i) => `- Reference Image ${roles.length + i + 1} is "KEY PROP ${p.roleIndex}". This is a critical object. Maintain its precise design.`).join('\n')}`;
   }
 
   if (bgs.length > 0) {
       systemPrompt += `\n\n[ENVIRONMENT]:
-      - Use the provided background reference for global scene mood, lighting, and architecture. Adapt characters and props into this setting consistently.`;
+      - Use provided background reference for mood/lighting/architecture.`;
   }
 
   if (contextImage) {
       systemPrompt += `\n\n[STORY CONTINUITY]:
-      - The separate context image is the previous shot. Progress the narrative while maintaining visual style and object/character designs.`;
+      - The separate context image is the previous shot. Progress the narrative.`;
   }
 
-  systemPrompt += `\n\n[STYLING]: Photorealistic, 35mm film look, volumetric lighting, cinematic rendering. NO TEXT overlays.`;
+  systemPrompt += `\n\n[STYLING]: Photorealistic, cinematic, no text overlays.`;
 
   const parts: any[] = [];
   
+  if (collageRef) {
+      const cleanCollage = collageRef.url.includes(',') ? collageRef.url.split(',')[1] : collageRef.url;
+      parts.push({ inlineData: { mimeType: 'image/png', data: cleanCollage } });
+  }
+
   roles.forEach(r => parts.push({ inlineData: { mimeType: r.mimeType, data: r.data } }));
   props.forEach(p => parts.push({ inlineData: { mimeType: p.mimeType, data: p.data } }));
   bgs.forEach(b => parts.push({ inlineData: { mimeType: b.mimeType, data: b.data } }));
@@ -131,15 +168,19 @@ export const generateMultiViewGrid = async (
   parts.push({ text: systemPrompt });
 
   try {
-    const response = await ai.models.generateContent({
-      model,
-      contents: { parts },
-      config: {
-        imageConfig: {
-          aspectRatio: validateAspectRatio(aspectRatio) as any,
-          imageSize: imageSize as any 
-        }
-      }
+    // Explicitly type the withRetry call to avoid 'unknown' errors
+    const response = await withRetry<GenerateContentResponse>(() => {
+        const ai = getClient();
+        return ai.models.generateContent({
+          model: 'gemini-3-pro-image-preview',
+          contents: { parts },
+          config: {
+            imageConfig: {
+              aspectRatio: validateAspectRatio(aspectRatio) as any,
+              imageSize: imageSize as any 
+            }
+          }
+        });
     });
 
     let fullImageBase64 = '';
@@ -167,7 +208,6 @@ export const editImage = async (
   imageSize: ImageSize = ImageSize.K1
 ): Promise<string> => {
   await ensureApiKey();
-  const ai = getClient();
   
   const cleanBase64 = base64Image.includes(',') ? base64Image.split(',')[1] : base64Image;
 
@@ -192,15 +232,19 @@ export const editImage = async (
   parts.push({ text: finalPrompt });
 
   try {
-    const response = await ai.models.generateContent({
-      model: modelName,
-      contents: { parts },
-      config: {
-        imageConfig: {
-          aspectRatio: validateAspectRatio(aspectRatio) as any,
-          imageSize: modelName === 'gemini-3-pro-image-preview' ? imageSize as any : undefined
-        }
-      }
+    // Explicitly type the withRetry call to avoid 'unknown' errors
+    const response = await withRetry<GenerateContentResponse>(() => {
+        const ai = getClient();
+        return ai.models.generateContent({
+          model: modelName,
+          contents: { parts },
+          config: {
+            imageConfig: {
+              aspectRatio: validateAspectRatio(aspectRatio) as any,
+              imageSize: modelName === 'gemini-3-pro-image-preview' ? imageSize as any : undefined
+            }
+          }
+        });
     });
 
     for (const part of response.candidates?.[0]?.content?.parts || []) {
@@ -217,13 +261,16 @@ export const editImage = async (
 
 export const generateCameraSuggestions = async (prompt: string, panelCount: number): Promise<string[]> => {
     await ensureApiKey();
-    const ai = getClient();
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: { parts: [{ text: `根据以下电影场景，建议 ${panelCount} 个逻辑性、渐进式的分镜镜头描述或构图。
-            要求：仅列出建议，每行一个。不要编号。使用中文。
-            场景内容：${prompt}` }] }
+        // Explicitly type the withRetry call and use the recommended gemini-3-flash-preview model
+        const response = await withRetry<GenerateContentResponse>(() => {
+            const ai = getClient();
+            return ai.models.generateContent({
+                model: 'gemini-3-flash-preview',
+                contents: { parts: [{ text: `根据以下电影场景，建议 ${panelCount} 个逻辑性、渐进式的分镜镜头描述或构图。
+                要求：仅列出建议，每行一个。不要编号。使用中文。
+                场景内容：${prompt}` }] }
+            });
         });
         const text = response.text || "";
         return text.split('\n').filter(line => line.trim().length > 0).slice(0, panelCount);
@@ -234,12 +281,15 @@ export const generateCameraSuggestions = async (prompt: string, panelCount: numb
 
 export const generateCameraMovement = async (prompt: string): Promise<string> => {
     await ensureApiKey();
-    const ai = getClient();
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: { parts: [{ text: `场景: ${prompt}` }] },
-            config: { systemInstruction: "Output ONLY a technical camera movement description for the overall scene. Max 10 words. Chinese." }
+        // Explicitly type the withRetry call and use the recommended gemini-3-flash-preview model
+        const response = await withRetry<GenerateContentResponse>(() => {
+            const ai = getClient();
+            return ai.models.generateContent({
+                model: 'gemini-3-flash-preview',
+                contents: { parts: [{ text: `场景: ${prompt}` }] },
+                config: { systemInstruction: "Output ONLY a technical camera movement description for the overall scene. Max 10 words. Chinese." }
+            });
         });
         return response.text || "固定镜头。";
     } catch { return "电影动效。"; }
@@ -247,11 +297,14 @@ export const generateCameraMovement = async (prompt: string): Promise<string> =>
 
 export const enhancePrompt = async (rawPrompt: string): Promise<string> => {
   await ensureApiKey();
-  const ai = getClient();
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: `Enhance this cinematic storyboard prompt. Keep it under 60 words. Use Chinese. Input: "${rawPrompt}"`,
+    // Explicitly type the withRetry call and use the recommended gemini-3-flash-preview model
+    const response = await withRetry<GenerateContentResponse>(() => {
+        const ai = getClient();
+        return ai.models.generateContent({
+          model: 'gemini-3-flash-preview',
+          contents: `Enhance this cinematic storyboard prompt. Keep it under 60 words. Use Chinese. Input: "${rawPrompt}"`,
+        });
     });
     return response.text || rawPrompt;
   } catch { return rawPrompt; }
@@ -259,11 +312,14 @@ export const enhancePrompt = async (rawPrompt: string): Promise<string> => {
 
 export const analyzeAsset = async (fileBase64: string, mimeType: string, prompt: string): Promise<string> => {
   await ensureApiKey();
-  const ai = getClient();
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview',
-      contents: { parts: [{ inlineData: { mimeType, data: fileBase64 } }, { text: prompt }] }
+    // Explicitly type the withRetry call to avoid 'unknown' errors
+    const response = await withRetry<GenerateContentResponse>(() => {
+        const ai = getClient();
+        return ai.models.generateContent({
+          model: 'gemini-3-pro-preview',
+          contents: { parts: [{ inlineData: { mimeType, data: fileBase64 } }, { text: prompt }] }
+        });
     });
     return response.text || "No analysis result.";
   } catch { return "Analysis failed."; }

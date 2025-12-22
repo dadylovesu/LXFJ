@@ -5,10 +5,11 @@ import { DirectorDeck } from './components/DirectorDeck';
 import { Canvas } from './components/Canvas';
 import { Inspector } from './components/Inspector';
 import { CameraEditor } from './components/CameraEditor';
-import { Asset, GeneratedImage, AspectRatio, ImageSize, AssetCategory } from './types';
+import { CollageEditor } from './components/CollageEditor';
+import { Asset, GeneratedImage, AspectRatio, ImageSize, AssetCategory, CollageData } from './types';
 import { generateMultiViewGrid, fileToBase64, enhancePrompt, analyzeAsset, ReferenceImageData, generateCameraMovement, editImage } from './services/geminiService';
 import { saveToStorage, loadFromStorage, clearStorage } from './services/persistenceService';
-import { AlertCircle, X as XIcon, Trash2 } from 'lucide-react';
+import { AlertCircle, X as XIcon, Trash2, LayoutGrid } from 'lucide-react';
 import { Button } from './components/Button';
 // @ts-ignore
 import JSZip from 'jszip';
@@ -28,6 +29,8 @@ const App: React.FC = () => {
   const [prompt, setPrompt] = useState<string>('');
   const [panelPrompts, setPanelPrompts] = useState<string[]>([]);
   const [isCameraEditorOpen, setIsCameraEditorOpen] = useState(false);
+  const [isCollageEditorOpen, setIsCollageEditorOpen] = useState(false);
+  const [activeCollage, setActiveCollage] = useState<CollageData | null>(null);
   
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStep, setGenerationStep] = useState<string>(''); 
@@ -150,7 +153,7 @@ const App: React.FC = () => {
           startX = rootNodes.length === 0 ? 100 : (rootNodes[rootNodes.length-1].position?.x || 100) + 420;
       }
 
-      setGenerationStep("正在根据镜头逻辑、核心道具与视觉资产执行渲染...");
+      setGenerationStep(activeCollage ? "正在复刻拼贴镜头组的构图与景别..." : "正在根据镜头逻辑、核心道具与视觉资产执行渲染...");
       
       const referenceData: ReferenceImageData[] = [];
       for (const asset of assets) {
@@ -162,15 +165,21 @@ const App: React.FC = () => {
           });
       }
 
+      // If collage is active, use its grid settings
+      const finalRows = activeCollage ? activeCollage.rows : gridRows;
+      const finalCols = activeCollage ? activeCollage.cols : gridCols;
+      const finalAspectRatio = activeCollage ? (activeCollage.aspectRatio as AspectRatio) : aspectRatio;
+
       const finalResult = await generateMultiViewGrid(
           prompt, 
-          gridRows, 
-          gridCols, 
-          aspectRatio, 
+          finalRows, 
+          finalCols, 
+          finalAspectRatio, 
           imageSize, 
           referenceData,
           previousContextImage,
-          panelPrompts 
+          activeCollage ? undefined : panelPrompts, // Bypass panel prompts if collage is active
+          activeCollage || undefined
       );
       
       setGenerationStep("正在分析最终画面动线...");
@@ -183,7 +192,7 @@ const App: React.FC = () => {
           prompt: prompt,
           textData: prompt, 
           assetIds: assets.map(a => a.id), 
-          aspectRatio,
+          aspectRatio: finalAspectRatio,
           timestamp: timestamp + 1,
           nodeType: 'render',
           parentId: parentNode?.id, 
@@ -191,8 +200,8 @@ const App: React.FC = () => {
           cameraDescription: cameraMove,
           slices: finalResult.slices,
           sliceHistory: {}, 
-          gridRows,
-          gridCols
+          gridRows: finalRows,
+          gridCols: finalCols
       };
 
       updateImagesWithHistory([...images, finalNode]);
@@ -315,6 +324,11 @@ const App: React.FC = () => {
     }
   };
 
+  const handleSaveCollage = (base64Url: string, rows: number, cols: number, ar: string) => {
+    setActiveCollage({ url: base64Url, rows, cols, aspectRatio: ar });
+    setIsCollageEditorOpen(false);
+  };
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-cine-black text-zinc-400 font-sans">
       <aside className="w-[340px] flex flex-col border-r border-cine-border bg-cine-dark z-20 shadow-2xl">
@@ -323,7 +337,7 @@ const App: React.FC = () => {
                 <span className="w-2.5 h-2.5 bg-cine-accent rounded-[1px]"></span>
                 橙意机构 - 连续分镜
             </h1>
-            <button onClick={() => { if(confirm("重置工作区？")) { setImages([]); setHistory([]); setPanelPrompts([]); clearStorage(); } }} className="text-zinc-700 hover:text-red-500 transition-colors">
+            <button onClick={() => { if(confirm("重置工作区？")) { setImages([]); setHistory([]); setPanelPrompts([]); setActiveCollage(null); clearStorage(); } }} className="text-zinc-700 hover:text-red-500 transition-colors">
               <Trash2 size={14} />
             </button>
         </div>
@@ -335,19 +349,44 @@ const App: React.FC = () => {
                 onRemoveAsset={handleRemoveAsset} 
                 onSelectAsset={(a) => { setSelectedAssetId(a.id); setSelectedImageId(undefined); }}
                 selectedAssetId={selectedAssetId}
+                onOpenCollage={() => setIsCollageEditorOpen(true)}
             />
 
+            <div className="px-2">
+                {activeCollage ? (
+                  <div className="p-3 bg-cine-accent/10 border border-cine-accent/30 rounded-sm space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                     <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-cine-accent font-bold uppercase tracking-widest flex items-center gap-2">
+                           <LayoutGrid size={12} />
+                           独立参考模式 (STRICT)
+                        </span>
+                        <button onClick={() => setActiveCollage(null)} className="text-cine-accent hover:text-white transition-colors">
+                           <XIcon size={12} />
+                        </button>
+                     </div>
+                     <div className="aspect-video bg-black rounded-sm overflow-hidden border border-cine-accent/20">
+                        <img src={activeCollage.url} className="w-full h-full object-contain" />
+                     </div>
+                     <p className="text-[8px] text-cine-accent/60 font-mono uppercase">将会完全参照此拼贴组复刻镜头</p>
+                  </div>
+                ) : (
+                  <div className="p-3 bg-zinc-900/40 border border-zinc-800/40 border-dashed rounded-sm text-center">
+                     <p className="text-[9px] text-zinc-600 font-mono">未激活拼贴模式</p>
+                  </div>
+                )}
+            </div>
+
             <DirectorDeck 
-                gridRows={gridRows} setGridRows={setGridRows}
-                gridCols={gridCols} setGridCols={setGridCols}
-                aspectRatio={aspectRatio} setAspectRatio={setAspectRatio}
+                gridRows={activeCollage ? activeCollage.rows : gridRows} setGridRows={setGridRows}
+                gridCols={activeCollage ? activeCollage.cols : gridCols} setGridCols={setGridCols}
+                aspectRatio={activeCollage ? (activeCollage.aspectRatio as AspectRatio) : aspectRatio} setAspectRatio={setAspectRatio}
                 imageSize={imageSize} setImageSize={setImageSize}
                 prompt={prompt} setPrompt={setPrompt}
                 onGenerate={handleGenerate}
                 onStop={() => setIsGenerating(false)}
                 isGenerating={isGenerating}
                 onEnhancePrompt={async () => setPrompt(await enhancePrompt(prompt))}
-                onGenerateCamera={() => setIsCameraEditorOpen(true)}
+                onGenerateCamera={activeCollage ? undefined : (() => setIsCameraEditorOpen(true))} // Disabled if collage is active
                 isContinuing={!!(selectedImageId && images.find(i => i.id === selectedImageId)?.nodeType === 'render')}
                 onDeselect={() => { setSelectedImageId(undefined); setSelectedAssetId(undefined); }}
             />
@@ -384,7 +423,7 @@ const App: React.FC = () => {
             </div>
         )}
 
-        {/* New Camera Logic Editor Modal */}
+        {/* Camera Logic Editor */}
         <CameraEditor 
           isOpen={isCameraEditorOpen}
           onClose={() => setIsCameraEditorOpen(false)}
@@ -393,6 +432,14 @@ const App: React.FC = () => {
           mainPrompt={prompt}
           initialPrompts={panelPrompts}
           onSave={(newPrompts) => setPanelPrompts(newPrompts)}
+        />
+
+        {/* Collage Editor */}
+        <CollageEditor 
+          isOpen={isCollageEditorOpen}
+          onClose={() => setIsCollageEditorOpen(false)}
+          onSave={handleSaveCollage}
+          defaultAspectRatio={aspectRatio}
         />
       </main>
 

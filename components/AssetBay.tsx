@@ -1,6 +1,6 @@
 
 import React, { useRef, useState } from 'react';
-import { X, Film, Image as ImageIcon, Plus, UploadCloud, UserSquare2, Mountain, Database, Box } from 'lucide-react';
+import { X, Film, Image as ImageIcon, Plus, UploadCloud, UserSquare2, Mountain, Database, Box, LayoutGrid } from 'lucide-react';
 import { Asset, AssetCategory } from '../types';
 
 interface AssetBayProps {
@@ -9,6 +9,7 @@ interface AssetBayProps {
   onRemoveAsset: (id: string) => void;
   onSelectAsset: (asset: Asset) => void;
   selectedAssetId?: string;
+  onOpenCollage: () => void;
 }
 
 export const AssetBay: React.FC<AssetBayProps> = ({ 
@@ -16,7 +17,8 @@ export const AssetBay: React.FC<AssetBayProps> = ({
     onAddAsset, 
     onRemoveAsset, 
     onSelectAsset, 
-    selectedAssetId
+    selectedAssetId,
+    onOpenCollage
 }) => {
   const roleInputRef = useRef<HTMLInputElement>(null);
   const bgInputRef = useRef<HTMLInputElement>(null);
@@ -117,9 +119,18 @@ export const AssetBay: React.FC<AssetBayProps> = ({
 
   return (
     <div className="flex flex-col space-y-4">
-      <div className="flex items-center gap-2 px-1 text-zinc-400">
-         <Database size={10} />
-         <span className="text-[10px] uppercase tracking-[0.25em] font-mono font-bold">01. 核心资产库 (ASSETS)</span>
+      <div className="flex items-center justify-between px-1">
+          <div className="flex items-center gap-2 text-zinc-400">
+             <Database size={10} />
+             <span className="text-[10px] uppercase tracking-[0.25em] font-mono font-bold">01. 核心资产库 (ASSETS)</span>
+          </div>
+          <button 
+            onClick={onOpenCollage}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-cine-accent text-black text-[10px] font-bold font-mono tracking-widest rounded-[2px] shadow-[0_0_15px_rgba(255,122,0,0.3)] hover:brightness-110 active:scale-95 transition-all"
+          >
+             <LayoutGrid size={12} />
+             COLLAGE
+          </button>
       </div>
 
       <div className="space-y-4">

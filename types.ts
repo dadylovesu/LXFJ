@@ -53,4 +53,11 @@ export interface Asset {
   analysis?: string;
 }
 
+export interface CollageData {
+  url: string; // Stitched image base64
+  rows: number;
+  cols: number;
+  aspectRatio: string;
+}
+
 export type InspectorTab = 'details' | 'analysis';

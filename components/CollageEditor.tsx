@@ -1,20 +1,21 @@
+
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Check, LayoutGrid, GripHorizontal, Image as ImageIcon, Trash2, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { X, Check, LayoutGrid, GripHorizontal, Image as ImageIcon, Trash2, Plus, ChevronLeft, ChevronRight, Video } from 'lucide-react';
 import { Button } from './Button';
 import { AspectRatio } from '../types';
 
 interface CollageEditorProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (files: File[], rows: number, cols: number, aspectRatio: string) => void;
-  defaultAspectRatio?: AspectRatio;
+  onSave: (base64Url: string, rows: number, cols: number, aspectRatio: string) => void;
+  defaultAspectRatio?: string;
 }
 
 export const CollageEditor: React.FC<CollageEditorProps> = ({ 
   isOpen, 
   onClose, 
   onSave,
-  defaultAspectRatio = AspectRatio.WIDE
+  defaultAspectRatio = '16:9'
 }) => {
   const [rows, setRows] = useState(2);
   const [cols, setCols] = useState(2);
@@ -83,10 +84,58 @@ export const CollageEditor: React.FC<CollageEditorProps> = ({
       });
   };
 
-  const handleSave = () => {
-      const filesToStitch = slots.filter(s => s !== null) as File[];
-      if (filesToStitch.length === 0) return;
-      onSave(filesToStitch, rows, cols, aspectRatio);
+  const handleSave = async () => {
+      const activeSlots = slots.map((f, i) => ({ file: f, index: i })).filter(s => s.file !== null);
+      if (activeSlots.length === 0) return;
+
+      const [arW, arH] = aspectRatio.split(':').map(Number);
+      const canvas = document.createElement('canvas');
+      const baseSize = 2048; 
+      canvas.width = baseSize;
+      canvas.height = Math.round(baseSize * (arH / arW));
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      const slotW = canvas.width / cols;
+      const slotH = canvas.height / rows;
+
+      const loadImg = (file: File): Promise<HTMLImageElement> => new Promise((res, rej) => {
+          const img = new Image();
+          img.onload = () => res(img);
+          img.onerror = rej;
+          img.src = URL.createObjectURL(file);
+      });
+
+      for (let i = 0; i < slots.length; i++) {
+          const file = slots[i];
+          if (!file) continue;
+          
+          const img = await loadImg(file);
+          const r = Math.floor(i / cols);
+          const c = i % cols;
+          
+          const dx = c * slotW;
+          const dy = r * slotH;
+          
+          // Cover logic
+          const imgRatio = img.width / img.height;
+          const targetRatio = slotW / slotH;
+          let sw, sh, sx, sy;
+          if (imgRatio > targetRatio) {
+              sh = img.height;
+              sw = img.height * targetRatio;
+              sx = (img.width - sw) / 2;
+              sy = 0;
+          } else {
+              sw = img.width;
+              sh = img.width / targetRatio;
+              sx = 0;
+              sy = (img.height - sh) / 2;
+          }
+          ctx.drawImage(img, sx, sy, sw, sh, dx, dy, slotW, slotH);
+      }
+
+      onSave(canvas.toDataURL('image/png'), rows, cols, aspectRatio);
   };
 
   const getPreviewStyle = () => {
@@ -95,56 +144,67 @@ export const CollageEditor: React.FC<CollageEditorProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-cine-dark border border-zinc-700 w-full max-w-4xl rounded-md shadow-2xl flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95 backdrop-blur-xl p-6 animate-in fade-in zoom-in-95 duration-300">
+      <div className="bg-cine-dark border border-zinc-800 w-full max-w-6xl rounded-lg shadow-[0_0_80px_rgba(0,0,0,0.9)] flex flex-col max-h-[90vh] overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-zinc-800 bg-zinc-900/50">
-            <h2 className="text-white font-mono uppercase tracking-widest text-sm flex items-center gap-2">
-                <LayoutGrid size={16} className="text-cine-accent" />
-                拼贴编辑器 (Collage Editor)
-            </h2>
-            <button onClick={onClose} className="text-zinc-500 hover:text-white transition-colors">
-                <X size={18} />
+        <div className="flex items-center justify-between p-6 border-b border-zinc-800 bg-zinc-900/40">
+            <div className="flex items-center gap-4">
+               <div className="w-10 h-10 rounded-md bg-cine-accent flex items-center justify-center shadow-[0_0_20px_rgba(255,122,0,0.3)]">
+                  <LayoutGrid size={22} className="text-black" />
+               </div>
+               <div>
+                  <h2 className="text-white font-mono uppercase tracking-[0.25em] text-sm font-bold">
+                    拼贴编辑器 (COLLAGE EDITOR)
+                  </h2>
+                  <p className="text-[10px] text-zinc-500 font-mono mt-0.5 uppercase tracking-widest">Create structural references for your sequence</p>
+               </div>
+            </div>
+            <button onClick={onClose} className="text-zinc-600 hover:text-white transition-all hover:rotate-90 duration-300">
+                <X size={20} />
             </button>
         </div>
 
         <div className="flex flex-1 overflow-hidden">
-            <div className="w-64 border-r border-zinc-800 p-4 space-y-6 bg-zinc-900/30 overflow-y-auto custom-scrollbar">
+            <div className="w-72 border-r border-zinc-800 p-6 space-y-8 bg-zinc-900/30 overflow-y-auto custom-scrollbar">
                 
-                {/* Layout Select (Dynamic) */}
+                {/* Layout Select */}
                 <div className="space-y-4">
-                    <label className="text-[10px] uppercase text-zinc-500 font-bold tracking-wider">宫格布局 (ROWS x COLS)</label>
-                    <div className="grid grid-cols-2 gap-2">
-                        {/* Rows */}
-                        <div className="flex flex-col gap-1.5">
-                            <span className="text-[8px] text-zinc-600 uppercase">Rows</span>
-                            <div className="flex items-center bg-black border border-zinc-800 rounded-sm">
-                                <button onClick={() => setRows(Math.max(1, rows - 1))} className="p-1 hover:text-white"><ChevronLeft size={14}/></button>
-                                <span className="flex-1 text-center font-mono text-xs text-zinc-300">{rows}</span>
-                                <button onClick={() => setRows(Math.min(4, rows + 1))} className="p-1 hover:text-white"><ChevronRight size={14}/></button>
+                    <label className="text-[10px] uppercase text-zinc-500 font-bold tracking-[0.2em] flex items-center gap-2">
+                       <span className="w-1.5 h-1.5 bg-cine-accent rounded-full"></span>
+                       网格布局 (GRID LAYOUT)
+                    </label>
+                    <div className="grid grid-cols-2 gap-3">
+                        <button 
+                            onClick={() => { setRows(2); setCols(2); }}
+                            className={`flex flex-col items-center gap-2 p-3 border rounded-sm transition-all ${rows === 2 && cols === 2 ? 'border-cine-accent bg-cine-accent/5' : 'border-zinc-800 bg-black/40 hover:border-zinc-700'}`}
+                        >
+                            <LayoutGrid size={20} className={rows === 2 && cols === 2 ? 'text-cine-accent' : 'text-zinc-700'} />
+                            <span className={`text-[10px] font-mono ${rows === 2 && cols === 2 ? 'text-cine-accent' : 'text-zinc-600'}`}>2x2 (4图)</span>
+                        </button>
+                        <button 
+                            onClick={() => { setRows(3); setCols(3); }}
+                            className={`flex flex-col items-center gap-2 p-3 border rounded-sm transition-all ${rows === 3 && cols === 3 ? 'border-cine-accent bg-cine-accent/5' : 'border-zinc-800 bg-black/40 hover:border-zinc-700'}`}
+                        >
+                            <div className="grid grid-cols-3 gap-0.5">
+                                {[...Array(9)].map((_, i) => <div key={i} className={`w-1.5 h-1.5 rounded-[1px] ${rows === 3 && cols === 3 ? 'bg-cine-accent' : 'bg-zinc-700'}`}></div>)}
                             </div>
-                        </div>
-                        {/* Cols */}
-                        <div className="flex flex-col gap-1.5">
-                            <span className="text-[8px] text-zinc-600 uppercase">Cols</span>
-                            <div className="flex items-center bg-black border border-zinc-800 rounded-sm">
-                                <button onClick={() => setCols(Math.max(1, cols - 1))} className="p-1 hover:text-white"><ChevronLeft size={14}/></button>
-                                <span className="flex-1 text-center font-mono text-xs text-zinc-300">{cols}</span>
-                                <button onClick={() => setCols(Math.min(4, cols + 1))} className="p-1 hover:text-white"><ChevronRight size={14}/></button>
-                            </div>
-                        </div>
+                            <span className={`text-[10px] font-mono ${rows === 3 && cols === 3 ? 'text-cine-accent' : 'text-zinc-600'}`}>3x3 (9图)</span>
+                        </button>
                     </div>
                 </div>
 
-                {/* Aspect Ratio */}
-                <div className="space-y-2">
-                    <label className="text-[10px] uppercase text-zinc-500 font-bold tracking-wider">画布比例</label>
+                {/* Canvas Ratio */}
+                <div className="space-y-4">
+                    <label className="text-[10px] uppercase text-zinc-500 font-bold tracking-[0.2em] flex items-center gap-2">
+                       <span className="w-1.5 h-1.5 bg-cine-accent rounded-full"></span>
+                       画布比例 (RATIO)
+                    </label>
                     <div className="grid grid-cols-2 gap-2">
                         {Object.values(AspectRatio).map(ar => (
                             <button
                                 key={ar}
                                 onClick={() => setAspectRatio(ar)}
-                                className={`px-2 py-1.5 text-[10px] font-mono border rounded-[1px] ${aspectRatio === ar ? 'bg-zinc-700 text-white border-zinc-500' : 'bg-black border-zinc-800 text-zinc-500 hover:border-zinc-600'}`}
+                                className={`px-2 py-2 text-[10px] font-mono border rounded-[1px] transition-all ${aspectRatio === ar ? 'bg-zinc-800 text-white border-zinc-600 shadow-inner' : 'bg-black border-zinc-800 text-zinc-700 hover:border-zinc-700'}`}
                             >
                                 {ar}
                             </button>
@@ -153,30 +213,34 @@ export const CollageEditor: React.FC<CollageEditorProps> = ({
                 </div>
 
                 {/* File Action */}
-                <div className="pt-4 border-t border-zinc-800">
+                <div className="pt-6 border-t border-zinc-800 space-y-4">
                     <button 
                         onClick={() => fileInputRef.current?.click()}
-                        className="w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 rounded-sm text-xs font-mono flex items-center justify-center gap-2 transition-colors"
+                        className="w-full py-4 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-sm text-[11px] font-mono font-bold flex items-center justify-center gap-3 transition-all uppercase tracking-widest shadow-lg"
                     >
-                        <Plus size={14} /> 添加图片
+                        <Plus size={16} /> 添加图片
                     </button>
+                    <p className="text-[9px] text-zinc-600 font-mono text-center leading-relaxed">
+                        可拖拽排序，填满后将自动裁剪为 {aspectRatio}。
+                    </p>
                     <input type="file" ref={fileInputRef} className="hidden" multiple accept="image/*" onChange={handleFileSelect} />
                 </div>
             </div>
 
-            <div className="flex-1 bg-black p-8 flex items-center justify-center overflow-auto relative">
+            <div className="flex-1 bg-black/60 p-12 flex items-center justify-center overflow-auto relative">
+                <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-[radial-gradient(#fff_1px,transparent_1px)] bg-[size:20px_20px]"></div>
                 <div 
-                    className="bg-zinc-900 border border-zinc-800 shadow-2xl relative transition-all duration-300"
-                    style={{ width: '100%', maxWidth: '600px', ...getPreviewStyle() }}
+                    className="bg-zinc-900 border border-zinc-800 shadow-[0_0_50px_rgba(0,0,0,0.5)] relative transition-all duration-500 ease-out"
+                    style={{ width: '100%', maxWidth: '800px', ...getPreviewStyle() }}
                 >
                     <div 
-                        className="grid w-full h-full gap-[1px] bg-zinc-950"
+                        className="grid w-full h-full gap-[2px] bg-zinc-950"
                         style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}
                     >
                         {slots.map((file, index) => (
                             <div 
                                 key={index}
-                                className={`relative group border border-dashed border-zinc-800 flex items-center justify-center overflow-hidden ${draggedIndex === index ? 'opacity-50' : 'opacity-100'}`}
+                                className={`relative group border border-dashed border-zinc-800/50 flex items-center justify-center overflow-hidden transition-colors ${draggedIndex === index ? 'opacity-40' : 'opacity-100'} ${!file ? 'hover:bg-cine-accent/5 hover:border-cine-accent/30' : ''}`}
                                 draggable={!!file}
                                 onDragStart={(e) => handleDragStart(e, index)}
                                 onDragOver={(e) => handleDragOver(e, index)}
@@ -184,16 +248,24 @@ export const CollageEditor: React.FC<CollageEditorProps> = ({
                             >
                                 {file ? (
                                     <>
-                                        <img src={URL.createObjectURL(file)} alt={`slot-${index}`} className="w-full h-full object-cover pointer-events-none" />
-                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                                            <GripHorizontal size={16} className="text-white cursor-grab active:cursor-grabbing" />
-                                            <button onClick={() => handleRemoveSlot(index)} className="text-white hover:text-red-500 p-1"><Trash2 size={14} /></button>
+                                        <img src={URL.createObjectURL(file)} alt={`slot-${index}`} className="w-full h-full object-cover pointer-events-none group-hover:scale-105 transition-transform duration-700" />
+                                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-3">
+                                            <GripHorizontal size={24} className="text-white cursor-grab active:cursor-grabbing mb-1" />
+                                            <button 
+                                              onClick={(e) => { e.stopPropagation(); handleRemoveSlot(index); }} 
+                                              className="bg-red-500/80 p-2 rounded-full text-white hover:bg-red-500 transition-colors shadow-lg"
+                                            >
+                                              <Trash2 size={16} />
+                                            </button>
+                                        </div>
+                                        <div className="absolute top-2 left-2 px-2 py-0.5 bg-black/80 rounded-[1px] text-white font-mono text-[9px] font-bold tracking-widest pointer-events-none">
+                                            {String(index + 1).padStart(2, '0')}
                                         </div>
                                     </>
                                 ) : (
-                                    <div className="flex flex-col items-center gap-1 text-zinc-700">
-                                        <ImageIcon size={16} />
-                                        <span className="text-[9px] font-mono">{index + 1}</span>
+                                    <div className="flex flex-col items-center gap-2 text-zinc-800 group-hover:text-zinc-600 transition-colors">
+                                        <ImageIcon size={24} strokeWidth={1} />
+                                        <span className="text-[10px] font-mono uppercase tracking-[0.2em]">{String(index + 1).padStart(2, '0')}</span>
                                     </div>
                                 )}
                             </div>
@@ -204,11 +276,30 @@ export const CollageEditor: React.FC<CollageEditorProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-zinc-800 bg-zinc-900/50 flex justify-end gap-3">
-            <Button variant="secondary" onClick={onClose} size="sm">取消</Button>
-            <Button variant="accent" onClick={handleSave} disabled={slots.every(s => s === null)} size="sm" className="px-6">
-                <Check size={14} className="mr-2" /> 生成拼贴素材 (Create Asset)
-            </Button>
+        <div className="p-6 border-t border-zinc-800 bg-zinc-900/60 flex justify-between items-center backdrop-blur-md">
+            <div className="flex items-center gap-4">
+                <div className={`w-2 h-2 rounded-full ${slots.filter(s => s !== null).length === slots.length ? 'bg-green-500' : 'bg-zinc-700'}`}></div>
+                <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">
+                    READY: {slots.filter(s => s !== null).length} / {slots.length} PANELS
+                </span>
+            </div>
+            <div className="flex gap-4">
+                <Button 
+                    variant="ghost" 
+                    onClick={onClose} 
+                    className="px-8 h-12 text-[11px] font-bold text-zinc-400 hover:text-white border border-zinc-800"
+                >
+                    取消 (CANCEL)
+                </Button>
+                <Button 
+                    variant="accent" 
+                    onClick={handleSave} 
+                    disabled={slots.every(s => s === null)} 
+                    className="px-12 h-12 text-[11px] font-black uppercase tracking-[0.2em] shadow-[0_0_30px_rgba(255,122,0,0.4)]"
+                >
+                    <Check size={18} className="mr-3" /> 生成拼贴素材 (CREATE ASSET)
+                </Button>
+            </div>
         </div>
       </div>
     </div>
