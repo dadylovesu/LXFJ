@@ -73,7 +73,7 @@ export const generateMultiViewGrid = async (
   imageSize: ImageSize, 
   categorizedRefs: ReferenceImageData[] = [],
   contextImage?: string,
-  panelInstructions?: string[] // Added panel specific instructions
+  panelInstructions?: string[] 
 ): Promise<{ fullImage: string, slices: string[] }> => {
   await ensureApiKey();
   const ai = getClient();
@@ -157,25 +157,43 @@ export const editImage = async (
   base64Image: string,
   editPrompt: string,
   modelName: 'gemini-2.5-flash-image' | 'gemini-3-pro-image-preview',
-  aspectRatio: string = '1:1'
+  aspectRatio: string = '1:1',
+  refImageBase64?: string,
+  imageSize: ImageSize = ImageSize.K1
 ): Promise<string> => {
   await ensureApiKey();
   const ai = getClient();
   
   const cleanBase64 = base64Image.includes(',') ? base64Image.split(',')[1] : base64Image;
 
+  const parts: any[] = [
+    { inlineData: { mimeType: 'image/png', data: cleanBase64 } }
+  ];
+
+  if (refImageBase64) {
+    const cleanRef = refImageBase64.includes(',') ? refImageBase64.split(',')[1] : refImageBase64;
+    parts.push({ inlineData: { mimeType: 'image/png', data: cleanRef } });
+  }
+
+  let finalPrompt = editPrompt.trim() 
+    ? `Edit this image according to the instruction: "${editPrompt}".` 
+    : "Enhance this image to high resolution while maintaining all details and composition.";
+
+  if (refImageBase64) {
+    finalPrompt += " Use the provided second image as a visual style and content reference for the edit.";
+  }
+
+  finalPrompt += " Photorealistic cinematic render.";
+  parts.push({ text: finalPrompt });
+
   try {
     const response = await ai.models.generateContent({
       model: modelName,
-      contents: {
-        parts: [
-          { inlineData: { mimeType: 'image/png', data: cleanBase64 } },
-          { text: `Edit this image according to the instruction: "${editPrompt}". Keep the overall cinematic style, character features, and composition as consistent as possible with the source. Photorealistic cinematic render.` }
-        ]
-      },
+      contents: { parts },
       config: {
         imageConfig: {
-          aspectRatio: validateAspectRatio(aspectRatio) as any
+          aspectRatio: validateAspectRatio(aspectRatio) as any,
+          imageSize: modelName === 'gemini-3-pro-image-preview' ? imageSize as any : undefined
         }
       }
     });
@@ -198,14 +216,14 @@ export const generateCameraSuggestions = async (prompt: string, panelCount: numb
     try {
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: { parts: [{ text: `Based on the following cinematic scene, suggest ${panelCount} logical, progressive camera movements or compositions for a storyboard sequence. 
-            Format: List only the suggestions, one per line. No numbering.
-            Scene: ${prompt}` }] }
+            contents: { parts: [{ text: `根据以下电影场景，建议 ${panelCount} 个逻辑性、渐进式的分镜镜头描述或构图。
+            要求：仅列出建议，每行一个。不要编号。使用中文。
+            场景内容：${prompt}` }] }
         });
         const text = response.text || "";
         return text.split('\n').filter(line => line.trim().length > 0).slice(0, panelCount);
     } catch { 
-        return new Array(panelCount).fill("Cinematic composition."); 
+        return new Array(panelCount).fill("电影级构图。"); 
     }
 };
 
@@ -215,11 +233,11 @@ export const generateCameraMovement = async (prompt: string): Promise<string> =>
     try {
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: { parts: [{ text: `Scene: ${prompt}` }] },
-            config: { systemInstruction: "Output ONLY a technical camera movement description for the overall scene. Max 10 words. English." }
+            contents: { parts: [{ text: `场景: ${prompt}` }] },
+            config: { systemInstruction: "Output ONLY a technical camera movement description for the overall scene. Max 10 words. Chinese." }
         });
-        return response.text || "Static shot.";
-    } catch { return "Cinematic move."; }
+        return response.text || "固定镜头。";
+    } catch { return "电影动效。"; }
 };
 
 export const enhancePrompt = async (rawPrompt: string): Promise<string> => {
@@ -228,7 +246,7 @@ export const enhancePrompt = async (rawPrompt: string): Promise<string> => {
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: `Enhance this cinematic storyboard prompt. Keep it under 60 words. Input: "${rawPrompt}"`,
+      contents: `Enhance this cinematic storyboard prompt. Keep it under 60 words. Use Chinese. Input: "${rawPrompt}"`,
     });
     return response.text || rawPrompt;
   } catch { return rawPrompt; }

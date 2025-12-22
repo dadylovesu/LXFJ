@@ -166,7 +166,7 @@ const App: React.FC = () => {
           imageSize, 
           referenceData,
           previousContextImage,
-          panelPrompts // Pass custom panel prompts
+          panelPrompts 
       );
       
       setGenerationStep("正在分析最终画面动线...");
@@ -193,8 +193,6 @@ const App: React.FC = () => {
 
       updateImagesWithHistory([...images, finalNode]);
       setSelectedImageId(finalNode.id);
-      // Clear panel prompts after use to avoid accidental repetition in next new render
-      // setPanelPrompts([]); 
 
     } catch (err: any) {
       setError(err.message || "生成失败");
@@ -204,9 +202,9 @@ const App: React.FC = () => {
     }
   };
 
-  const handleEditSlice = async (imageId: string, sliceIndex: number, editPrompt: string, usePro: boolean) => {
+  const handleEditSlice = async (imageId: string, sliceIndex: number, editPrompt: string, usePro: boolean, refImage?: string, targetImageSize: ImageSize = ImageSize.K1) => {
     setIsGenerating(true);
-    setGenerationStep("正在应用AI局部重绘...");
+    setGenerationStep("正在应用AI重绘与增强...");
     try {
       const image = images.find(img => img.id === imageId);
       if (!image || !image.slices) return;
@@ -214,7 +212,7 @@ const App: React.FC = () => {
       const currentSlice = image.slices[sliceIndex];
       const model = usePro ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
       
-      const newSliceUrl = await editImage(currentSlice, editPrompt, model, image.aspectRatio);
+      const newSliceUrl = await editImage(currentSlice, editPrompt, model, image.aspectRatio, refImage, targetImageSize);
 
       const newImages = images.map(img => {
         if (img.id === imageId) {

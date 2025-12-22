@@ -1,8 +1,9 @@
 
-import React, { useState, useEffect } from 'react';
-import { GeneratedImage, Asset } from '../types';
-import { Download, Copy, Maximize2, Wand2, X, MessageSquare, Info, Video, Fingerprint, Eye, Sparkle, LayoutGrid, ChevronLeft, ChevronRight, History, Layers, Zap } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { GeneratedImage, Asset, ImageSize } from '../types';
+import { Download, Copy, Maximize2, Wand2, X, MessageSquare, Info, Video, Fingerprint, Eye, Sparkle, LayoutGrid, ChevronLeft, ChevronRight, History, Layers, Zap, Upload, Image as ImageIcon } from 'lucide-react';
 import { Button } from './Button';
+import { fileToBase64 } from '../services/geminiService';
 
 interface InspectorProps {
   selectedImage: GeneratedImage | null;
@@ -11,7 +12,7 @@ interface InspectorProps {
   onAnalyze: (prompt: string) => void;
   isAnalyzing: boolean;
   analysisResult?: string;
-  onEditSlice?: (imageId: string, sliceIndex: number, prompt: string, usePro: boolean) => void;
+  onEditSlice?: (imageId: string, sliceIndex: number, prompt: string, usePro: boolean, refImage?: string, imageSize?: ImageSize) => void;
   onRevertSlice?: (imageId: string, sliceIndex: number, historyIndex: number) => void;
 }
 
@@ -31,11 +32,16 @@ export const Inspector: React.FC<InspectorProps> = ({
   const [currentSliceIndex, setCurrentSliceIndex] = useState(0);
   const [editPrompt, setEditPrompt] = useState("");
   const [useProModel, setUseProModel] = useState(false);
+  const [upscaleSize, setUpscaleSize] = useState<ImageSize>(ImageSize.K1);
+  const [editRefImage, setEditRefImage] = useState<string | null>(null);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const editRefInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setShowFullGrid(false);
     setCurrentSliceIndex(0);
+    setEditRefImage(null);
+    setUpscaleSize(ImageSize.K1);
     if (selectedImage || selectedAsset) {
         setActiveTab('view');
     }
@@ -63,8 +69,16 @@ export const Inspector: React.FC<InspectorProps> = ({
 
   const handleEdit = () => {
     if (selectedImage && isSliceView && onEditSlice) {
-      onEditSlice(selectedImage.id, currentSliceIndex, editPrompt, useProModel);
+      onEditSlice(selectedImage.id, currentSliceIndex, editPrompt, useProModel, editRefImage || undefined, upscaleSize);
       setEditPrompt("");
+      setEditRefImage(null);
+    }
+  };
+
+  const handleRefImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.[0]) {
+      const b64 = await fileToBase64(e.target.files[0]);
+      setEditRefImage(`data:${e.target.files[0].type};base64,${b64}`);
     }
   };
 
@@ -244,8 +258,34 @@ export const Inspector: React.FC<InspectorProps> = ({
                         分镜图像编辑 (IMAGE EDITING)
                     </h3>
                     <p className="text-[10px] text-zinc-600 leading-relaxed font-mono bg-black/30 p-3 border-l-2 border-cine-accent/50">
-                        您可以对当前选中的单图分镜进行局部修改或重绘。新生成的图像将替换原图，并保留在历史记录中。
+                        您可以对当前选中的单图分镜进行局部修改或重绘。
                     </p>
+                 </div>
+
+                 {/* Reference Image for Edit */}
+                 <div className="space-y-3">
+                    <label className="text-zinc-500 text-[9px] font-bold uppercase tracking-[0.2em]">编辑参考图 (EDIT REFERENCE)</label>
+                    <div 
+                        onClick={() => editRefInputRef.current?.click()}
+                        className={`relative aspect-video rounded-sm border-2 border-dashed transition-all cursor-pointer flex items-center justify-center group overflow-hidden ${
+                            editRefImage ? 'border-cine-accent' : 'border-zinc-800 bg-black/20 hover:border-cine-accent/50'
+                        }`}
+                    >
+                        {editRefImage ? (
+                            <>
+                                <img src={editRefImage} className="w-full h-full object-cover" />
+                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                    <X className="text-white" size={24} onClick={(e) => { e.stopPropagation(); setEditRefImage(null); }} />
+                                </div>
+                            </>
+                        ) : (
+                            <div className="flex flex-col items-center gap-2 text-zinc-600 group-hover:text-cine-accent transition-colors">
+                                <Upload size={20} />
+                                <span className="text-[9px] font-mono">点击上传参考图 (OPTIONAL)</span>
+                            </div>
+                        )}
+                        <input type="file" ref={editRefInputRef} className="hidden" accept="image/*" onChange={handleRefImageUpload} />
+                    </div>
                  </div>
 
                  <div className="space-y-3">
@@ -253,9 +293,30 @@ export const Inspector: React.FC<InspectorProps> = ({
                     <textarea 
                         value={editPrompt}
                         onChange={(e) => setEditPrompt(e.target.value)}
-                        className="w-full bg-black/40 border border-zinc-800/80 rounded-sm p-4 text-[11px] text-zinc-400 focus:border-cine-accent focus:ring-0 resize-none font-mono min-h-[120px] leading-relaxed transition-all placeholder:text-zinc-800"
+                        className="w-full bg-black/40 border border-zinc-800/80 rounded-sm p-4 text-[11px] text-zinc-400 focus:border-cine-accent focus:ring-0 resize-none font-mono min-h-[100px] leading-relaxed transition-all placeholder:text-zinc-800"
                         placeholder="例如：给角色戴上黑色墨镜，或者改变背景的天气..."
                     />
+                 </div>
+
+                 {/* Upscale Options */}
+                 <div className="space-y-3">
+                    <label className="text-zinc-500 text-[9px] font-bold uppercase tracking-[0.2em]">放大分辨率 (UPSCALE SIZE)</label>
+                    <div className="grid grid-cols-3 gap-2">
+                        {[ImageSize.K1, ImageSize.K2, ImageSize.K4].map((sz) => (
+                            <button
+                                key={sz}
+                                onClick={() => setUpscaleSize(sz)}
+                                className={`text-[10px] h-8 border rounded-[1px] font-mono transition-all flex items-center justify-center gap-2 ${
+                                    upscaleSize === sz 
+                                    ? 'border-cine-accent text-cine-accent bg-cine-accent/5' 
+                                    : 'border-zinc-800 text-zinc-600 hover:border-zinc-700'
+                                }`}
+                            >
+                                <LayoutGrid size={12} />
+                                {sz}
+                            </button>
+                        ))}
+                    </div>
                  </div>
 
                  <div className="space-y-4">
@@ -274,10 +335,10 @@ export const Inspector: React.FC<InspectorProps> = ({
                         size="md" 
                         className="w-full gap-2.5 h-12 shadow-[0_0_20px_rgba(255,122,0,0.2)]"
                         onClick={handleEdit}
-                        disabled={!editPrompt.trim()}
+                        disabled={!editPrompt.trim() && upscaleSize === ImageSize.K1 && !editRefImage}
                     >
                         <Wand2 size={14} />
-                        执行 AI 重绘 (RE-RENDER)
+                        执行 AI 重绘/放大 (RE-RENDER)
                     </Button>
                  </div>
 
