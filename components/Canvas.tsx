@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useLayoutEffect, useCallback, memo } from 'react';
+import React, { useState, useRef, useLayoutEffect, useCallback, memo, useMemo } from 'react';
 import { GeneratedImage, Asset } from '../types';
 import { Trash2, Archive, LayoutGrid, List, MonitorPlay, Workflow, Type, Images, Video, X, Maximize2, ArrowLeft, History } from 'lucide-react';
 import { Button } from './Button';
@@ -27,10 +27,10 @@ interface NodeProps {
     onMouseDown: (e: React.MouseEvent) => void;
     allAssets?: Asset[]; 
     onHeightChange?: (id: string, height: number) => void;
+    isDraggingThis?: boolean;
 }
 
-// 使用 memo 优化单个节点的重绘性能
-const Node = memo(({ image, selected, onSelect, onDelete, onMouseDown, allAssets, onHeightChange }: NodeProps) => {
+const Node = memo(({ image, selected, onSelect, onDelete, onMouseDown, allAssets, onHeightChange, isDraggingThis }: NodeProps) => {
     const [expandedSlice, setExpandedSlice] = useState<string | null>(null);
     const nodeRef = useRef<HTMLDivElement>(null);
 
@@ -82,12 +82,11 @@ const Node = memo(({ image, selected, onSelect, onDelete, onMouseDown, allAssets
     return (
         <div 
             ref={nodeRef}
-            className={`absolute group bg-zinc-950 border rounded-md shadow-2xl transition-shadow duration-300 will-change-transform ${
+            className={`absolute group bg-zinc-950 border rounded-md shadow-2xl transition-shadow duration-150 will-change-transform select-none ${
                 selected ? 'border-cine-accent ring-1 ring-cine-accent/50 z-30' : 'border-zinc-800 hover:border-zinc-600 z-10'
-            }`}
+            } ${isDraggingThis ? 'cursor-grabbing opacity-90 scale-[1.01] shadow-cine-accent/20 z-40' : 'cursor-default'}`}
             style={{ 
-                left: image.position?.x || 0, 
-                top: image.position?.y || 0,
+                transform: `translate3d(${image.position?.x || 0}px, ${image.position?.y || 0}px, 0)`,
                 width: width,
             }}
             onMouseDown={(e) => {
@@ -98,7 +97,7 @@ const Node = memo(({ image, selected, onSelect, onDelete, onMouseDown, allAssets
         >
             {/* Node Header */}
             <div className={`px-3 py-2 border-b flex justify-between items-center rounded-t-md cursor-grab active:cursor-grabbing ${getHeaderColor()}`}>
-                 <div className="flex items-center gap-2 text-zinc-300">
+                 <div className="flex items-center gap-2 text-zinc-300 pointer-events-none">
                      {getIcon()}
                      <span className="text-[9px] font-mono uppercase tracking-wider font-bold">
                          {getLabel()}
@@ -120,7 +119,7 @@ const Node = memo(({ image, selected, onSelect, onDelete, onMouseDown, allAssets
             </div>
 
             {/* Content Body */}
-            <div className="p-2 bg-black/80">
+            <div className="p-2 bg-black/80 pointer-events-none">
                 {image.nodeType === 'prompt' && (
                     <div className="p-3 text-zinc-300 text-xs font-mono leading-relaxed bg-zinc-900 rounded-sm border border-zinc-800 min-h-[80px]">
                         "{image.textData}"
@@ -177,7 +176,7 @@ const Node = memo(({ image, selected, onSelect, onDelete, onMouseDown, allAssets
 
                         {/* Main Image / Grid */}
                         <div 
-                            className="relative w-full bg-zinc-900 rounded-sm border border-zinc-800 overflow-hidden"
+                            className="relative w-full bg-zinc-900 rounded-sm border border-zinc-800 overflow-hidden pointer-events-auto"
                             style={{ aspectRatio: image.aspectRatio ? image.aspectRatio.replace(':', '/') : '16/9' }}
                         >
                             {expandedSlice ? (
@@ -350,7 +349,11 @@ export const Canvas: React.FC<CanvasProps> = ({ images, assets, onSelect, select
   const [scale, setScale] = useState(1);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDraggingCanvas, setIsDraggingCanvas] = useState(false);
+  
+  // 核心优化：局部拖拽状态。只在 Canvas 内部管理当前的拖拽坐标，不触发全局 App 刷新
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
+  const [localDragPos, setLocalDragPos] = useState<{x: number, y: number} | null>(null);
+  
   const lastMousePos = useRef({ x: 0, y: 0 });
   const [nodeHeights, setNodeHeights] = useState<Record<string, number>>({});
   const [detailViewItem, setDetailViewItem] = useState<GeneratedImage | null>(null);
@@ -371,9 +374,17 @@ export const Canvas: React.FC<CanvasProps> = ({ images, assets, onSelect, select
   };
 
   const handleNodeMouseDown = useCallback((e: React.MouseEvent, id: string) => {
+      // 防止文字误选
+      window.getSelection()?.removeAllRanges();
       setDraggingNodeId(id);
+      
+      const image = images.find(i => i.id === id);
+      if (image && image.position) {
+          setLocalDragPos({ x: image.position.x, y: image.position.y });
+      }
+      
       lastMousePos.current = { x: e.clientX, y: e.clientY };
-  }, []);
+  }, [images]);
 
   const handleMouseMove = (e: React.MouseEvent) => {
       const dx = e.clientX - lastMousePos.current.x;
@@ -382,19 +393,23 @@ export const Canvas: React.FC<CanvasProps> = ({ images, assets, onSelect, select
 
       if (isDraggingCanvas) {
           setPan(prev => ({ x: prev.x + dx, y: prev.y + dy }));
-      } else if (draggingNodeId) {
-          const image = images.find(i => i.id === draggingNodeId);
-          if (image && image.position) {
-              const newX = image.position.x + (dx / scale);
-              const newY = image.position.y + (dy / scale);
-              onUpdateNodePosition(draggingNodeId, newX, newY);
-          }
+      } else if (draggingNodeId && localDragPos) {
+          // 优化：仅更新局部状态，大幅提升帧率
+          setLocalDragPos(prev => prev ? ({
+              x: prev.x + (dx / scale),
+              y: prev.y + (dy / scale)
+          }) : null);
       }
   };
 
   const handleMouseUp = () => {
+      if (draggingNodeId && localDragPos) {
+          // 在松开鼠标时，一次性同步给全局状态
+          onUpdateNodePosition(draggingNodeId, localDragPos.x, localDragPos.y);
+      }
       setIsDraggingCanvas(false);
       setDraggingNodeId(null);
+      setLocalDragPos(null);
   };
 
   const handleWheel = (e: React.WheelEvent) => {
@@ -418,8 +433,18 @@ export const Canvas: React.FC<CanvasProps> = ({ images, assets, onSelect, select
       setDetailViewItem(img);
   };
 
+  // 渲染优化：根据拖拽状态实时合并坐标
+  const renderedNodes = useMemo(() => {
+      return images.map(img => {
+          if (img.id === draggingNodeId && localDragPos) {
+              return { ...img, position: localDragPos };
+          }
+          return img;
+      });
+  }, [images, draggingNodeId, localDragPos]);
+
   return (
-    <div className="flex flex-col h-full bg-black relative selection:bg-cine-accent selection:text-black">
+    <div className={`flex flex-col h-full bg-black relative selection:bg-cine-accent selection:text-black ${draggingNodeId ? 'select-none cursor-grabbing' : ''}`}>
       {detailViewItem && <DetailViewOverlay image={detailViewItem} onClose={() => setDetailViewItem(null)} />}
       <div className="absolute top-0 left-0 right-0 h-14 px-6 flex items-center justify-between z-20 bg-gradient-to-b from-black via-black/90 to-transparent pointer-events-none">
          <div className="flex items-center gap-4 pointer-events-auto">
@@ -466,7 +491,7 @@ export const Canvas: React.FC<CanvasProps> = ({ images, assets, onSelect, select
             <>
                 {viewMode === 'workflow' && (
                     <div 
-                        className="w-full h-full overflow-hidden cursor-grab active:cursor-grabbing bg-[#050505]" 
+                        className={`w-full h-full overflow-hidden bg-[#050505] ${isDraggingCanvas ? 'cursor-grabbing' : 'cursor-grab'}`} 
                         ref={containerRef} 
                         onMouseDown={handleMouseDown} 
                         onMouseMove={handleMouseMove} 
@@ -476,16 +501,16 @@ export const Canvas: React.FC<CanvasProps> = ({ images, assets, onSelect, select
                     >
                          <div className="absolute inset-0 pointer-events-none opacity-20" style={{ backgroundImage: 'radial-gradient(#444 1px, transparent 1px)', backgroundSize: `${20 * scale}px ${20 * scale}px`, backgroundPosition: `${pan.x}px ${pan.y}px` }} />
                          <div className="absolute origin-top-left will-change-transform" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})` }}>
-                             {images.map(img => {
+                             {renderedNodes.map(img => {
                                  if (img.parentId) {
-                                     const parent = images.find(p => p.id === img.parentId);
+                                     const parent = renderedNodes.find(p => p.id === img.parentId);
                                      if (parent && parent.position && img.position) {
                                          return <ConnectionLine key={`link-${parent.id}-${img.id}`} start={parent.position} end={img.position} startWidth={320} startHeight={nodeHeights[parent.id] || 200} />
                                      }
                                  }
                                  return null;
                              })}
-                             {images.map(img => (
+                             {renderedNodes.map(img => (
                                  <Node 
                                     key={img.id} 
                                     image={img} 
@@ -495,6 +520,7 @@ export const Canvas: React.FC<CanvasProps> = ({ images, assets, onSelect, select
                                     onDelete={() => onDelete(img.id)} 
                                     onMouseDown={(e) => handleNodeMouseDown(e, img.id)} 
                                     onHeightChange={handleHeightChange} 
+                                    isDraggingThis={draggingNodeId === img.id}
                                  />
                              ))}
                          </div>
