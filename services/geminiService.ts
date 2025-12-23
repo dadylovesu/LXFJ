@@ -221,11 +221,50 @@ export const generateCameraSuggestions = async (prompt: string, panelCount: numb
             const ai = getClient();
             return ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
-                contents: { parts: [{ text: `根据分镜场景建议 ${panelCount} 个镜头。场景：${prompt}` }] }
+                contents: { 
+                  parts: [{ 
+                    text: `你是一个专业的电影分镜规划师。
+                    任务：将以下场景描述规划为 ${panelCount} 个连贯的视觉分镜指令。
+                    
+                    场景描述：${prompt}
+                    
+                    【严格输出格式要求】：
+                    1. 必须输出正好 ${panelCount} 条指令，每条指令占据一行。
+                    2. 严禁带有数字编号（如 1. 2. 3.）、前缀词（如 镜头1：）或任何引言。
+                    3. 每一行必须是一个完整且丰富的专业描述。
+                    
+                    【内容要求】：
+                    每条描述必须包含以下要素：
+                    - 景别：如 远景、全景、中景、近景、特写。
+                    - 构图：如 三分法构图、黄金分割、对称构图、引导线构图。
+                    - 角度：如 平视、仰拍、俯拍、斜角镜头。
+                    - 拍摄手法：如 固定镜头、推镜头、摇镜头、移镜头。
+                    - 角色细节：详细描述角色的朝向（如 面向镜头左侧45度）、镜头角度、具体的身体姿态、细微的面部表情（如 坚定、忧虑、狂喜）。
+                    - 叙事内容：描述画面中发生的关键动作、光影氛围（如 丁达尔效应、侧逆光）。
+                    
+                    请以专业的导演视角进行创作，确保这 ${panelCount} 个镜头构成一个逻辑严密的视觉序列。` 
+                  }] 
+                }
             });
         });
-        return (response.text || "").split('\n').filter(l => l.trim()).slice(0, panelCount);
-    } catch { return new Array(panelCount).fill("电影级构图。"); }
+        
+        // Process the text to ensure it's a clean line-by-line array
+        const rawText = response.text || "";
+        const lines = rawText.split('\n')
+            .map(line => line.replace(/^[0-9]+[.\-、\s]*/, '').trim()) // Remove any leading numbers
+            .filter(line => line.length > 5) // Filter out garbage/short lines
+            .slice(0, panelCount);
+            
+        // Padding if AI returns fewer lines than requested
+        while (lines.length < panelCount) {
+            lines.push("电影级全景镜头：角色正对镜头，中性表情，侧逆光氛围，专业电影感。");
+        }
+        
+        return lines;
+    } catch (error) { 
+        console.error("Camera suggestions failed:", error);
+        return new Array(panelCount).fill("专业级电影分镜：高清渲染，导演级构图逻辑。"); 
+    }
 };
 
 export const generateCameraMovement = async (prompt: string): Promise<string> => {
