@@ -5,14 +5,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>橙意机构 - 连续分镜创作器</title>
-    <!-- 关键修复：确保浏览器能识别环境变量 -->
     <script>
-      window.process = window.process || { env: {} };
-      // 如果环境中存在 API_KEY，则注入
-      if (!window.process.env.API_KEY) {
-        // 此处通常由 Vercel 或构建环境自动替换，但我们提供一个占位
-        window.process.env.API_KEY = ""; 
-      }
+      // 更加健壮的 process.env 垫片
+      window.process = window.process || {};
+      window.process.env = window.process.env || {};
     </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
