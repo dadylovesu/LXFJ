@@ -139,7 +139,7 @@ const App: React.FC = () => {
   const handleGenerate = async () => {
     setError(null);
     setIsGenerating(true);
-    setGenerationStep("正在连接环境密钥...");
+    setGenerationStep("正在调用环境密钥渲染...");
     abortControllerRef.current = new AbortController();
 
     try {
@@ -155,7 +155,7 @@ const App: React.FC = () => {
           startX = rootNodes.length === 0 ? 100 : (rootNodes[rootNodes.length-1].position?.x || 100) + 420;
       }
 
-      setGenerationStep("正在渲染全景分镜宫格...");
+      setGenerationStep("正在执行全景渲染...");
       const referenceData: ReferenceImageData[] = [];
       for (const asset of assets) {
           referenceData.push({
@@ -173,7 +173,7 @@ const App: React.FC = () => {
           referenceData, previousContextImage, instructionsToSend, activeCollage || undefined
       );
       
-      setGenerationStep("正在分析动态逻辑...");
+      setGenerationStep("正在完成动态分析...");
       const cameraMove = await generateCameraMovement(prompt);
 
       const finalNode: GeneratedImage = {
@@ -199,8 +199,8 @@ const App: React.FC = () => {
       updateImagesWithHistory([...images, finalNode]);
       setSelectedImageId(finalNode.id);
     } catch (err: any) {
-      console.error("Critical Render Error:", err);
-      setError(err.message || "生成失败，请检查环境变量 API_KEY。");
+      console.error("Critical Error:", err);
+      setError(err.message || "生成失败。请确保后端环境变量 API_KEY 设置正确且为付费项目。");
     } finally {
       setIsGenerating(false);
       setGenerationStep("");
@@ -258,7 +258,7 @@ const App: React.FC = () => {
     const selected = images.find(i => i.id === selectedImageId);
     if (!selected || selected.nodeType !== 'render') return;
     setIsGenerating(true);
-    setGenerationStep("正在打包无损 ZIP...");
+    setGenerationStep("正在打包 ZIP...");
     try {
       const zip = new JSZip();
       const base64ToBlob = (b64: string) => {

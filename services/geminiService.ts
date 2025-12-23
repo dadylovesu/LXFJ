@@ -2,11 +2,9 @@
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { AspectRatio, ImageSize, Asset, CollageData, PanelAspectRatio } from "../types";
 
-// 每次 API 调用前重新初始化 GoogleGenAI 实例
+// 严格按照指令：直接使用 process.env.API_KEY 初始化
 const createAIInstance = () => {
-  const apiKey = process.env.API_KEY || "";
-  // 我们不再在这里抛出 Error，而是让 SDK 尝试去使用 process.env.API_KEY
-  return new GoogleGenAI({ apiKey });
+  return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
 async function withRetry<T>(operation: () => Promise<T>, maxRetries = 3): Promise<T> {
@@ -16,14 +14,8 @@ async function withRetry<T>(operation: () => Promise<T>, maxRetries = 3): Promis
       return await operation();
     } catch (error: any) {
       lastError = error;
-      const errorMsg = error?.message || "";
       const isOverloaded = error?.status === 'UNAVAILABLE' || error?.code === 503;
       const isRateLimited = error?.status === 'RESOURCE_EXHAUSTED' || error?.code === 429;
-      
-      // 如果是鉴权失败（没有 Key 或 Key 无效），直接抛出不再重试
-      if (errorMsg.includes("API_KEY_INVALID") || errorMsg.includes("not found")) {
-        throw error;
-      }
 
       if ((isOverloaded || isRateLimited) && attempt < maxRetries) {
         const delay = Math.pow(2, attempt) * 2000 + Math.random() * 1000;
