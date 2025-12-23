@@ -118,22 +118,17 @@ export const generateMultiViewGrid = async (
     - MAIN THEME: "${prompt}"`;
 
   if (collageRef) {
-      systemPrompt += `\n\n[STRICT COMPOSITION MAPPING]: 
-      - The provided Collage image contains a grid of ${collageRef.rows}x${collageRef.cols} panels. Each panel in the collage has a numerical ID in its corner.
-      - TASK: Perform a linear 1:1 mapping from the collage to your output grid.
-      - Panel 1 of the Collage (Top-Left) -> Panel 1 of Output.
-      - Panel 2 of the Collage -> Panel 2 of Output.
-      - ...and so on, from left-to-right, then top-to-bottom.
-      - CORRESPONDENCE: For each panel, strictly identify and replicate the:
-        1. SHOT TYPE (e.g., Extreme Close-up, Medium Shot, Long Shot, Wide Shot).
-        2. CAMERA ANGLE (e.g., Low angle, High angle, Bird's eye, Dutch tilt).
-        3. COMPOSITION (e.g., Rule of thirds, Leading lines, Subject positioning).
-      - IMPORTANT: Do NOT copy the content (characters/objects) of the collage. Only copy the STAGING and CAMERA LOGIC. Use the provided ASSETS for characters and props.`;
+      systemPrompt += `\n\n[COMPOSITION REFERENCE]: 
+      - The provided Collage image is a visual reference for camera framing and composition.
+      - It contains a grid of ${collageRef.rows}x${collageRef.cols} panels.
+      - TASK: Recognize the camera angles, shot types (Close-up, Wide, etc.), and framing from the collage panels.
+      - ADAPT: Map these compositional ideas to the current target grid of ${gridRows}x${gridCols} and the output aspect ratio of ${aspectRatio}.
+      - DO NOT replicate the literal pixel content of the collage; only use its staging, angles, and camera logic.`;
   }
 
   if (panelInstructions && panelInstructions.length > 0) {
-      systemPrompt += `\n\n[PANEL SPECIFICS]: Override the mapping with these instructions if they conflict:
-      ${panelInstructions.map((instr, idx) => `- Panel ${idx + 1}: ${instr || 'AI Choice (Follow Collage)'}`).join('\n')}`;
+      systemPrompt += `\n\n[PANEL SPECIFICS]: Follow these specific instructions for each panel index:
+      ${panelInstructions.map((instr, idx) => `- Panel ${idx + 1}: ${instr || 'AI Choice'}`).join('\n')}`;
   }
 
   if (roles.length > 0) {
@@ -151,7 +146,7 @@ export const generateMultiViewGrid = async (
       - Use the separate context image for narrative flow.`;
   }
 
-  systemPrompt += `\n\n[STYLING]: Photorealistic, cinematic, professional storyboard. No text overlays. Clear subjects.`;
+  systemPrompt += `\n\n[STYLING]: Photorealistic, cinematic, professional storyboard. No text overlays.`;
 
   const parts: any[] = [];
   

@@ -138,23 +138,9 @@ export const CollageEditor: React.FC<CollageEditorProps> = ({
           }
           
           ctx.drawImage(img, 0, 0, img.width, img.height, dx + offsetX, dy + offsetY, dw, dh);
-          
-          // ADD SPATIAL INDEX LABEL TO HELP AI VISION (1:1 Correspondence)
-          ctx.fillStyle = 'rgba(255, 122, 0, 0.9)';
-          ctx.fillRect(dx + 10, dy + 10, 100, 100);
-          ctx.fillStyle = 'white';
-          ctx.font = 'bold 60px monospace';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText((i + 1).toString(), dx + 60, dy + 60);
-          
-          // DRAW PANEL BORDERS FOR CLARITY
-          ctx.strokeStyle = '#333333';
-          ctx.lineWidth = 4;
-          ctx.strokeRect(dx, dy, slotW, slotH);
       }
 
-      // Use '1:1' as internal transport AR
+      // Use '1:1' as internal transport AR, Gemini will map compositions to the user's selected deck AR
       onSave(canvas.toDataURL('image/png'), rows, cols, '1:1');
   };
 
@@ -215,7 +201,7 @@ export const CollageEditor: React.FC<CollageEditorProps> = ({
                        注意事项 (NOTICE)
                     </label>
                     <p className="text-[9px] text-zinc-500 font-mono leading-relaxed bg-black/40 p-3 rounded-sm border border-zinc-800">
-                        系统将严格按照 <span className="text-cine-accent">从左到右、从上到下</span> 的顺序，将参考图的构图映射到生成结果中。
+                        编辑器将保留参考图的完整比例（不裁剪），帮助 AI 准确识别每一帧的景别和构图。
                     </p>
                 </div>
 
@@ -265,8 +251,8 @@ export const CollageEditor: React.FC<CollageEditorProps> = ({
                                               <Trash2 size={16} />
                                             </button>
                                         </div>
-                                        <div className="absolute top-2 left-2 px-2 py-0.5 bg-cine-accent/90 rounded-[1px] text-black font-mono text-[9px] font-bold tracking-widest pointer-events-none shadow-md">
-                                            SLOT {String(index + 1).padStart(2, '0')}
+                                        <div className="absolute top-2 left-2 px-2 py-0.5 bg-black/80 rounded-[1px] text-white font-mono text-[9px] font-bold tracking-widest pointer-events-none">
+                                            REF {String(index + 1).padStart(2, '0')}
                                         </div>
                                     </>
                                 ) : (
