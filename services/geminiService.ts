@@ -1,11 +1,6 @@
+
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { AspectRatio, ImageSize, Asset, CollageData, PanelAspectRatio } from "../types";
-
-export const ensureApiKey = async () => {
-  // Logic for external API key selection removed to support direct environment variable usage
-  // and prevent runtime errors in standard web deployments.
-  return Promise.resolve();
-};
 
 const getClient = () => {
   return new GoogleGenAI({ apiKey: process.env.API_KEY });
