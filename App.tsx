@@ -153,7 +153,7 @@ const App: React.FC = () => {
           startX = rootNodes.length === 0 ? 100 : (rootNodes[rootNodes.length-1].position?.x || 100) + 420;
       }
 
-      setGenerationStep(activeCollage ? "正在复刻拼贴镜头组的构图与景别..." : "正在根据镜头逻辑、核心道具与视觉资产执行渲染...");
+      setGenerationStep(activeCollage ? "正在分析拼贴镜头组的构图与景别逻辑..." : "正在渲染分镜...");
       
       const referenceData: ReferenceImageData[] = [];
       for (const asset of assets) {
@@ -165,20 +165,17 @@ const App: React.FC = () => {
           });
       }
 
-      // If collage is active, use its grid settings
-      const finalRows = activeCollage ? activeCollage.rows : gridRows;
-      const finalCols = activeCollage ? activeCollage.cols : gridCols;
-      const finalAspectRatio = activeCollage ? (activeCollage.aspectRatio as AspectRatio) : aspectRatio;
-
+      // No longer overriding user settings with collage settings. 
+      // Users can independently set grid and aspect ratio.
       const finalResult = await generateMultiViewGrid(
           prompt, 
-          finalRows, 
-          finalCols, 
-          finalAspectRatio, 
+          gridRows, 
+          gridCols, 
+          aspectRatio, 
           imageSize, 
           referenceData,
           previousContextImage,
-          activeCollage ? undefined : panelPrompts, // Bypass panel prompts if collage is active
+          panelPrompts,
           activeCollage || undefined
       );
       
@@ -192,7 +189,7 @@ const App: React.FC = () => {
           prompt: prompt,
           textData: prompt, 
           assetIds: assets.map(a => a.id), 
-          aspectRatio: finalAspectRatio,
+          aspectRatio: aspectRatio,
           timestamp: timestamp + 1,
           nodeType: 'render',
           parentId: parentNode?.id, 
@@ -200,8 +197,8 @@ const App: React.FC = () => {
           cameraDescription: cameraMove,
           slices: finalResult.slices,
           sliceHistory: {}, 
-          gridRows: finalRows,
-          gridCols: finalCols
+          gridRows: gridRows,
+          gridCols: gridCols
       };
 
       updateImagesWithHistory([...images, finalNode]);
@@ -250,6 +247,7 @@ const App: React.FC = () => {
     }
   };
 
+  // Fixed the error where 'idx' was undefined; changed it to 'sliceIndex'.
   const handleRevertSlice = (imageId: string, sliceIndex: number, historyIndex: number) => {
     const newImages = images.map(img => {
       if (img.id === imageId) {
@@ -358,7 +356,7 @@ const App: React.FC = () => {
                      <div className="flex items-center justify-between">
                         <span className="text-[10px] text-cine-accent font-bold uppercase tracking-widest flex items-center gap-2">
                            <LayoutGrid size={12} />
-                           独立参考模式 (STRICT)
+                           镜头组参考模式 (ACTIVE)
                         </span>
                         <button onClick={() => setActiveCollage(null)} className="text-cine-accent hover:text-white transition-colors">
                            <XIcon size={12} />
@@ -367,26 +365,26 @@ const App: React.FC = () => {
                      <div className="aspect-video bg-black rounded-sm overflow-hidden border border-cine-accent/20">
                         <img src={activeCollage.url} className="w-full h-full object-contain" />
                      </div>
-                     <p className="text-[8px] text-cine-accent/60 font-mono uppercase">将会完全参照此拼贴组复刻镜头</p>
+                     <p className="text-[8px] text-zinc-500 font-mono uppercase tracking-widest">AI 将提取此图的镜头布局与角度</p>
                   </div>
                 ) : (
                   <div className="p-3 bg-zinc-900/40 border border-zinc-800/40 border-dashed rounded-sm text-center">
-                     <p className="text-[9px] text-zinc-600 font-mono">未激活拼贴模式</p>
+                     <p className="text-[9px] text-zinc-600 font-mono">未激活镜头组参考</p>
                   </div>
                 )}
             </div>
 
             <DirectorDeck 
-                gridRows={activeCollage ? activeCollage.rows : gridRows} setGridRows={setGridRows}
-                gridCols={activeCollage ? activeCollage.cols : gridCols} setGridCols={setGridCols}
-                aspectRatio={activeCollage ? (activeCollage.aspectRatio as AspectRatio) : aspectRatio} setAspectRatio={setAspectRatio}
+                gridRows={gridRows} setGridRows={setGridRows}
+                gridCols={gridCols} setGridCols={setGridCols}
+                aspectRatio={aspectRatio} setAspectRatio={setAspectRatio}
                 imageSize={imageSize} setImageSize={setImageSize}
                 prompt={prompt} setPrompt={setPrompt}
                 onGenerate={handleGenerate}
                 onStop={() => setIsGenerating(false)}
                 isGenerating={isGenerating}
                 onEnhancePrompt={async () => setPrompt(await enhancePrompt(prompt))}
-                onGenerateCamera={activeCollage ? undefined : (() => setIsCameraEditorOpen(true))} // Disabled if collage is active
+                onGenerateCamera={() => setIsCameraEditorOpen(true)} 
                 isContinuing={!!(selectedImageId && images.find(i => i.id === selectedImageId)?.nodeType === 'render')}
                 onDeselect={() => { setSelectedImageId(undefined); setSelectedAssetId(undefined); }}
             />

@@ -19,7 +19,6 @@ export const CollageEditor: React.FC<CollageEditorProps> = ({
 }) => {
   const [rows, setRows] = useState(2);
   const [cols, setCols] = useState(2);
-  const [aspectRatio, setAspectRatio] = useState<string>(defaultAspectRatio);
   const [slots, setSlots] = useState<(File | null)[]>([]);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   
@@ -88,13 +87,17 @@ export const CollageEditor: React.FC<CollageEditorProps> = ({
       const activeSlots = slots.map((f, i) => ({ file: f, index: i })).filter(s => s.file !== null);
       if (activeSlots.length === 0) return;
 
-      const [arW, arH] = aspectRatio.split(':').map(Number);
       const canvas = document.createElement('canvas');
       const baseSize = 2048; 
+      // We use a square base canvas for the transport grid to prevent distortion
       canvas.width = baseSize;
-      canvas.height = Math.round(baseSize * (arH / arW));
+      canvas.height = baseSize;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
+
+      // Fill background to clearly separate slots if contain leaves gaps
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       const slotW = canvas.width / cols;
       const slotH = canvas.height / rows;
@@ -117,30 +120,42 @@ export const CollageEditor: React.FC<CollageEditorProps> = ({
           const dx = c * slotW;
           const dy = r * slotH;
           
-          // Cover logic
+          // Use "CONTAIN" logic so the full reference is visible for camera angle recognition
           const imgRatio = img.width / img.height;
           const targetRatio = slotW / slotH;
-          let sw, sh, sx, sy;
+          let dw, dh, offsetX, offsetY;
+          
           if (imgRatio > targetRatio) {
-              sh = img.height;
-              sw = img.height * targetRatio;
-              sx = (img.width - sw) / 2;
-              sy = 0;
+              dw = slotW;
+              dh = slotW / imgRatio;
+              offsetX = 0;
+              offsetY = (slotH - dh) / 2;
           } else {
-              sw = img.width;
-              sh = img.width / targetRatio;
-              sx = 0;
-              sy = (img.height - sh) / 2;
+              dh = slotH;
+              dw = slotH * imgRatio;
+              offsetX = (slotW - dw) / 2;
+              offsetY = 0;
           }
-          ctx.drawImage(img, sx, sy, sw, sh, dx, dy, slotW, slotH);
+          
+          ctx.drawImage(img, 0, 0, img.width, img.height, dx + offsetX, dy + offsetY, dw, dh);
+          
+          // ADD SPATIAL INDEX LABEL TO HELP AI VISION (1:1 Correspondence)
+          ctx.fillStyle = 'rgba(255, 122, 0, 0.9)';
+          ctx.fillRect(dx + 10, dy + 10, 100, 100);
+          ctx.fillStyle = 'white';
+          ctx.font = 'bold 60px monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText((i + 1).toString(), dx + 60, dy + 60);
+          
+          // DRAW PANEL BORDERS FOR CLARITY
+          ctx.strokeStyle = '#333333';
+          ctx.lineWidth = 4;
+          ctx.strokeRect(dx, dy, slotW, slotH);
       }
 
-      onSave(canvas.toDataURL('image/png'), rows, cols, aspectRatio);
-  };
-
-  const getPreviewStyle = () => {
-      const [w, h] = aspectRatio.split(':').map(Number);
-      return { aspectRatio: `${w}/${h}` };
+      // Use '1:1' as internal transport AR
+      onSave(canvas.toDataURL('image/png'), rows, cols, '1:1');
   };
 
   return (
@@ -154,9 +169,9 @@ export const CollageEditor: React.FC<CollageEditorProps> = ({
                </div>
                <div>
                   <h2 className="text-white font-mono uppercase tracking-[0.25em] text-sm font-bold">
-                    拼贴编辑器 (COLLAGE EDITOR)
+                    镜头组参考编辑器 (SHOT GROUP EDITOR)
                   </h2>
-                  <p className="text-[10px] text-zinc-500 font-mono mt-0.5 uppercase tracking-widest">Create structural references for your sequence</p>
+                  <p className="text-[10px] text-zinc-500 font-mono mt-0.5 uppercase tracking-widest">Create structural references to guide camera angles</p>
                </div>
             </div>
             <button onClick={onClose} className="text-zinc-600 hover:text-white transition-all hover:rotate-90 duration-300">
@@ -193,23 +208,15 @@ export const CollageEditor: React.FC<CollageEditorProps> = ({
                     </div>
                 </div>
 
-                {/* Canvas Ratio */}
+                {/* Info Text */}
                 <div className="space-y-4">
                     <label className="text-[10px] uppercase text-zinc-500 font-bold tracking-[0.2em] flex items-center gap-2">
                        <span className="w-1.5 h-1.5 bg-cine-accent rounded-full"></span>
-                       画布比例 (RATIO)
+                       注意事项 (NOTICE)
                     </label>
-                    <div className="grid grid-cols-2 gap-2">
-                        {Object.values(AspectRatio).map(ar => (
-                            <button
-                                key={ar}
-                                onClick={() => setAspectRatio(ar)}
-                                className={`px-2 py-2 text-[10px] font-mono border rounded-[1px] transition-all ${aspectRatio === ar ? 'bg-zinc-800 text-white border-zinc-600 shadow-inner' : 'bg-black border-zinc-800 text-zinc-700 hover:border-zinc-700'}`}
-                            >
-                                {ar}
-                            </button>
-                        ))}
-                    </div>
+                    <p className="text-[9px] text-zinc-500 font-mono leading-relaxed bg-black/40 p-3 rounded-sm border border-zinc-800">
+                        系统将严格按照 <span className="text-cine-accent">从左到右、从上到下</span> 的顺序，将参考图的构图映射到生成结果中。
+                    </p>
                 </div>
 
                 {/* File Action */}
@@ -218,10 +225,10 @@ export const CollageEditor: React.FC<CollageEditorProps> = ({
                         onClick={() => fileInputRef.current?.click()}
                         className="w-full py-4 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-sm text-[11px] font-mono font-bold flex items-center justify-center gap-3 transition-all uppercase tracking-widest shadow-lg"
                     >
-                        <Plus size={16} /> 添加图片
+                        <Plus size={16} /> 添加参考图
                     </button>
                     <p className="text-[9px] text-zinc-600 font-mono text-center leading-relaxed">
-                        可拖拽排序，填满后将自动裁剪为 {aspectRatio}。
+                        支持拖拽排序。
                     </p>
                     <input type="file" ref={fileInputRef} className="hidden" multiple accept="image/*" onChange={handleFileSelect} />
                 </div>
@@ -231,7 +238,7 @@ export const CollageEditor: React.FC<CollageEditorProps> = ({
                 <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-[radial-gradient(#fff_1px,transparent_1px)] bg-[size:20px_20px]"></div>
                 <div 
                     className="bg-zinc-900 border border-zinc-800 shadow-[0_0_50px_rgba(0,0,0,0.5)] relative transition-all duration-500 ease-out"
-                    style={{ width: '100%', maxWidth: '800px', ...getPreviewStyle() }}
+                    style={{ width: '100%', maxWidth: '700px', aspectRatio: '1/1' }}
                 >
                     <div 
                         className="grid w-full h-full gap-[2px] bg-zinc-950"
@@ -240,7 +247,7 @@ export const CollageEditor: React.FC<CollageEditorProps> = ({
                         {slots.map((file, index) => (
                             <div 
                                 key={index}
-                                className={`relative group border border-dashed border-zinc-800/50 flex items-center justify-center overflow-hidden transition-colors ${draggedIndex === index ? 'opacity-40' : 'opacity-100'} ${!file ? 'hover:bg-cine-accent/5 hover:border-cine-accent/30' : ''}`}
+                                className={`relative group border border-dashed border-zinc-800/50 flex items-center justify-center overflow-hidden transition-colors ${draggedIndex === index ? 'opacity-40' : 'opacity-100'} ${!file ? 'hover:bg-cine-accent/5 hover:border-cine-accent/30' : 'bg-black'}`}
                                 draggable={!!file}
                                 onDragStart={(e) => handleDragStart(e, index)}
                                 onDragOver={(e) => handleDragOver(e, index)}
@@ -248,7 +255,7 @@ export const CollageEditor: React.FC<CollageEditorProps> = ({
                             >
                                 {file ? (
                                     <>
-                                        <img src={URL.createObjectURL(file)} alt={`slot-${index}`} className="w-full h-full object-cover pointer-events-none group-hover:scale-105 transition-transform duration-700" />
+                                        <img src={URL.createObjectURL(file)} alt={`slot-${index}`} className="w-full h-full object-contain pointer-events-none group-hover:scale-105 transition-transform duration-700" />
                                         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-3">
                                             <GripHorizontal size={24} className="text-white cursor-grab active:cursor-grabbing mb-1" />
                                             <button 
@@ -258,8 +265,8 @@ export const CollageEditor: React.FC<CollageEditorProps> = ({
                                               <Trash2 size={16} />
                                             </button>
                                         </div>
-                                        <div className="absolute top-2 left-2 px-2 py-0.5 bg-black/80 rounded-[1px] text-white font-mono text-[9px] font-bold tracking-widest pointer-events-none">
-                                            {String(index + 1).padStart(2, '0')}
+                                        <div className="absolute top-2 left-2 px-2 py-0.5 bg-cine-accent/90 rounded-[1px] text-black font-mono text-[9px] font-bold tracking-widest pointer-events-none shadow-md">
+                                            SLOT {String(index + 1).padStart(2, '0')}
                                         </div>
                                     </>
                                 ) : (
@@ -280,7 +287,7 @@ export const CollageEditor: React.FC<CollageEditorProps> = ({
             <div className="flex items-center gap-4">
                 <div className={`w-2 h-2 rounded-full ${slots.filter(s => s !== null).length === slots.length ? 'bg-green-500' : 'bg-zinc-700'}`}></div>
                 <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">
-                    READY: {slots.filter(s => s !== null).length} / {slots.length} PANELS
+                    ACTIVE: {slots.filter(s => s !== null).length} / {slots.length} REF SLOTS
                 </span>
             </div>
             <div className="flex gap-4">
@@ -297,7 +304,7 @@ export const CollageEditor: React.FC<CollageEditorProps> = ({
                     disabled={slots.every(s => s === null)} 
                     className="px-12 h-12 text-[11px] font-black uppercase tracking-[0.2em] shadow-[0_0_30px_rgba(255,122,0,0.4)]"
                 >
-                    <Check size={18} className="mr-3" /> 生成拼贴素材 (CREATE ASSET)
+                    <Check size={18} className="mr-3" /> 应用镜头组参考 (APPLY)
                 </Button>
             </div>
         </div>

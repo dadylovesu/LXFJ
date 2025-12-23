@@ -113,41 +113,45 @@ export const generateMultiViewGrid = async (
   const props = categorizedRefs.filter(r => r.category === 'prop');
 
   let systemPrompt = `[CORE TASK]: GENERATE A SINGLE ${gridType} CINEMATIC STORYBOARD GRID.
-    - MAIN THEME: "${prompt}"
-    - VIEWS: Exactly ${totalViews} unique panels showing narrative progression in a single image grid.`;
+    - OUTPUT FORMAT: Exactly ${totalViews} panels in a ${gridRows}x${gridCols} grid.
+    - ASPECT RATIO: Adapt all content to ${aspectRatio}.
+    - MAIN THEME: "${prompt}"`;
 
   if (collageRef) {
-      systemPrompt += `\n\n[STRICT COMPOSITION MODE]: 
-      - The provided Collage Reference image contains a grid of ${collageRef.rows}x${collageRef.cols}.
-      - IMPORTANT: Replicate the EXACT camera angles, framing, and compositions of each corresponding panel from this reference.
-      - Replace the visual content with the current story prompt: "${prompt}". 
-      - Ignore any other camera instructions if they conflict with this collage.`;
-  } else if (panelInstructions && panelInstructions.length > 0) {
-      systemPrompt += `\n\n[PANEL SPECIFICS]: Follow these specific camera and composition instructions for each panel index:
-      ${panelInstructions.map((instr, idx) => `- Panel ${idx + 1}: ${instr || 'AI Choice'}`).join('\n')}`;
+      systemPrompt += `\n\n[STRICT COMPOSITION MAPPING]: 
+      - The provided Collage image contains a grid of ${collageRef.rows}x${collageRef.cols} panels. Each panel in the collage has a numerical ID in its corner.
+      - TASK: Perform a linear 1:1 mapping from the collage to your output grid.
+      - Panel 1 of the Collage (Top-Left) -> Panel 1 of Output.
+      - Panel 2 of the Collage -> Panel 2 of Output.
+      - ...and so on, from left-to-right, then top-to-bottom.
+      - CORRESPONDENCE: For each panel, strictly identify and replicate the:
+        1. SHOT TYPE (e.g., Extreme Close-up, Medium Shot, Long Shot, Wide Shot).
+        2. CAMERA ANGLE (e.g., Low angle, High angle, Bird's eye, Dutch tilt).
+        3. COMPOSITION (e.g., Rule of thirds, Leading lines, Subject positioning).
+      - IMPORTANT: Do NOT copy the content (characters/objects) of the collage. Only copy the STAGING and CAMERA LOGIC. Use the provided ASSETS for characters and props.`;
+  }
+
+  if (panelInstructions && panelInstructions.length > 0) {
+      systemPrompt += `\n\n[PANEL SPECIFICS]: Override the mapping with these instructions if they conflict:
+      ${panelInstructions.map((instr, idx) => `- Panel ${idx + 1}: ${instr || 'AI Choice (Follow Collage)'}`).join('\n')}`;
   }
 
   if (roles.length > 0) {
       systemPrompt += `\n\n[CHARACTER CONSISTENCY]:
-      ${roles.map((r, i) => `- Reference Image ${i+1} is "ROLE ${r.roleIndex}". Maintain this character's specific facial features, hairstyle, and clothing across all panels.`).join('\n')}`;
+      ${roles.map((r, i) => `- Reference Image ${i+1} is "ROLE ${r.roleIndex}". Maintain this character across all panels.`).join('\n')}`;
   }
 
   if (props.length > 0) {
-      systemPrompt += `\n\n[PROP/OBJECT CONSISTENCY]:
-      ${props.map((p, i) => `- Reference Image ${roles.length + i + 1} is "KEY PROP ${p.roleIndex}". This is a critical object. Maintain its precise design.`).join('\n')}`;
-  }
-
-  if (bgs.length > 0) {
-      systemPrompt += `\n\n[ENVIRONMENT]:
-      - Use provided background reference for mood/lighting/architecture.`;
+      systemPrompt += `\n\n[PROP CONSISTENCY]:
+      ${props.map((p, i) => `- Maintain the design of "KEY PROP ${p.roleIndex}" as shown in references.`).join('\n')}`;
   }
 
   if (contextImage) {
       systemPrompt += `\n\n[STORY CONTINUITY]:
-      - The separate context image is the previous shot. Progress the narrative.`;
+      - Use the separate context image for narrative flow.`;
   }
 
-  systemPrompt += `\n\n[STYLING]: Photorealistic, cinematic, no text overlays.`;
+  systemPrompt += `\n\n[STYLING]: Photorealistic, cinematic, professional storyboard. No text overlays. Clear subjects.`;
 
   const parts: any[] = [];
   
@@ -168,7 +172,6 @@ export const generateMultiViewGrid = async (
   parts.push({ text: systemPrompt });
 
   try {
-    // Explicitly type the withRetry call to avoid 'unknown' errors
     const response = await withRetry<GenerateContentResponse>(() => {
         const ai = getClient();
         return ai.models.generateContent({
@@ -232,7 +235,6 @@ export const editImage = async (
   parts.push({ text: finalPrompt });
 
   try {
-    // Explicitly type the withRetry call to avoid 'unknown' errors
     const response = await withRetry<GenerateContentResponse>(() => {
         const ai = getClient();
         return ai.models.generateContent({
@@ -262,7 +264,6 @@ export const editImage = async (
 export const generateCameraSuggestions = async (prompt: string, panelCount: number): Promise<string[]> => {
     await ensureApiKey();
     try {
-        // Explicitly type the withRetry call and use the recommended gemini-3-flash-preview model
         const response = await withRetry<GenerateContentResponse>(() => {
             const ai = getClient();
             return ai.models.generateContent({
@@ -282,7 +283,6 @@ export const generateCameraSuggestions = async (prompt: string, panelCount: numb
 export const generateCameraMovement = async (prompt: string): Promise<string> => {
     await ensureApiKey();
     try {
-        // Explicitly type the withRetry call and use the recommended gemini-3-flash-preview model
         const response = await withRetry<GenerateContentResponse>(() => {
             const ai = getClient();
             return ai.models.generateContent({
@@ -298,7 +298,6 @@ export const generateCameraMovement = async (prompt: string): Promise<string> =>
 export const enhancePrompt = async (rawPrompt: string): Promise<string> => {
   await ensureApiKey();
   try {
-    // Explicitly type the withRetry call and use the recommended gemini-3-flash-preview model
     const response = await withRetry<GenerateContentResponse>(() => {
         const ai = getClient();
         return ai.models.generateContent({
@@ -313,7 +312,6 @@ export const enhancePrompt = async (rawPrompt: string): Promise<string> => {
 export const analyzeAsset = async (fileBase64: string, mimeType: string, prompt: string): Promise<string> => {
   await ensureApiKey();
   try {
-    // Explicitly type the withRetry call to avoid 'unknown' errors
     const response = await withRetry<GenerateContentResponse>(() => {
         const ai = getClient();
         return ai.models.generateContent({
