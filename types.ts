@@ -10,9 +10,7 @@ export enum AspectRatio {
 export enum PanelAspectRatio {
   P3_4 = '3:4',
   P9_16 = '9:16',
-  P2_3 = '2:3',
   P16_9 = '16:9',
-  P3_2 = '3:2',
   P4_3 = '4:3',
   P1_1 = '1:1'
 }

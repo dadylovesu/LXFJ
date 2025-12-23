@@ -49,8 +49,6 @@ const App: React.FC = () => {
       case PanelAspectRatio.P9_16: setAspectRatio(AspectRatio.MOBILE); break;    // 9:16
       case PanelAspectRatio.P3_4: setAspectRatio(AspectRatio.PORTRAIT); break;   // 3:4
       case PanelAspectRatio.P4_3: setAspectRatio(AspectRatio.STANDARD); break;   // 4:3
-      case PanelAspectRatio.P2_3: setAspectRatio(AspectRatio.PORTRAIT); break;   // 2:3 -> 3:4 (最接近)
-      case PanelAspectRatio.P3_2: setAspectRatio(AspectRatio.STANDARD); break;   // 3:2 -> 4:3 (最接近)
       case PanelAspectRatio.P1_1: setAspectRatio(AspectRatio.SQUARE); break;     // 1:1
     }
   }, [panelAspectRatio]);
@@ -264,9 +262,29 @@ const App: React.FC = () => {
 
     try {
       const zip = new JSZip();
-      const renderNodes = images.filter(i => i.nodeType === 'render');
-      const index = renderNodes.findIndex(i => i.id === selected.id) + 1;
-      const folderName = `镜头${index}`;
+      
+      // 命名逻辑：根据连线关系确定组号和镜头号
+      const getRootId = (nodeId: string): string => {
+          const node = images.find(n => n.id === nodeId);
+          if (!node || !node.parentId) return nodeId;
+          return getRootId(node.parentId);
+      };
+
+      const getDepth = (nodeId: string, depth = 1): number => {
+          const node = images.find(n => n.id === nodeId);
+          if (!node || !node.parentId) return depth;
+          return getDepth(node.parentId, depth + 1);
+      };
+
+      const rootNodes = images
+          .filter(i => i.nodeType === 'render' && !i.parentId)
+          .sort((a, b) => a.timestamp - b.timestamp);
+
+      const currentRootId = getRootId(selected.id);
+      const groupIdx = rootNodes.findIndex(r => r.id === currentRootId) + 1;
+      const shotIdx = getDepth(selected.id);
+      
+      const folderName = `组${groupIdx}-镜头${shotIdx}`;
       const folder = zip.folder(folderName);
 
       const base64ToBlob = (b64: string) => {
