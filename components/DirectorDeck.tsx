@@ -1,7 +1,8 @@
+
 import React from 'react';
 import { Button } from './Button';
 import { AspectRatio, ImageSize, PanelAspectRatio } from '../types';
-import { Settings2, GitMerge, Video, Layers, Zap, LayoutGrid, ChevronRight, ChevronLeft, XCircle, PlusCircle, Square, Wand2 } from 'lucide-react';
+import { Settings2, GitMerge, Video, Layers, Zap, LayoutGrid, ChevronRight, ChevronLeft, XCircle, PlusCircle, Square, Wand2, Info } from 'lucide-react';
 
 interface DirectorDeckProps {
   gridSize: number;
@@ -21,6 +22,7 @@ interface DirectorDeckProps {
   onOpenScriptDeconstruct?: () => void;
   isContinuing?: boolean;
   onDeselect?: () => void;
+  isCollageActive?: boolean;
 }
 
 export const DirectorDeck: React.FC<DirectorDeckProps> = ({
@@ -40,7 +42,8 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
   onGenerateCamera,
   onOpenScriptDeconstruct,
   isContinuing = false,
-  onDeselect
+  onDeselect,
+  isCollageActive = false
 }) => {
   
   const getQualityLabel = () => {
@@ -180,7 +183,7 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
       </div>
 
       {/* Tools Row */}
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-2 relative">
           <Button 
             variant="primary" 
             size="sm" 
@@ -191,16 +194,23 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
               <Wand2 size={12} className="mr-2 text-zinc-400 group-hover:text-cine-accent transition-colors" /> 
               智能脚本拆解
           </Button>
-          <Button 
-            variant="primary" 
-            size="sm" 
-            onClick={onGenerateCamera} 
-            disabled={isGenerating || !prompt.trim()} 
-            className="text-[9px] h-10 border-dashed border-zinc-800 group"
-          >
-              <Video size={12} className="mr-2 text-zinc-400 group-hover:text-cine-accent transition-colors" /> 
-              分镜镜头逻辑
-          </Button>
+          <div className="relative group/tool">
+            <Button 
+                variant="primary" 
+                size="sm" 
+                onClick={onGenerateCamera} 
+                disabled={isGenerating || !prompt.trim() || isCollageActive} 
+                className={`w-full text-[9px] h-10 border-dashed border-zinc-800 group ${isCollageActive ? 'opacity-40 grayscale cursor-not-allowed' : ''}`}
+            >
+                <Video size={12} className="mr-2 text-zinc-400 group-hover:text-cine-accent transition-colors" /> 
+                分镜镜头逻辑
+            </Button>
+            {isCollageActive && (
+                <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-48 bg-black/90 text-cine-accent text-[8px] p-2 border border-cine-accent/30 rounded-sm opacity-0 group-hover/tool:opacity-100 transition-opacity pointer-events-none z-50 font-mono uppercase tracking-tighter text-center">
+                    <Info size={10} className="inline mr-1" /> 已激活镜头组参考，文本逻辑已禁用
+                </div>
+            )}
+          </div>
       </div>
 
       {/* Action Button Group */}

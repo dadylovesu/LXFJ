@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AssetBay } from './components/AssetBay';
 import { DirectorDeck } from './components/DirectorDeck';
@@ -41,14 +42,13 @@ const App: React.FC = () => {
 
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Sync main aspect ratio with panel selection
   useEffect(() => {
     switch (panelAspectRatio) {
-      case PanelAspectRatio.P16_9: setAspectRatio(AspectRatio.WIDE); break;      // 16:9
-      case PanelAspectRatio.P9_16: setAspectRatio(AspectRatio.MOBILE); break;    // 9:16
-      case PanelAspectRatio.P3_4: setAspectRatio(AspectRatio.PORTRAIT); break;   // 3:4
-      case PanelAspectRatio.P4_3: setAspectRatio(AspectRatio.STANDARD); break;   // 4:3
-      case PanelAspectRatio.P1_1: setAspectRatio(AspectRatio.SQUARE); break;     // 1:1
+      case PanelAspectRatio.P16_9: setAspectRatio(AspectRatio.WIDE); break;
+      case PanelAspectRatio.P9_16: setAspectRatio(AspectRatio.MOBILE); break;
+      case PanelAspectRatio.P3_4: setAspectRatio(AspectRatio.PORTRAIT); break;
+      case PanelAspectRatio.P4_3: setAspectRatio(AspectRatio.STANDARD); break;
+      case PanelAspectRatio.P1_1: setAspectRatio(AspectRatio.SQUARE); break;
     }
   }, [panelAspectRatio]);
 
@@ -160,9 +160,12 @@ const App: React.FC = () => {
           });
       }
 
+      // If activeCollage is present, we DISCARD text-based panelPrompts to prioritize visual recognition.
+      const instructionsToSend = activeCollage ? undefined : panelPrompts;
+
       const finalResult = await generateMultiViewGrid(
           prompt, gridSize, panelAspectRatio, aspectRatio, imageSize, 
-          referenceData, previousContextImage, panelPrompts, activeCollage || undefined
+          referenceData, previousContextImage, instructionsToSend, activeCollage || undefined
       );
       
       setGenerationStep("正在分析动线逻辑...");
@@ -369,6 +372,7 @@ const App: React.FC = () => {
                 onOpenScriptDeconstruct={() => setIsScriptEditorOpen(true)}
                 isContinuing={!!(selectedImageId && images.find(i => i.id === selectedImageId)?.nodeType === 'render')}
                 onDeselect={() => { setSelectedImageId(undefined); setSelectedAssetId(undefined); }}
+                isCollageActive={!!activeCollage}
             />
         </div>
       </aside>
