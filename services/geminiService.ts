@@ -25,8 +25,21 @@ async function withRetry<T>(operation: () => Promise<T>, maxRetries = 3): Promis
       return await operation();
     } catch (error: any) {
       lastError = error;
-      const isOverloaded = error?.status === 'UNAVAILABLE' || error?.code === 503;
-      const isRateLimited = error?.status === 'RESOURCE_EXHAUSTED' || error?.code === 429;
+      const errorMsg = error?.message || "";
+      const statusCode = error?.status || error?.code;
+
+      // Handle mandatory key selection reset if requested entity not found
+      if (errorMsg.includes("Requested entity was not found.")) {
+        // @ts-ignore
+        if (window.aistudio && window.aistudio.openSelectKey) {
+            // @ts-ignore
+            await window.aistudio.openSelectKey();
+        }
+        throw error; // Rethrow after prompting for key
+      }
+
+      const isOverloaded = statusCode === 'UNAVAILABLE' || statusCode === 503 || statusCode === 500;
+      const isRateLimited = statusCode === 'RESOURCE_EXHAUSTED' || statusCode === 429;
 
       if ((isOverloaded || isRateLimited) && attempt < maxRetries) {
         const delay = Math.pow(2, attempt) * 2000 + Math.random() * 1000;
@@ -52,7 +65,7 @@ const sliceImageGrid = (base64Data: string, rows: number, cols: number): Promise
       const canvas = document.createElement('canvas');
       canvas.width = pieceWidth;
       canvas.height = pieceHeight;
-      const ctx = canvas.getContext('2d', { alpha: false }); // Disable alpha for better performance and solid edges
+      const ctx = canvas.getContext('2d', { alpha: false });
       if (!ctx) return reject(new Error("Canvas error"));
       
       for (let r = 0; r < rows; r++) {
@@ -91,77 +104,70 @@ export const generateMultiViewGrid = async (
   
   const totalViews = gridSize * gridSize;
   const gridType = `${gridSize}x${gridSize}`;
-
-  // 极致的构图约束，确保无缝
   const isVertical = panelAspectRatio.includes('3:4') || panelAspectRatio.includes('9:16');
   const isSquare = panelAspectRatio === '1:1';
   
   let compositionInstruction = "";
   if (isVertical) {
-    compositionInstruction = `MANDATORY: Use EDGE-TO-EDGE VERTICAL COMPOSITION. NO BLACK BARS. NO MARGINS. The scene must bleed to the very edge of each ${panelAspectRatio} frame.`;
+    compositionInstruction = `MANDATORY: EDGE-TO-EDGE VERTICAL COMPOSITION. NO MARGINS.`;
   } else if (isSquare) {
-    compositionInstruction = `MANDATORY: Use FULL-BLEED SQUARE COMPOSITION. ZERO GUTTERS. Each of the ${totalViews} panels must be perfectly contiguous.`;
+    compositionInstruction = `MANDATORY: FULL-BLEED SQUARE COMPOSITION. ZERO GUTTERS.`;
   } else {
-    compositionInstruction = `MANDATORY: Use CINEMATIC WIDESCREEN with ZERO LETTERBOXING. Ensure the content fills the entire ${panelAspectRatio} area of each panel completely.`;
+    compositionInstruction = `MANDATORY: CINEMATIC WIDESCREEN, ZERO LETTERBOXING.`;
   }
 
-  const roles = categorizedRefs.filter(r => r.category === 'role');
-  const bgs = categorizedRefs.filter(r => r.category === 'background');
-  const props = categorizedRefs.filter(r => r.category === 'prop');
+  // Limit input assets to improve stability
+  const limitedRefs = categorizedRefs.slice(0, 5);
+  const roles = limitedRefs.filter(r => r.category === 'role');
+  const bgs = limitedRefs.filter(r => r.category === 'background');
+  const props = limitedRefs.filter(r => r.category === 'prop');
 
-  let systemPrompt = `[CORE TASK]: GENERATE A SEAMLESS ${gridType} STORYBOARD GRID.
-
-[STRICT LAYOUT RULE]:
-- Exactly ${gridSize} rows and ${gridSize} columns.
-- FULL IMAGE ASPECT RATIO: ${containerAspectRatio}.
-- INDIVIDUAL PANEL ASPECT RATIO: ${panelAspectRatio}.
-
-[CHARACTER ANATOMY PRESERVATION - CRITICAL]:
-- The provided 'role' reference images define the ABSOLUTE morphology of the character.
-- STRICTLY adhere to the anatomical structure of the role. If the character is a simple blob, creature, or object without legs/arms/human body, IT MUST REMAIN IN THAT FORM.
-- DO NOT spontaneously generate legs, feet, bodies, or human-like limbs if they are not explicitly shown in the role reference.
-- Maintain character features (e.g., leaf on head, facial layout, silhouette) with 100% precision across all frames.
-
-[NEGATIVE CONSTRAINTS]:
-- NO WHITE BARS, NO BLACK BARS, NO LETTERBOXING, NO PILLARBOXING.
-- NO PADDING OR MARGINS BETWEEN PANELS.
-- NO INTERNAL GRID LINES OR BORDERS.
-- THE FULL IMAGE MUST BE A CONTIGUOUS MOSAIC.
-
-[COMPOSITION]:
+  let systemPrompt = `STORYBOARD GRID ${gridType}.
+FULL AR: ${containerAspectRatio}. PANEL AR: ${panelAspectRatio}.
 ${compositionInstruction}
-- Content must be NATIVE to the ${panelAspectRatio} shape.
+SCENE: "${prompt}"
+ANATOMY: Strictly preserve reference morphology. No extra limbs.
+NO BORDERS. NO GRID LINES. SEAMLESS MOSAIC.
+${panelInstructions && panelInstructions.length > 0 ? `PANELS:\n${panelInstructions.map((instr, idx) => `P${idx + 1}: ${instr}`).join('\n')}` : ''}
+STYLE: Cinematic film, high-end production.`;
 
-[SCENE]: "${prompt}"
+  const makePayload = () => {
+    const parts: any[] = [];
+    roles.forEach(r => parts.push({ inlineData: { mimeType: r.mimeType, data: r.data } }));
+    bgs.forEach(b => parts.push({ inlineData: { mimeType: b.mimeType, data: b.data } }));
+    props.forEach(p => parts.push({ inlineData: { mimeType: p.mimeType, data: p.data } }));
+    if (collageRef) parts.push({ inlineData: { mimeType: 'image/png', data: collageRef.url.split(',')[1] } });
+    if (contextImage) parts.push({ inlineData: { mimeType: 'image/png', data: contextImage.split(',')[1] } });
+    parts.push({ text: systemPrompt });
+    return parts;
+  };
 
-${collageRef ? `\n[ACTION REF]: Match the cinematic angles in the provided collage.` : ''}
-${panelInstructions && panelInstructions.length > 0 ? `\n[PANEL DETAILS]:\n${panelInstructions.map((instr, idx) => `Panel ${idx + 1}: ${instr}`).join('\n')}` : ''}
-
-[STYLE]: Hyper-realistic cinematic film, 35mm photography, high-end production value. Consistent lighting and grading.`;
-
-  const parts: any[] = [];
-  roles.forEach(r => parts.push({ inlineData: { mimeType: r.mimeType, data: r.data } }));
-  bgs.forEach(b => parts.push({ inlineData: { mimeType: b.mimeType, data: b.data } }));
-  props.forEach(p => parts.push({ inlineData: { mimeType: p.mimeType, data: p.data } }));
-  if (collageRef) parts.push({ inlineData: { mimeType: 'image/png', data: collageRef.url.split(',')[1] } });
-  if (contextImage) parts.push({ inlineData: { mimeType: 'image/png', data: contextImage.split(',')[1] } });
-  
-  parts.push({ text: systemPrompt });
-
-  try {
-    const response = await withRetry<GenerateContentResponse>(() => {
+  const tryGenerate = async (modelName: string, isPro: boolean) => {
+    return await withRetry<GenerateContentResponse>(() => {
         const ai = getClient();
         return ai.models.generateContent({
-          model: 'gemini-3-pro-image-preview',
-          contents: { parts },
+          model: modelName,
+          contents: { parts: makePayload() },
           config: {
             imageConfig: {
               aspectRatio: containerAspectRatio as any,
-              imageSize: imageSize as any 
+              imageSize: isPro ? imageSize as any : undefined
             }
           }
         });
     });
+  };
+
+  try {
+    let response: GenerateContentResponse;
+    try {
+        // Primary attempt with Gemini 3 Pro
+        response = await tryGenerate('gemini-3-pro-image-preview', true);
+    } catch (e: any) {
+        // Fallback to Flash if Pro encounters a 500 or capacity issue
+        console.warn("Gemini 3 Pro failed, falling back to 2.5 Flash Image:", e);
+        response = await tryGenerate('gemini-2.5-flash-image', false);
+    }
 
     let fullImageBase64 = '';
     for (const part of response.candidates?.[0]?.content?.parts || []) {
@@ -172,7 +178,7 @@ ${panelInstructions && panelInstructions.length > 0 ? `\n[PANEL DETAILS]:\n${pan
     const panels = await sliceImageGrid(fullImageBase64, gridSize, gridSize);
     return { fullImage: fullImageBase64, slices: panels };
   } catch (error: any) {
-    console.error("Grid gen error:", error);
+    console.error("Grid gen final error:", error);
     throw error;
   }
 };
@@ -190,10 +196,7 @@ export const editImage = async (
   const parts: any[] = [{ inlineData: { mimeType: 'image/png', data: cleanBase64 } }];
   if (refImageBase64) parts.push({ inlineData: { mimeType: 'image/png', data: refImageBase64.split(',')[1] } });
   
-  parts.push({ text: `EDIT TASK: Modify this ${aspectRatio} cinematic shot.
-REQUEST: "${editPrompt}"
-ANATOMY RULE: Preserve the original morphology and anatomical structure of the character in the image. DO NOT add limbs (legs/arms) if they are not part of the character's design.
-RULE: ABSOLUTELY NO BLACK/WHITE BORDERS. Maintain full-bleed framing.` });
+  parts.push({ text: `EDIT: ${editPrompt}. AR: ${aspectRatio}. Preserve morphology. No extra limbs. No borders.` });
 
   try {
     const response = await withRetry<GenerateContentResponse>(() => {
@@ -228,21 +231,7 @@ export const generateCameraSuggestions = async (prompt: string, panelCount: numb
                 model: 'gemini-3-flash-preview',
                 contents: { 
                   parts: [{ 
-                    text: `你是一个世界级的电影摄影指导。基于场景描述，规划 ${panelCount} 个极具专业深度的电影级分镜脚本。
-                    
-                    场景：${prompt}
-                    
-                    每个分镜描述必须严格包含以下要素，并以专业电影术语描述：
-                    1. [环境信息]：具体的时间点与天气氛围。
-                    2. [镜头语言]：具体的景别与构图逻辑。
-                    3. [镜头视角与焦段]：明确视角及具体的焦段感。
-                    4. [动态状态]：说明是静态镜头、平滑横移还是带有动态模糊的快速移动（不要假设角色一定有腿在跑步，使用“移动”或“位移”）。
-                    5. [角色构图元素]：描述角色朝向、在画面中的具体坐标位置、画面占比以及具体的动作（如：抬头、向前滑行、身体微微前倾）。
-                    
-                    重要规则：
-                    - 禁止描述角色的长相特征、面部细节。仅将其视为构图元素。
-                    - 如果角色是非人形（如球状、物状），请勿描述其“快步走”或“站立”，应使用更通用的物理位移描述。
-                    - 请输出 ${panelCount} 行纯文本，每行代表一个独立的分镜片段，不要带编号，不要有任何多余的引言或结束语。` 
+                    text: `基于：${prompt}。规划 ${panelCount} 个电影分镜。包含环境、镜头、焦段、动态、角色动作。输出 ${panelCount} 行，纯文本。` 
                   }] 
                 }
             });
@@ -255,12 +244,12 @@ export const generateCameraSuggestions = async (prompt: string, panelCount: numb
             .slice(0, panelCount);
             
         while (lines.length < panelCount) {
-            lines.push("清晨，微弱阳光，中景，黄金分割构图，佳能 50mm f/1.2 视角，静态镜头，角色位于画面中央，侧身朝向右侧，占据画面约 30%，正在静立观察。");
+            lines.push("清晨，中景，黄金分割，50mm，静态，角色中央，侧身观察。");
         }
         
         return lines;
     } catch (error) { 
-        return new Array(panelCount).fill("专业级电影分镜：35mm焦段，导演级构图逻辑。"); 
+        return new Array(panelCount).fill("专业分镜：35mm，导演构图。"); 
     }
 };
 
@@ -272,7 +261,7 @@ export const generateCameraMovement = async (prompt: string): Promise<string> =>
             return ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
                 contents: { parts: [{ text: `场景: ${prompt}` }] },
-                config: { systemInstruction: "Output a camera movement description (Chinese). Max 10 words." }
+                config: { systemInstruction: "Output camera movement (Chinese). Max 10 words." }
             });
         });
         return response.text || "固定镜头。";
@@ -288,22 +277,13 @@ export const generateScriptLines = async (instruction: string, count: number, at
                 model: 'gemini-3-flash-preview',
                 contents: { 
                   parts: [
-                    { text: `你是一个电影分镜脚本师。请将输入内容拆解为 ${count} 条独立且详尽的专业电影分镜指令。
-                    
-                    输入内容：
-                    ${attachmentText || ''}
-                    
-                    附加指令：
-                    ${instruction}
-                    
-                    每条指令必须包含：时间天气、景别构图、焦段视角、动静态、角色位置动作。禁止描述外貌细节，严禁给非人形角色添加多余肢体描述。` }
+                    { text: `拆解为 ${count} 条独立电影分镜指令。环境、景别、焦段、动态、角色动作。输入：${attachmentText || ''}。附加：${instruction}` }
                   ] 
                 }
             });
         });
         return (response.text || "").split('\n').filter(l => l.trim()).slice(0, count);
     } catch (e) {
-        console.error(e);
         return new Array(count).fill("时间，全景，平视，角色1，正在待命");
     }
 };
@@ -317,13 +297,12 @@ export const generateDirectorSummary = async (scripts: string[]): Promise<string
                 model: 'gemini-3-flash-preview',
                 contents: { 
                   parts: [
-                    { text: `根据这些分镜描述生成一个总体的剧情梗概：
-                    ${scripts.join('\n')}` }
+                    { text: `剧情梗概：${scripts.join('\n')}` }
                   ] 
                 }
             });
         });
-        return response.text?.trim() || "生成的梗概。";
+        return response.text?.trim() || "剧情梗概。";
     } catch {
         return "无法生成梗概。";
     }
