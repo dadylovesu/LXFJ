@@ -136,7 +136,6 @@ ${panelInstructions && panelInstructions.length > 0 ? `\n[PANEL DETAILS]:\n${pan
   const parts: any[] = [];
   roles.forEach(r => parts.push({ inlineData: { mimeType: r.mimeType, data: r.data } }));
   bgs.forEach(b => parts.push({ inlineData: { mimeType: b.mimeType, data: b.data } }));
-  // Fixed typo: changed r.mimeType to p.mimeType to correctly reference the iterator variable 'p'
   props.forEach(p => parts.push({ inlineData: { mimeType: p.mimeType, data: p.data } }));
   if (collageRef) parts.push({ inlineData: { mimeType: 'image/png', data: collageRef.url.split(',')[1] } });
   if (contextImage) parts.push({ inlineData: { mimeType: 'image/png', data: contextImage.split(',')[1] } });
@@ -222,11 +221,20 @@ export const generateCameraSuggestions = async (prompt: string, panelCount: numb
                 model: 'gemini-3-flash-preview',
                 contents: { 
                   parts: [{ 
-                    text: `你是一个世界级的电影摄影指导。基于场景描述，规划 ${panelCount} 个电影级分镜。
+                    text: `你是一个世界级的电影摄影指导。基于场景描述，规划 ${panelCount} 个极具专业深度的电影级分镜脚本。
                     
                     场景：${prompt}
                     
-                    请输出 ${panelCount} 行纯文本，每行包含：景别、角度、构图逻辑。不要带编号。` 
+                    每个分镜描述必须严格包含以下要素，并以专业电影术语描述：
+                    1. [环境信息]：具体的时间点（如黄昏黄金时刻、深夜冷色调）与天气氛围（如薄雾、强逆光、雨后湿滑感）。
+                    2. [镜头语言]：具体的景别（如：特写、中远景、极全景）与构图逻辑（如：三分法、平衡构图、消失点构图）。
+                    3. [镜头视角与焦段]：明确视角（如：低仰角、俯视）及具体的相机器材焦段感（例如：索尼 35mm f/1.4, 佳能 50mm, 120mm 望远压缩感, 或超远距离 400mm 长焦）。
+                    4. [动态状态]：说明是静态镜头、平滑横移还是带有动态模糊（Motion Blur）的快速跟拍。
+                    5. [角色构图元素]：描述角色朝向（如：侧对镜头、背对镜头）、在画面中的具体坐标位置（如：左侧1/3处）、画面占比（如：占据画面40%）以及具体的动作（如：抬头、快步走、身体微微前倾）。
+                    
+                    重要规则：
+                    - 禁止描述角色的长相特征、面部细节、肤色或衣着款式。仅将其视为构图元素（角色动作/角度/位置）。
+                    - 请输出 ${panelCount} 行纯文本，每行代表一个独立的分镜片段，不要带编号，不要有任何多余的引言或结束语。` 
                   }] 
                 }
             });
@@ -239,7 +247,7 @@ export const generateCameraSuggestions = async (prompt: string, panelCount: numb
             .slice(0, panelCount);
             
         while (lines.length < panelCount) {
-            lines.push("全景，平视，中心构图。");
+            lines.push("清晨，微弱阳光，中景，黄金分割构图，佳能 50mm f/1.2 视角，静态镜头，角色位于画面中央，侧身朝向右侧，占据画面约 30%，正在静立观察。");
         }
         
         return lines;
@@ -272,13 +280,15 @@ export const generateScriptLines = async (instruction: string, count: number, at
                 model: 'gemini-3-flash-preview',
                 contents: { 
                   parts: [
-                    { text: `你是一个电影分镜脚本师。拆解为 ${count} 条独立指令。
+                    { text: `你是一个电影分镜脚本师。请将输入内容拆解为 ${count} 条独立且详尽的专业电影分镜指令。
                     
                     输入内容：
                     ${attachmentText || ''}
                     
                     附加指令：
-                    ${instruction}` }
+                    ${instruction}
+                    
+                    每条指令必须包含：时间天气、景别构图、焦段视角、动静态、角色位置动作。禁止描述外貌细节。` }
                   ] 
                 }
             });
