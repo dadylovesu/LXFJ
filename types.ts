@@ -10,6 +10,16 @@ export enum AspectRatio {
   PHOTO_PORTRAIT = '2:3'
 }
 
+export enum PanelAspectRatio {
+  P3_4 = '3:4',
+  P9_16 = '9:16',
+  P2_3 = '2:3',
+  P16_9 = '16:9',
+  P3_2 = '3:2',
+  P4_3 = '4:3',
+  P1_1 = '1:1'
+}
+
 export enum ImageSize {
   K1 = '1K',
   K2 = '2K',
@@ -26,6 +36,7 @@ export interface GeneratedImage {
   fullGridUrl?: string;
   prompt: string;
   aspectRatio: string;
+  panelAspectRatio?: string;
   timestamp: number;
   
   // Node Graph Properties

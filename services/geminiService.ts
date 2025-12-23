@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
-import { AspectRatio, ImageSize, Asset, CollageData } from "../types";
+import { AspectRatio, ImageSize, Asset, CollageData, PanelAspectRatio } from "../types";
 
 export const ensureApiKey = async () => {
   // @ts-ignore
@@ -93,8 +93,9 @@ export const generateMultiViewGrid = async (
   prompt: string,
   gridRows: number, 
   gridCols: number, 
-  aspectRatio: AspectRatio,
+  aspectRatio: AspectRatio | string,
   imageSize: ImageSize, 
+  panelAspectRatio: PanelAspectRatio,
   categorizedRefs: ReferenceImageData[] = [],
   contextImage?: string,
   panelInstructions?: string[],
@@ -109,25 +110,28 @@ export const generateMultiViewGrid = async (
   const bgs = categorizedRefs.filter(r => r.category === 'background');
   const props = categorizedRefs.filter(r => r.category === 'prop');
 
-  // 构建更强的一致性系统指令 - 特别强调对非人形生物解剖结构的遵循
   let systemPrompt = `[CORE TASK]: AS A PROFESSIONAL CINEMATIC DIRECTOR, GENERATE A SINGLE ${gridType} STORYBOARD GRID.
 
-[CRITICAL REQUIREMENT: CHARACTER ANATOMY FIDELITY]:
+[COMPOSITION FORMATTING]:
+- EACH INDIVIDUAL PANEL MUST BE IN ${panelAspectRatio} ASPECT RATIO.
+- THE FINAL IMAGE MUST BE FILLED SEAMLESSLY WITH THESE ${totalViews} PANELS.
+- ENSURE NO CROPPING OF THE PANEL CONTENT.
+
+[CHARACTER ANATOMY FIDELITY]:
 1. DIRECTLY INHERIT THE PHYSICAL STRUCTURE AND ANATOMY FROM THE PROVIDED ROLE IMAGES.
 2. DO NOT ADD HUMAN LIMBS (ARMS, LEGS) OR HUMAN FEATURES TO ENTITIES THAT DO NOT HAVE THEM IN THE REFERENCE. 
 3. IF A CHARACTER IS A CARTOON OBJECT OR NON-HUMANOID, MAINTAIN ITS ORIGINAL SHAPE STRICTLY.
-4. DO NOT INTERPRET NARRATIVE ACTIONS BY MODIFYING THE CHARACTER'S FUNDAMENTAL BIOLOGY.
 
 [ENTITY MAPPING]:
-${roles.map((r, i) => `- IMAGE_PART_${i}: This is the visual source for "ROLE ${r.roleIndex}". LOCK ITS PHYSICAL STRUCTURE AND IDENTITY.`).join('\n')}
+${roles.map((r, i) => `- IMAGE_PART_${i}: Visual source for "ROLE ${r.roleIndex}".`).join('\n')}
 ${bgs.map((b, i) => `- IMAGE_PART_${roles.length + i}: Environment visual anchor.`).join('\n')}
 ${props.map((p, i) => `- IMAGE_PART_${roles.length + bgs.length + i}: Prop visual anchor.`).join('\n')}
 
 [STORYBOARD CONTENT]:
 - MAIN THEME: "${prompt}"
-- LAYOUT: Exactly ${totalViews} distinct panels.
+- LAYOUT: Exactly ${totalViews} distinct panels in a ${gridType} grid.
 
-${collageRef ? `\n[COMPOSITION REFERENCE]: Use the provided Collage image to guide camera angles and flow.` : ''}
+${collageRef ? `\n[COMPOSITION REFERENCE]: Use the provided Collage image to guide camera angles.` : ''}
 ${panelInstructions && panelInstructions.length > 0 ? `\n[PANEL SPECIFICS]:\n${panelInstructions.map((instr, idx) => `Panel ${idx + 1}: ${instr}`).join('\n')}` : ''}
 
 [FINAL STYLE]: Ultra-realistic cinematic render, 35mm lens. No text.`;
@@ -187,8 +191,7 @@ export const editImage = async (
   
   parts.push({ text: `MANDATORY: Edit this storyboard panel. 
 1. STRICTLY ADHERE TO THE ORIGINAL CHARACTER'S ANATOMY. 
-2. DO NOT ADD ARMS/LEGS IF THE CHARACTER DOES NOT HAVE THEM. 
-3. Edit Request: "${editPrompt}".` });
+2. Edit Request: "${editPrompt}".` });
 
   try {
     const response = await withRetry<GenerateContentResponse>(() => {
@@ -225,25 +228,9 @@ export const generateCameraSuggestions = async (prompt: string, panelCount: numb
                   parts: [{ 
                     text: `你是一个世界级的电影摄影指导（DoP）。
                     任务：基于以下剧本/场景描述，规划 ${panelCount} 个电影级分镜。
-                    
                     场景：${prompt}
-                    
-                    【输出规范】：
-                    每一行必须包含以下要素，严禁省略：
-                    1. [时间/光影环境]：如“清晨冷色调侧光”、“午后强烈顶光”、“夜晚霓虹低照度”。
-                    2. [景别]：如“特写”、“中景”、“全景”、“远景”。
-                    3. [构图逻辑]：如“黄金分割构图”、“中心对称构图”、“框架构图”、“对角线构图”。
-                    4. [焦段]：明确具体的mm数。如“14mm超广角”、“35mm叙事焦段”、“85mm人像焦段”、“200mm长焦压缩”。
-                    5. [镜头角度]：如“低角度仰拍”、“平视镜头”、“高位俯拍”、“鸟瞰镜头”。
-                    6. [角色空间属性]：描述“角色1”在画面中的朝向（如“侧向镜头”）、画面位置（如“位于右侧三分之一处”）以及画面占比（如“占比60%”）。
-                    
-                    【禁止事项】：
-                    1. 禁止描述角色长相细节或服装（只用“角色1”、“角色2”）。
-                    2. 禁止描述不符合参考图解剖结构的动作。
-                    
                     输出格式参考：
-                    “清晨金辉，全景，黄金分割构图，35mm焦段，低角度仰拍。角色1位于画面左侧偏下，面向右前方，画面占比30%，正处于逆光中。”
-                    
+                    “清晨金辉，全景，黄金分割构图，35mm焦段，低角度仰拍。角色1位于画面左侧偏下，面向右前方，画面占比30%。”
                     请输出 ${panelCount} 行纯文本：` 
                   }] 
                 }
@@ -257,7 +244,7 @@ export const generateCameraSuggestions = async (prompt: string, panelCount: numb
             .slice(0, panelCount);
             
         while (lines.length < panelCount) {
-            lines.push("日间自然光，全景，中心构图，35mm焦段，平视镜头。角色1位于画面中心，正对镜头，画面占比50%。");
+            lines.push("日间自然光，全景，中心构图，35mm焦段，平视镜头。角色1位于画面中心。");
         }
         
         return lines;
@@ -290,19 +277,9 @@ export const generateScriptLines = async (instruction: string, count: number, at
                 model: 'gemini-3-flash-preview',
                 contents: { 
                   parts: [
-                    { text: `你是一个电影分镜脚本师。
-                    任务：拆解为 ${count} 条独立指令。
-                    
-                    【强制规范】：
-                    1. 严禁描述角色长相、服装、细节。
-                    2. 角色部分只能写“角色[编号]”。
-                    3. 禁止描述不符合参考图物理结构的动作（例如，如果角色没有手，禁止描述“抓取”）。
-                    
-                    输入内容：
-                    ${attachmentText || ''}
-                    
-                    附加指令：
-                    ${instruction}` }
+                    { text: `你是一个电影分镜脚本师。拆解为 ${count} 条独立指令。
+                    输入内容：${attachmentText || ''}
+                    附加指令：${instruction}` }
                   ] 
                 }
             });
@@ -324,8 +301,6 @@ export const generateDirectorSummary = async (scripts: string[]): Promise<string
                 contents: { 
                   parts: [
                     { text: `生成剧情梗概。
-                    禁止描述角色外貌或多余解剖细节。
-                    
                     分镜列表：
                     ${scripts.join('\n')}` }
                   ] 
@@ -345,7 +320,7 @@ export const enhancePrompt = async (rawPrompt: string): Promise<string> => {
         const ai = getClient();
         return ai.models.generateContent({
           model: 'gemini-3-flash-preview',
-          contents: `Enhance cinematic prompt (Strictly focus on environment/atmosphere, ignore character details): "${rawPrompt}"`,
+          contents: `Enhance cinematic prompt: "${rawPrompt}"`,
         });
     });
     return response.text || rawPrompt;
