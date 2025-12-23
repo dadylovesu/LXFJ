@@ -109,32 +109,31 @@ export const generateMultiViewGrid = async (
   const bgs = categorizedRefs.filter(r => r.category === 'background');
   const props = categorizedRefs.filter(r => r.category === 'prop');
 
-  // 构建更强的一致性系统指令
+  // 构建更强的一致性系统指令 - 特别强调对非人形生物解剖结构的遵循
   let systemPrompt = `[CORE TASK]: AS A PROFESSIONAL CINEMATIC DIRECTOR, GENERATE A SINGLE ${gridType} STORYBOARD GRID.
-[CRITICAL REQUIREMENT: VISUAL CONSISTENCY]:
-1. THE FACIAL FEATURES, HAIR, CLOTHING, AND BODY PROPORTIONS OF EACH "ROLE" MUST BE 100% CONSISTENT ACROSS ALL PANELS.
-2. THE LIGHTING, TEXTURES, AND SPATIAL LAYOUT OF THE "BACKGROUND" MUST REMAIN PERMANENTLY ANCHORED.
-3. ALL "PROPS" MUST MAINTAIN THEIR SCALE AND DESIGN DETAILS.
+
+[CRITICAL REQUIREMENT: CHARACTER ANATOMY FIDELITY]:
+1. DIRECTLY INHERIT THE PHYSICAL STRUCTURE AND ANATOMY FROM THE PROVIDED ROLE IMAGES.
+2. DO NOT ADD HUMAN LIMBS (ARMS, LEGS) OR HUMAN FEATURES TO ENTITIES THAT DO NOT HAVE THEM IN THE REFERENCE. 
+3. IF A CHARACTER IS A CARTOON OBJECT OR NON-HUMANOID, MAINTAIN ITS ORIGINAL SHAPE STRICTLY.
+4. DO NOT INTERPRET NARRATIVE ACTIONS BY MODIFYING THE CHARACTER'S FUNDAMENTAL BIOLOGY.
 
 [ENTITY MAPPING]:
-${roles.map((r, i) => `- IMAGE_PART_${i}: This is the visual anchor for "ROLE ${r.roleIndex}". Extract and lock their identity.`).join('\n')}
-${bgs.map((b, i) => `- IMAGE_PART_${roles.length + i}: This is the visual anchor for the ENVIRONMENT.`).join('\n')}
-${props.map((p, i) => `- IMAGE_PART_${roles.length + bgs.length + i}: This is the visual anchor for "PROP ${p.roleIndex}".`).join('\n')}
+${roles.map((r, i) => `- IMAGE_PART_${i}: This is the visual source for "ROLE ${r.roleIndex}". LOCK ITS PHYSICAL STRUCTURE AND IDENTITY.`).join('\n')}
+${bgs.map((b, i) => `- IMAGE_PART_${roles.length + i}: Environment visual anchor.`).join('\n')}
+${props.map((p, i) => `- IMAGE_PART_${roles.length + bgs.length + i}: Prop visual anchor.`).join('\n')}
 
 [STORYBOARD CONTENT]:
 - MAIN THEME: "${prompt}"
-- ASPECT RATIO: Adapt all content to ${aspectRatio}.
-- LAYOUT: Exactly ${totalViews} distinct narrative panels.
+- LAYOUT: Exactly ${totalViews} distinct panels.
 
-${collageRef ? `\n[COMPOSITION REFERENCE]: Use the provided Collage image to guide camera angles, framing, and sequential flow.` : ''}
+${collageRef ? `\n[COMPOSITION REFERENCE]: Use the provided Collage image to guide camera angles and flow.` : ''}
+${panelInstructions && panelInstructions.length > 0 ? `\n[PANEL SPECIFICS]:\n${panelInstructions.map((instr, idx) => `Panel ${idx + 1}: ${instr}`).join('\n')}` : ''}
 
-${panelInstructions && panelInstructions.length > 0 ? `\n[PANEL-BY-PANEL SPECIFICS]:\n${panelInstructions.map((instr, idx) => `Panel ${idx + 1}: ${instr || 'Evolve the narrative logically'}`).join('\n')}` : ''}
-
-[FINAL STYLE]: Ultra-realistic cinematic render, 35mm lens feel, high production value. No text or icons in the image.`;
+[FINAL STYLE]: Ultra-realistic cinematic render, 35mm lens. No text.`;
 
   const parts: any[] = [];
   
-  // 严格排序以对应 Prompt 中的索引
   roles.forEach(r => parts.push({ inlineData: { mimeType: r.mimeType, data: r.data } }));
   bgs.forEach(b => parts.push({ inlineData: { mimeType: b.mimeType, data: b.data } }));
   props.forEach(p => parts.push({ inlineData: { mimeType: p.mimeType, data: p.data } }));
@@ -186,9 +185,10 @@ export const editImage = async (
   const parts: any[] = [{ inlineData: { mimeType: 'image/png', data: cleanBase64 } }];
   if (refImageBase64) parts.push({ inlineData: { mimeType: 'image/png', data: refImageBase64.split(',')[1] } });
   
-  parts.push({ text: `MANDATORY INSTRUCTION: Update this storyboard panel based on: "${editPrompt}". 
-Maintain EXACT consistency with the character's facial features and environment from the original image. 
-Output: Cinematic High-Fidelity Render.` });
+  parts.push({ text: `MANDATORY: Edit this storyboard panel. 
+1. STRICTLY ADHERE TO THE ORIGINAL CHARACTER'S ANATOMY. 
+2. DO NOT ADD ARMS/LEGS IF THE CHARACTER DOES NOT HAVE THEM. 
+3. Edit Request: "${editPrompt}".` });
 
   try {
     const response = await withRetry<GenerateContentResponse>(() => {
@@ -223,47 +223,46 @@ export const generateCameraSuggestions = async (prompt: string, panelCount: numb
                 model: 'gemini-3-flash-preview',
                 contents: { 
                   parts: [{ 
-                    text: `你是一个专业的电影分镜规划师。
-                    任务：将以下场景描述规划为 ${panelCount} 个连贯的视觉分镜指令。
+                    text: `你是一个世界级的电影摄影指导（DoP）。
+                    任务：基于以下剧本/场景描述，规划 ${panelCount} 个电影级分镜。
                     
-                    场景描述：${prompt}
+                    场景：${prompt}
                     
-                    【严格输出格式要求】：
-                    1. 必须输出正好 ${panelCount} 条指令，每条指令占据一行。
-                    2. 严禁带有数字编号（如 1. 2. 3.）、前缀词（如 镜头1：）或任何引言。
-                    3. 每一行必须是一个完整且丰富的专业描述。
+                    【输出规范】：
+                    每一行必须包含以下要素，严禁省略：
+                    1. [时间/光影环境]：如“清晨冷色调侧光”、“午后强烈顶光”、“夜晚霓虹低照度”。
+                    2. [景别]：如“特写”、“中景”、“全景”、“远景”。
+                    3. [构图逻辑]：如“黄金分割构图”、“中心对称构图”、“框架构图”、“对角线构图”。
+                    4. [焦段]：明确具体的mm数。如“14mm超广角”、“35mm叙事焦段”、“85mm人像焦段”、“200mm长焦压缩”。
+                    5. [镜头角度]：如“低角度仰拍”、“平视镜头”、“高位俯拍”、“鸟瞰镜头”。
+                    6. [角色空间属性]：描述“角色1”在画面中的朝向（如“侧向镜头”）、画面位置（如“位于右侧三分之一处”）以及画面占比（如“占比60%”）。
                     
-                    【内容要求】：
-                    每条描述必须包含以下要素：
-                    - 景别：如 远景、全景、中景、近景、特写。
-                    - 构图：如 三分法构图、黄金分割、对称构图、引导线构图。
-                    - 角度：如 平视、仰拍、俯拍、斜角镜头。
-                    - 拍摄手法：如 固定镜头、推镜头、摇镜头、移镜头。
-                    - 角色细节：详细描述角色的朝向（如 面向镜头左侧45度）、镜头角度、具体的身体姿态、细微的面部表情（如 坚定、忧虑、狂喜）。
-                    - 叙事内容：描述画面中发生的关键动作、光影氛围（如 丁达尔效应、侧逆光）。
+                    【禁止事项】：
+                    1. 禁止描述角色长相细节或服装（只用“角色1”、“角色2”）。
+                    2. 禁止描述不符合参考图解剖结构的动作。
                     
-                    请以专业的导演视角进行创作，确保这 ${panelCount} 个镜头构成一个逻辑严密的视觉序列。` 
+                    输出格式参考：
+                    “清晨金辉，全景，黄金分割构图，35mm焦段，低角度仰拍。角色1位于画面左侧偏下，面向右前方，画面占比30%，正处于逆光中。”
+                    
+                    请输出 ${panelCount} 行纯文本：` 
                   }] 
                 }
             });
         });
         
-        // Process the text to ensure it's a clean line-by-line array
         const rawText = response.text || "";
         const lines = rawText.split('\n')
-            .map(line => line.replace(/^[0-9]+[.\-、\s]*/, '').trim()) // Remove any leading numbers
-            .filter(line => line.length > 5) // Filter out garbage/short lines
+            .map(line => line.replace(/^[0-9]+[.\-、\s]*/, '').trim())
+            .filter(line => line.length > 5)
             .slice(0, panelCount);
             
-        // Padding if AI returns fewer lines than requested
         while (lines.length < panelCount) {
-            lines.push("电影级全景镜头：角色正对镜头，中性表情，侧逆光氛围，专业电影感。");
+            lines.push("日间自然光，全景，中心构图，35mm焦段，平视镜头。角色1位于画面中心，正对镜头，画面占比50%。");
         }
         
         return lines;
     } catch (error) { 
-        console.error("Camera suggestions failed:", error);
-        return new Array(panelCount).fill("专业级电影分镜：高清渲染，导演级构图逻辑。"); 
+        return new Array(panelCount).fill("专业级电影分镜：35mm焦段，导演级构图逻辑。"); 
     }
 };
 
@@ -291,15 +290,15 @@ export const generateScriptLines = async (instruction: string, count: number, at
                 model: 'gemini-3-flash-preview',
                 contents: { 
                   parts: [
-                    { text: `你是一个专业的电影分镜脚本拆解师。
-                    任务：将以下输入内容拆解为正好 ${count} 条独立的视觉描述指令。
-                    要求：
-                    1. 每条指令必须严格遵循以下结构：“时间，景别，拍摄角度，构图，角色标号+名称，角色的行为动作，关键道具，环境描述”。
-                    2. 【严格禁止】：不要描述角色身上的服装、细节或任何多余的角色长相细节。角色部分必须仅保留“角色标号+名称”。
-                    3. 保持叙事的连贯性。
-                    4. 直接返回这 ${count} 条文本，每条占一行。不要编号。使用中文。
+                    { text: `你是一个电影分镜脚本师。
+                    任务：拆解为 ${count} 条独立指令。
                     
-                    输入内容/文档：
+                    【强制规范】：
+                    1. 严禁描述角色长相、服装、细节。
+                    2. 角色部分只能写“角色[编号]”。
+                    3. 禁止描述不符合参考图物理结构的动作（例如，如果角色没有手，禁止描述“抓取”）。
+                    
+                    输入内容：
                     ${attachmentText || ''}
                     
                     附加指令：
@@ -311,7 +310,7 @@ export const generateScriptLines = async (instruction: string, count: number, at
         return (response.text || "").split('\n').filter(l => l.trim()).slice(0, count);
     } catch (e) {
         console.error(e);
-        return new Array(count).fill("时间，全景，平视，黄金分割，角色1，正在待命，无，场景待定");
+        return new Array(count).fill("时间，全景，平视，角色1，正在待命");
     }
 };
 
@@ -324,12 +323,10 @@ export const generateDirectorSummary = async (scripts: string[]): Promise<string
                 model: 'gemini-3-flash-preview',
                 contents: { 
                   parts: [
-                    { text: `根据以下分镜脚本，生成一段简短的、基于选中脚本的片段梗概。
-                    描述结构必须包含：时间，地点，角色标号+名称，角色的行为动作，关键道具，环境描述。
-                    【注意】：不要描述角色身上的服装或多余角色细节。
-                    使用中文，控制在100字以内。
+                    { text: `生成剧情梗概。
+                    禁止描述角色外貌或多余解剖细节。
                     
-                    分镜脚本列表：
+                    分镜列表：
                     ${scripts.join('\n')}` }
                   ] 
                 }
@@ -348,7 +345,7 @@ export const enhancePrompt = async (rawPrompt: string): Promise<string> => {
         const ai = getClient();
         return ai.models.generateContent({
           model: 'gemini-3-flash-preview',
-          contents: `Enhance cinematic prompt: "${rawPrompt}" (Chinese, <60 words)`,
+          contents: `Enhance cinematic prompt (Strictly focus on environment/atmosphere, ignore character details): "${rawPrompt}"`,
         });
     });
     return response.text || rawPrompt;
