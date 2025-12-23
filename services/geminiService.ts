@@ -1,8 +1,13 @@
-
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { AspectRatio, ImageSize, Asset, CollageData, PanelAspectRatio } from "../types";
 
 export const ensureApiKey = async () => {
+  // 如果环境变量中已经有了 API_KEY，则优先使用
+  if (process.env.API_KEY && process.env.API_KEY !== "") {
+    return true;
+  }
+
+  // 针对 Gemini 3 系列模型，如果环境没提供 Key，则调用 aistudio 提供的选择器
   // @ts-ignore
   if (window.aistudio && window.aistudio.hasSelectedApiKey) {
     // @ts-ignore
@@ -10,11 +15,14 @@ export const ensureApiKey = async () => {
     if (!hasKey) {
       // @ts-ignore
       await window.aistudio.openSelectKey();
+      return true; // 假设用户选择成功
     }
   }
+  return false;
 };
 
 const getClient = () => {
+  // 每次调用时重新创建实例，以确保获取最新的 API_KEY
   return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
@@ -25,6 +33,17 @@ async function withRetry<T>(operation: () => Promise<T>, maxRetries = 3): Promis
       return await operation();
     } catch (error: any) {
       lastError = error;
+      const errorMsg = error?.message || "";
+      
+      // 如果报错显示实体未找到，通常意味着需要重新选择 Key（针对付费项目）
+      if (errorMsg.includes("Requested entity was not found")) {
+        // @ts-ignore
+        if (window.aistudio && window.aistudio.openSelectKey) {
+          // @ts-ignore
+          await window.aistudio.openSelectKey();
+        }
+      }
+
       const isOverloaded = error?.status === 'UNAVAILABLE' || error?.code === 503;
       const isRateLimited = error?.status === 'RESOURCE_EXHAUSTED' || error?.code === 429;
 
