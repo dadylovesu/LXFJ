@@ -1,15 +1,9 @@
-
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>橙意机构 - 连续分镜创作器</title>
-    <script>
-      // 更加健壮的 process.env 垫片
-      window.process = window.process || {};
-      window.process.env = window.process.env || {};
-    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -44,10 +38,43 @@
         width: 100vw;
         height: 100vh;
       }
-      ::-webkit-scrollbar { width: 6px; height: 6px; }
-      ::-webkit-scrollbar-track { background: transparent; }
-      ::-webkit-scrollbar-thumb { background: #222; border-radius: 10px; }
-      ::-webkit-scrollbar-thumb:hover { background: #333; }
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent; 
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #222; 
+        border-radius: 10px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #333; 
+      }
+      
+      .glass-panel {
+        background: rgba(18, 18, 18, 0.7);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+      }
+
+      @keyframes subtle-pulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.8; transform: scale(0.98); }
+      }
+      .animate-subtle-pulse {
+        animation: subtle-pulse 2s infinite ease-in-out;
+      }
+
+      @keyframes flow {
+        from { stroke-dashoffset: 20; }
+        to { stroke-dashoffset: 0; }
+      }
+      .animate-flow {
+        animation: flow 1s linear infinite;
+      }
     </style>
   <script type="importmap">
 {
@@ -64,6 +91,7 @@
 </head>
   <body>
     <div id="root"></div>
+    <!-- Entry point for the React application -->
     <script type="module" src="index.tsx"></script>
   </body>
 </html>
