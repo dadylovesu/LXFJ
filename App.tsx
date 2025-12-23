@@ -10,33 +10,36 @@ import { ScriptEditor } from './components/ScriptEditor';
 import { Asset, GeneratedImage, AspectRatio, PanelAspectRatio, ImageSize, AssetCategory, CollageData } from './types';
 import { generateMultiViewGrid, fileToBase64, enhancePrompt, analyzeAsset, ReferenceImageData, generateCameraMovement, editImage } from './services/geminiService';
 import { saveToStorage, loadFromStorage, clearStorage } from './services/persistenceService';
-import { AlertCircle, X as XIcon, Trash2, LayoutGrid, ShieldCheck, ExternalLink, Zap } from 'lucide-react';
+import { AlertCircle, X as XIcon, Trash2, LayoutGrid, Zap } from 'lucide-react';
 import { Button } from './components/Button';
 // @ts-ignore
 import JSZip from 'jszip';
 
 const App: React.FC = () => {
-  // 移除阻塞状态，直接进入应用
-  const [isKeyReady, setIsKeyReady] = useState<boolean>(true);
-  
+  // 资产与图像状态
   const [assets, setAssets] = useState<Asset[]>([]);
   const [images, setImages] = useState<GeneratedImage[]>([]);
   const [history, setHistory] = useState<GeneratedImage[][]>([]);
   
+  // 选中状态
   const [selectedImageId, setSelectedImageId] = useState<string | undefined>(undefined);
   const [selectedAssetId, setSelectedAssetId] = useState<string | undefined>(undefined);
   
+  // 配置状态
   const [gridSize, setGridSize] = useState(2);
   const [panelAspectRatio, setPanelAspectRatio] = useState<PanelAspectRatio>(PanelAspectRatio.P16_9);
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>(AspectRatio.WIDE);
   const [imageSize, setImageSize] = useState<ImageSize>(ImageSize.K4);
   const [prompt, setPrompt] = useState<string>('');
   const [panelPrompts, setPanelPrompts] = useState<string[]>([]);
+  
+  // 弹窗状态
   const [isCameraEditorOpen, setIsCameraEditorOpen] = useState(false);
   const [isCollageEditorOpen, setIsCollageEditorOpen] = useState(false);
   const [isScriptEditorOpen, setIsScriptEditorOpen] = useState(false);
   const [activeCollage, setActiveCollage] = useState<CollageData | null>(null);
   
+  // 状态处理
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStep, setGenerationStep] = useState<string>(''); 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -44,34 +47,6 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const abortControllerRef = useRef<AbortController | null>(null);
-
-  // 仅在静默状态下检查 Key，不阻塞 UI 渲染
-  useEffect(() => {
-    const checkKey = async () => {
-      try {
-        // @ts-ignore
-        if (window.aistudio && typeof window.aistudio.hasSelectedApiKey === 'function') {
-           // @ts-ignore
-           const ready = await window.aistudio.hasSelectedApiKey();
-           setIsKeyReady(ready);
-        }
-      } catch (e) {
-        console.warn("Key check failed, proceeding with env variable.");
-      }
-    };
-    checkKey();
-  }, []);
-
-  const handleOpenKeyDialog = async () => {
-    try {
-      // @ts-ignore
-      await window.aistudio.openSelectKey();
-      setIsKeyReady(true);
-      setError(null);
-    } catch (e) {
-      setError("无法打开 Key 选择对话框");
-    }
-  };
 
   useEffect(() => {
     switch (panelAspectRatio) {
@@ -164,7 +139,7 @@ const App: React.FC = () => {
   const handleGenerate = async () => {
     setError(null);
     setIsGenerating(true);
-    setGenerationStep("正在启动渲染引擎...");
+    setGenerationStep("正在连接环境密钥...");
     abortControllerRef.current = new AbortController();
 
     try {
@@ -180,7 +155,7 @@ const App: React.FC = () => {
           startX = rootNodes.length === 0 ? 100 : (rootNodes[rootNodes.length-1].position?.x || 100) + 420;
       }
 
-      setGenerationStep("正在渲染分镜组...");
+      setGenerationStep("正在渲染全景分镜宫格...");
       const referenceData: ReferenceImageData[] = [];
       for (const asset of assets) {
           referenceData.push({
@@ -198,7 +173,7 @@ const App: React.FC = () => {
           referenceData, previousContextImage, instructionsToSend, activeCollage || undefined
       );
       
-      setGenerationStep("正在分析动线逻辑...");
+      setGenerationStep("正在分析动态逻辑...");
       const cameraMove = await generateCameraMovement(prompt);
 
       const finalNode: GeneratedImage = {
@@ -224,13 +199,8 @@ const App: React.FC = () => {
       updateImagesWithHistory([...images, finalNode]);
       setSelectedImageId(finalNode.id);
     } catch (err: any) {
-      console.error("Generate error:", err);
-      const msg = err.message || "生成失败";
-      setError(msg);
-      // 如果报错显示 entity not found 或 API key 相关，显示激活 Key 的引导
-      if (msg.toLowerCase().includes("not found") || msg.toLowerCase().includes("api key")) {
-        setIsKeyReady(false);
-      }
+      console.error("Critical Render Error:", err);
+      setError(err.message || "生成失败，请检查环境变量 API_KEY。");
     } finally {
       setIsGenerating(false);
       setGenerationStep("");
@@ -286,40 +256,11 @@ const App: React.FC = () => {
 
   const handleDownloadZip = async () => {
     const selected = images.find(i => i.id === selectedImageId);
-    if (!selected || selected.nodeType !== 'render') {
-      alert("请先在画布上选择一个分镜组。");
-      return;
-    }
-
-    setGenerationStep("准备打包 ZIP...");
+    if (!selected || selected.nodeType !== 'render') return;
     setIsGenerating(true);
-
+    setGenerationStep("正在打包无损 ZIP...");
     try {
       const zip = new JSZip();
-      
-      const getRootId = (nodeId: string): string => {
-          const node = images.find(n => n.id === nodeId);
-          if (!node || !node.parentId) return nodeId;
-          return getRootId(node.parentId);
-      };
-
-      const getDepth = (nodeId: string, depth = 1): number => {
-          const node = images.find(n => n.id === nodeId);
-          if (!node || !node.parentId) return depth;
-          return getDepth(node.parentId, depth + 1);
-      };
-
-      const rootNodes = images
-          .filter(i => i.nodeType === 'render' && !i.parentId)
-          .sort((a, b) => a.timestamp - b.timestamp);
-
-      const currentRootId = getRootId(selected.id);
-      const groupIdx = rootNodes.findIndex(r => r.id === currentRootId) + 1;
-      const shotIdx = getDepth(selected.id);
-      
-      const folderName = `组${groupIdx}-镜头${shotIdx}`;
-      const folder = zip.folder(folderName);
-
       const base64ToBlob = (b64: string) => {
         const parts = b64.split(';base64,');
         const byteCharacters = atob(parts[1]);
@@ -327,30 +268,19 @@ const App: React.FC = () => {
         for (let i = 0; i < byteCharacters.length; i++) {
           byteNumbers[i] = byteCharacters.charCodeAt(i);
         }
-        const byteArray = new Uint8Array(byteNumbers);
-        return new Blob([byteArray], { type: 'image/png' });
+        return new Blob([new Uint8Array(byteNumbers)], { type: 'image/png' });
       };
-
-      const fullGridBlob = base64ToBlob(selected.fullGridUrl || selected.url);
-      folder.file(`${folderName}_全景宫格.png`, fullGridBlob);
-
-      if (selected.slices) {
-        selected.slices.forEach((sliceUrl, i) => {
-          const sliceBlob = base64ToBlob(sliceUrl);
-          folder.file(`${folderName}_分镜${i + 1}.png`, sliceBlob);
-        });
-      }
-
+      zip.file(`full_grid.png`, base64ToBlob(selected.fullGridUrl || selected.url));
+      selected.slices?.forEach((slice, i) => {
+        zip.file(`panel_${i + 1}.png`, base64ToBlob(slice));
+      });
       const content = await zip.generateAsync({ type: "blob" });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(content);
-      link.download = `${folderName}_分镜组.zip`;
-      document.body.appendChild(link);
+      link.download = `Cine-Export-${Date.now()}.zip`;
       link.click();
-      document.body.removeChild(link);
     } catch (err) {
-      console.error("ZIP Error:", err);
-      alert("ZIP 打包失败，请重试。");
+      console.error(err);
     } finally {
       setIsGenerating(false);
       setGenerationStep("");
@@ -420,29 +350,6 @@ const App: React.FC = () => {
             onDownloadAll={handleDownloadZip} assets={assets} onDeselectAll={() => { setSelectedImageId(undefined); setSelectedAssetId(undefined); }}
         />
         
-        {/* API Key 激活浮层 - 仅在报错或未授权时显示 */}
-        {!isKeyReady && (
-            <div className="absolute inset-0 bg-cine-black/90 backdrop-blur-xl z-[200] flex items-center justify-center p-6">
-                <div className="max-w-md w-full glass-panel border border-zinc-800 p-10 rounded-lg space-y-8 text-center shadow-2xl animate-in zoom-in-95 duration-300">
-                    <div className="w-20 h-20 bg-cine-accent/10 border border-cine-accent/30 rounded-full flex items-center justify-center mx-auto shadow-[0_0_30px_rgba(255,122,0,0.2)]">
-                        <ShieldCheck className="text-cine-accent" size={40} />
-                    </div>
-                    <div className="space-y-3">
-                        <h2 className="text-white text-xl font-bold tracking-widest font-mono uppercase">激活渲染引擎 (AUTH)</h2>
-                        <p className="text-zinc-500 text-xs leading-relaxed font-mono px-4">
-                            系统检测到需要手动激活 Pro 级视觉能力。请点击下方按钮完成环境授权。
-                        </p>
-                    </div>
-                    <div className="pt-4 space-y-4">
-                        <Button variant="accent" className="w-full h-14 text-sm font-bold gap-3" onClick={handleOpenKeyDialog}>
-                            <Zap size={18} />
-                            连接生产密钥 (AUTHORIZE)
-                        </Button>
-                    </div>
-                </div>
-            </div>
-        )}
-
         {isGenerating && (
             <div className="absolute inset-0 bg-cine-black/90 backdrop-blur-xl z-[150] flex flex-col items-center justify-center space-y-8">
                  <div className="w-16 h-16 border-t-2 border-cine-accent rounded-full animate-spin"></div>
