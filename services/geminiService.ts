@@ -1,28 +1,7 @@
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { AspectRatio, ImageSize, Asset, CollageData, PanelAspectRatio } from "../types";
 
-export const ensureApiKey = async () => {
-  // 如果环境变量中已经有了 API_KEY，则优先使用
-  if (process.env.API_KEY && process.env.API_KEY !== "") {
-    return true;
-  }
-
-  // 针对 Gemini 3 系列模型，如果环境没提供 Key，则调用 aistudio 提供的选择器
-  // @ts-ignore
-  if (window.aistudio && window.aistudio.hasSelectedApiKey) {
-    // @ts-ignore
-    const hasKey = await window.aistudio.hasSelectedApiKey();
-    if (!hasKey) {
-      // @ts-ignore
-      await window.aistudio.openSelectKey();
-      return true; // 假设用户选择成功
-    }
-  }
-  return false;
-};
-
 const getClient = () => {
-  // 每次调用时重新创建实例，以确保获取最新的 API_KEY
   return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
@@ -33,17 +12,6 @@ async function withRetry<T>(operation: () => Promise<T>, maxRetries = 3): Promis
       return await operation();
     } catch (error: any) {
       lastError = error;
-      const errorMsg = error?.message || "";
-      
-      // 如果报错显示实体未找到，通常意味着需要重新选择 Key（针对付费项目）
-      if (errorMsg.includes("Requested entity was not found")) {
-        // @ts-ignore
-        if (window.aistudio && window.aistudio.openSelectKey) {
-          // @ts-ignore
-          await window.aistudio.openSelectKey();
-        }
-      }
-
       const isOverloaded = error?.status === 'UNAVAILABLE' || error?.code === 503;
       const isRateLimited = error?.status === 'RESOURCE_EXHAUSTED' || error?.code === 429;
 
@@ -106,8 +74,6 @@ export const generateMultiViewGrid = async (
   panelInstructions?: string[],
   collageRef?: CollageData 
 ): Promise<{ fullImage: string, slices: string[] }> => {
-  await ensureApiKey();
-  
   const totalViews = gridSize * gridSize;
   const gridType = `${gridSize}x${gridSize}`;
 
@@ -206,7 +172,6 @@ export const editImage = async (
   refImageBase64?: string,
   imageSize: ImageSize = ImageSize.K1
 ): Promise<string> => {
-  await ensureApiKey();
   const cleanBase64 = base64Image.includes(',') ? base64Image.split(',')[1] : base64Image;
   const parts: any[] = [{ inlineData: { mimeType: 'image/png', data: cleanBase64 } }];
   if (refImageBase64) parts.push({ inlineData: { mimeType: 'image/png', data: refImageBase64.split(',')[1] } });
@@ -241,7 +206,6 @@ RULE: ABSOLUTELY NO BLACK/WHITE BORDERS. Maintain full-bleed framing.` });
 };
 
 export const generateCameraSuggestions = async (prompt: string, panelCount: number): Promise<string[]> => {
-    await ensureApiKey();
     try {
         const response = await withRetry<GenerateContentResponse>(() => {
             const ai = getClient();
@@ -286,7 +250,6 @@ export const generateCameraSuggestions = async (prompt: string, panelCount: numb
 };
 
 export const generateCameraMovement = async (prompt: string): Promise<string> => {
-    await ensureApiKey();
     try {
         const response = await withRetry<GenerateContentResponse>(() => {
             const ai = getClient();
@@ -301,7 +264,6 @@ export const generateCameraMovement = async (prompt: string): Promise<string> =>
 };
 
 export const generateScriptLines = async (instruction: string, count: number, attachmentText?: string): Promise<string[]> => {
-    await ensureApiKey();
     try {
         const response = await withRetry<GenerateContentResponse>(() => {
             const ai = getClient();
@@ -330,7 +292,6 @@ export const generateScriptLines = async (instruction: string, count: number, at
 };
 
 export const generateDirectorSummary = async (scripts: string[]): Promise<string> => {
-    await ensureApiKey();
     try {
         const response = await withRetry<GenerateContentResponse>(() => {
             const ai = getClient();
@@ -351,7 +312,6 @@ export const generateDirectorSummary = async (scripts: string[]): Promise<string
 };
 
 export const enhancePrompt = async (rawPrompt: string): Promise<string> => {
-  await ensureApiKey();
   try {
     const response = await withRetry<GenerateContentResponse>(() => {
         const ai = getClient();
@@ -365,7 +325,6 @@ export const enhancePrompt = async (rawPrompt: string): Promise<string> => {
 };
 
 export const analyzeAsset = async (fileBase64: string, mimeType: string, prompt: string): Promise<string> => {
-  await ensureApiKey();
   try {
     const response = await withRetry<GenerateContentResponse>(() => {
         const ai = getClient();

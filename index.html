@@ -91,6 +91,15 @@
 </head>
   <body>
     <div id="root"></div>
+    <script>
+      /**
+       * Shim for process.env
+       * In a production environment like Vercel, the global 'process' object 
+       * might not be available in the browser context. This shim prevents 
+       * scripts from crashing when trying to access process.env.API_KEY.
+       */
+      window.process = window.process || { env: { API_KEY: "" } };
+    </script>
     <!-- Entry point for the React application -->
     <script type="module" src="index.tsx"></script>
   </body>
