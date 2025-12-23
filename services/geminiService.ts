@@ -1,8 +1,9 @@
+
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { AspectRatio, ImageSize, Asset, CollageData, PanelAspectRatio } from "../types";
 
-// 按照规范：在调用前即时实例化，以确保获取到最新的 API Key
-const createClient = () => {
+const getClient = () => {
+  // 直接使用注入的环境变量 API_KEY
   return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
@@ -75,18 +76,57 @@ export const generateMultiViewGrid = async (
   panelInstructions?: string[],
   collageRef?: CollageData 
 ): Promise<{ fullImage: string, slices: string[] }> => {
+  const totalViews = gridSize * gridSize;
   const gridType = `${gridSize}x${gridSize}`;
+
+  const isVertical = panelAspectRatio.includes('3:4') || panelAspectRatio.includes('9:16');
+  const isSquare = panelAspectRatio === '1:1';
+  
+  let compositionInstruction = "";
+  if (isVertical) {
+    compositionInstruction = `MANDATORY: Use EDGE-TO-EDGE VERTICAL COMPOSITION. NO BLACK BARS. NO MARGINS. The scene must bleed to the very edge of each ${panelAspectRatio} frame.`;
+  } else if (isSquare) {
+    compositionInstruction = `MANDATORY: Use FULL-BLEED SQUARE COMPOSITION. ZERO GUTTERS. Each of the ${totalViews} panels must be perfectly contiguous.`;
+  } else {
+    compositionInstruction = `MANDATORY: Use CINEMATIC WIDESCREEN with ZERO LETTERBOXING. Ensure the content fills the entire ${panelAspectRatio} area of each panel completely.`;
+  }
+
   const roles = categorizedRefs.filter(r => r.category === 'role');
   const bgs = categorizedRefs.filter(r => r.category === 'background');
   const props = categorizedRefs.filter(r => r.category === 'prop');
 
   let systemPrompt = `[CORE TASK]: GENERATE A SEAMLESS ${gridType} STORYBOARD GRID.
+
+[STRICT LAYOUT RULE]:
 - Exactly ${gridSize} rows and ${gridSize} columns.
 - FULL IMAGE ASPECT RATIO: ${containerAspectRatio}.
 - INDIVIDUAL PANEL ASPECT RATIO: ${panelAspectRatio}.
-${collageRef ? `[SHOT GROUP REFERENCE]: Match visual composition from provided collage.` : ''}
+
+${collageRef ? `
+[SHOT GROUP REFERENCE - HIGHEST PRIORITY]:
+- You are provided with a VISUAL REFERENCE GRID (Collage).
+- For each panel, you MUST MATCH the EXACT:
+  1. SHOT SIZE (CU, MCU, LS, etc.) from the reference.
+  2. CAMERA ANGLE (Low, Eye-level, High-angle, Dutch tilt) from the reference.
+  3. CHARACTER ORIENTATION (Back to camera, Profile, 3/4 view) from the reference.
+  4. COMPOSITION (Rule of thirds, Center-framed, Leading lines) from the reference.
+- IMPORTANT: Only replicate the SHOT ATTRIBUTES. DO NOT copy the specific people or objects from the collage. Replace them with the current character and scene content described in the prompt.
+` : ''}
+
+[CHARACTER ANATOMY PRESERVATION]:
+- The provided 'role' reference images define the ABSOLUTE morphology of the character.
+- STRICTLY adhere to the anatomical structure of the role. If the character is a simple blob, creature, or object without legs/arms/human body, IT MUST REMAIN IN THAT FORM.
+- DO NOT spontaneously generate legs, feet, bodies, or human-like limbs if they are not explicitly shown in the role reference.
+
+[NEGATIVE CONSTRAINTS]:
+- NO WHITE BARS, NO BLACK BARS, NO LETTERBOXING.
+- NO PADDING OR MARGINS BETWEEN PANELS. NO INTERNAL GRID LINES.
+
 [SCENE]: "${prompt}"
-[STYLE]: Hyper-realistic cinematic film. Consistent lighting.`;
+
+${!collageRef && panelInstructions && panelInstructions.length > 0 ? `\n[PANEL DETAILS (TEXT LOGIC)]:\n${panelInstructions.map((instr, idx) => `Panel ${idx + 1}: ${instr}`).join('\n')}` : ''}
+
+[STYLE]: Hyper-realistic cinematic film, 35mm photography. Consistent lighting and grading.`;
 
   const parts: any[] = [];
   roles.forEach(r => parts.push({ inlineData: { mimeType: r.mimeType, data: r.data } }));
@@ -94,11 +134,12 @@ ${collageRef ? `[SHOT GROUP REFERENCE]: Match visual composition from provided c
   props.forEach(p => parts.push({ inlineData: { mimeType: p.mimeType, data: p.data } }));
   if (collageRef) parts.push({ inlineData: { mimeType: 'image/png', data: collageRef.url.split(',')[1] } });
   if (contextImage) parts.push({ inlineData: { mimeType: 'image/png', data: contextImage.split(',')[1] } });
+  
   parts.push({ text: systemPrompt });
 
   try {
     const response = await withRetry<GenerateContentResponse>(() => {
-        const ai = createClient();
+        const ai = getClient();
         return ai.models.generateContent({
           model: 'gemini-3-pro-image-preview',
           contents: { parts },
@@ -120,9 +161,7 @@ ${collageRef ? `[SHOT GROUP REFERENCE]: Match visual composition from provided c
     const panels = await sliceImageGrid(fullImageBase64, gridSize, gridSize);
     return { fullImage: fullImageBase64, slices: panels };
   } catch (error: any) {
-    if (error?.message?.includes("Requested entity was not found")) {
-        throw new Error("API_KEY_EXPIRED");
-    }
+    console.error("Grid gen error:", error);
     throw error;
   }
 };
@@ -139,11 +178,14 @@ export const editImage = async (
   const parts: any[] = [{ inlineData: { mimeType: 'image/png', data: cleanBase64 } }];
   if (refImageBase64) parts.push({ inlineData: { mimeType: 'image/png', data: refImageBase64.split(',')[1] } });
   
-  parts.push({ text: `EDIT TASK: Modify this ${aspectRatio} cinematic shot. REQUEST: "${editPrompt}"` });
+  parts.push({ text: `EDIT TASK: Modify this ${aspectRatio} cinematic shot.
+REQUEST: "${editPrompt}"
+ANATOMY RULE: Preserve the original morphology and anatomical structure of the character in the image. DO NOT add limbs (legs/arms) if they are not part of the character's design.
+RULE: ABSOLUTELY NO BLACK/WHITE BORDERS. Maintain full-bleed framing.` });
 
   try {
     const response = await withRetry<GenerateContentResponse>(() => {
-        const ai = createClient();
+        const ai = getClient();
         return ai.models.generateContent({
           model: modelName,
           contents: { parts },
@@ -160,9 +202,7 @@ export const editImage = async (
     }
     throw new Error("No image data returned.");
   } catch (error: any) {
-    if (error?.message?.includes("Requested entity was not found")) {
-        throw new Error("API_KEY_EXPIRED");
-    }
+    console.error("Image edit error:", error);
     throw error;
   }
 };
@@ -170,25 +210,46 @@ export const editImage = async (
 export const generateCameraSuggestions = async (prompt: string, panelCount: number): Promise<string[]> => {
     try {
         const response = await withRetry<GenerateContentResponse>(() => {
-            const ai = createClient();
+            const ai = getClient();
             return ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
                 contents: { 
                   parts: [{ 
-                    text: `基于场景描述，规划 ${panelCount} 个电影级分镜脚本。场景：${prompt}` 
+                    text: `你是一个世界级的电影摄影指导。基于场景描述，规划 ${panelCount} 个极具专业深度的电影级分镜脚本。
+                    
+                    场景：${prompt}
+                    
+                    每个分镜描述必须严格包含以下要素，并以专业电影术语描述：
+                    1. [环境信息]：具体的时间点与天气氛围。
+                    2. [镜头语言]：具体的景别与构图逻辑。
+                    3. [镜头视角与焦段]：明确视角及具体的焦段感。
+                    4. [动态状态]：说明是静态镜头、平滑横移还是带有动态模糊的快速移动。
+                    5. [角色构图元素]：描述角色朝向、在画面中的具体坐标位置、画面占比以及具体的动作。
+                    
+                    重要规则：
+                    - 禁止描述角色的长相特征、面部细节。仅将其视为构图元素。
+                    - 请输出 ${panelCount} 行纯文本，每行代表一个独立的分镜片段，不要带编号。` 
                   }] 
                 }
             });
         });
+        
         const rawText = response.text || "";
-        return rawText.split('\n').filter(line => line.length > 5).slice(0, panelCount);
-    } catch { return new Array(panelCount).fill("专业级电影分镜：导演级构图逻辑。"); }
+        const lines = rawText.split('\n')
+            .map(line => line.replace(/^[0-9]+[.\-、\s]*/, '').trim())
+            .filter(line => line.length > 5)
+            .slice(0, panelCount);
+            
+        return lines;
+    } catch (error) { 
+        return new Array(panelCount).fill("专业级电影分镜：35mm焦段，导演级构图逻辑。"); 
+    }
 };
 
 export const generateCameraMovement = async (prompt: string): Promise<string> => {
     try {
         const response = await withRetry<GenerateContentResponse>(() => {
-            const ai = createClient();
+            const ai = getClient();
             return ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
                 contents: { parts: [{ text: `场景: ${prompt}` }] },
@@ -202,41 +263,55 @@ export const generateCameraMovement = async (prompt: string): Promise<string> =>
 export const generateScriptLines = async (instruction: string, count: number, attachmentText?: string): Promise<string[]> => {
     try {
         const response = await withRetry<GenerateContentResponse>(() => {
-            const ai = createClient();
+            const ai = getClient();
             return ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
                 contents: { 
                   parts: [
-                    { text: `将输入内容拆解为 ${count} 条独立且详尽的专业电影分镜指令。输入：${attachmentText || ''}。指令：${instruction}` }
+                    { text: `你是一个电影分镜脚本师。请将输入内容拆解为 ${count} 条独立且详尽的专业电影分镜指令。
+                    
+                    输入内容：
+                    ${attachmentText || ''}
+                    
+                    附加指令：
+                    ${instruction}
+                    
+                    每条指令必须包含：时间天气、景别构图、焦段视角、动静态、角色位置动作。` }
                   ] 
                 }
             });
         });
         return (response.text || "").split('\n').filter(l => l.trim()).slice(0, count);
-    } catch { return new Array(count).fill("时间，全景，平视，角色1，正在待命"); }
+    } catch (e) {
+        console.error(e);
+        return new Array(count).fill("时间，全景，平视，角色1，正在待命");
+    }
 };
 
 export const generateDirectorSummary = async (scripts: string[]): Promise<string> => {
     try {
         const response = await withRetry<GenerateContentResponse>(() => {
-            const ai = createClient();
+            const ai = getClient();
             return ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
                 contents: { 
                   parts: [
-                    { text: `根据分镜描述生成剧情梗概：${scripts.join('\n')}` }
+                    { text: `根据这些分镜描述生成一个总体的剧情梗概：
+                    ${scripts.join('\n')}` }
                   ] 
                 }
             });
         });
         return response.text?.trim() || "生成的梗概。";
-    } catch { return "无法生成梗概。"; }
+    } catch {
+        return "无法生成梗概。";
+    }
 };
 
 export const enhancePrompt = async (rawPrompt: string): Promise<string> => {
   try {
     const response = await withRetry<GenerateContentResponse>(() => {
-        const ai = createClient();
+        const ai = getClient();
         return ai.models.generateContent({
           model: 'gemini-3-flash-preview',
           contents: `Enhance cinematic prompt: "${rawPrompt}"`,
@@ -249,7 +324,7 @@ export const enhancePrompt = async (rawPrompt: string): Promise<string> => {
 export const analyzeAsset = async (fileBase64: string, mimeType: string, prompt: string): Promise<string> => {
   try {
     const response = await withRetry<GenerateContentResponse>(() => {
-        const ai = createClient();
+        const ai = getClient();
         return ai.models.generateContent({
           model: 'gemini-3-pro-preview',
           contents: { parts: [{ inlineData: { mimeType, data: fileBase64 } }, { text: prompt }] }

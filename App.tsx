@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AssetBay } from './components/AssetBay';
 import { DirectorDeck } from './components/DirectorDeck';
@@ -8,8 +9,8 @@ import { CollageEditor } from './components/CollageEditor';
 import { ScriptEditor } from './components/ScriptEditor';
 import { Asset, GeneratedImage, AspectRatio, PanelAspectRatio, ImageSize, AssetCategory, CollageData } from './types';
 import { generateMultiViewGrid, fileToBase64, enhancePrompt, analyzeAsset, ReferenceImageData, generateCameraMovement, editImage } from './services/geminiService';
-import { saveToStorage, loadFromStorage } from './services/persistenceService';
-import { AlertCircle, X as XIcon, Trash2, LayoutGrid, Key, ShieldCheck, ExternalLink } from 'lucide-react';
+import { saveToStorage, loadFromStorage, clearStorage } from './services/persistenceService';
+import { AlertCircle, X as XIcon, Trash2, LayoutGrid } from 'lucide-react';
 import { Button } from './components/Button';
 // @ts-ignore
 import JSZip from 'jszip';
@@ -38,27 +39,8 @@ const App: React.FC = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
-  const [showApiKeyOverlay, setShowApiKeyOverlay] = useState(false);
 
   const abortControllerRef = useRef<AbortController | null>(null);
-
-  // 初始化 API Key 检查
-  useEffect(() => {
-    const checkApiKey = async () => {
-      // @ts-ignore
-      const hasKey = await window.aistudio?.hasSelectedApiKey();
-      if (!hasKey) {
-        setShowApiKeyOverlay(true);
-      }
-    };
-    checkApiKey();
-  }, []);
-
-  const handleOpenApiKeyDialog = async () => {
-    // @ts-ignore
-    await window.aistudio?.openSelectKey();
-    setShowApiKeyOverlay(false);
-  };
 
   useEffect(() => {
     switch (panelAspectRatio) {
@@ -178,6 +160,7 @@ const App: React.FC = () => {
           });
       }
 
+      // If activeCollage is present, we DISCARD text-based panelPrompts to prioritize visual recognition.
       const instructionsToSend = activeCollage ? undefined : panelPrompts;
 
       const finalResult = await generateMultiViewGrid(
@@ -211,12 +194,7 @@ const App: React.FC = () => {
       updateImagesWithHistory([...images, finalNode]);
       setSelectedImageId(finalNode.id);
     } catch (err: any) {
-      if (err.message === "API_KEY_EXPIRED") {
-        setShowApiKeyOverlay(true);
-        setError("API 密钥失效或未找到，请重新授权。");
-      } else {
-        setError(err.message || "生成失败");
-      }
+      setError(err.message || "生成失败");
     } finally {
       setIsGenerating(false);
       setGenerationStep("");
@@ -253,9 +231,6 @@ const App: React.FC = () => {
       });
       updateImagesWithHistory(newImages);
     } catch (err: any) { 
-        if (err.message === "API_KEY_EXPIRED") {
-            setShowApiKeyOverlay(true);
-        }
         setError(err.message || "重绘失败"); 
     } finally { 
         setIsGenerating(false); 
@@ -275,63 +250,81 @@ const App: React.FC = () => {
 
   const handleDownloadZip = async () => {
     const selected = images.find(i => i.id === selectedImageId);
-    if (!selected || selected.nodeType !== 'render') return;
+    if (!selected || selected.nodeType !== 'render') {
+      alert("请先在画布上选择一个分镜组。");
+      return;
+    }
+
     setGenerationStep("准备打包 ZIP...");
     setIsGenerating(true);
+
     try {
       const zip = new JSZip();
-      const folder = zip.folder("Storyboards");
+      
+      const getRootId = (nodeId: string): string => {
+          const node = images.find(n => n.id === nodeId);
+          if (!node || !node.parentId) return nodeId;
+          return getRootId(node.parentId);
+      };
+
+      const getDepth = (nodeId: string, depth = 1): number => {
+          const node = images.find(n => n.id === nodeId);
+          if (!node || !node.parentId) return depth;
+          return getDepth(node.parentId, depth + 1);
+      };
+
+      const rootNodes = images
+          .filter(i => i.nodeType === 'render' && !i.parentId)
+          .sort((a, b) => a.timestamp - b.timestamp);
+
+      const currentRootId = getRootId(selected.id);
+      const groupIdx = rootNodes.findIndex(r => r.id === currentRootId) + 1;
+      const shotIdx = getDepth(selected.id);
+      
+      const folderName = `组${groupIdx}-镜头${shotIdx}`;
+      const folder = zip.folder(folderName);
+
       const base64ToBlob = (b64: string) => {
         const parts = b64.split(';base64,');
         const byteCharacters = atob(parts[1]);
         const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) byteNumbers[i] = byteCharacters.charCodeAt(i);
-        return new Blob([new Uint8Array(byteNumbers)], { type: 'image/png' });
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        return new Blob([byteArray], { type: 'image/png' });
       };
-      folder.file(`full_grid.png`, base64ToBlob(selected.fullGridUrl || selected.url));
-      selected.slices?.forEach((s, i) => folder.file(`panel_${i+1}.png`, base64ToBlob(s)));
+
+      const fullGridBlob = base64ToBlob(selected.fullGridUrl || selected.url);
+      folder.file(`${folderName}_全景宫格.png`, fullGridBlob);
+
+      if (selected.slices) {
+        selected.slices.forEach((sliceUrl, i) => {
+          const sliceBlob = base64ToBlob(sliceUrl);
+          folder.file(`${folderName}_分镜${i + 1}.png`, sliceBlob);
+        });
+      }
+
       const content = await zip.generateAsync({ type: "blob" });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(content);
-      link.download = `storyboard_export.zip`;
+      link.download = `${folderName}_分镜组.zip`;
+      document.body.appendChild(link);
       link.click();
-    } catch (err) { console.error(err); } finally { setIsGenerating(false); setGenerationStep(""); }
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error("ZIP Error:", err);
+      alert("ZIP 打包失败，请重试。");
+    } finally {
+      setIsGenerating(false);
+      setGenerationStep("");
+    }
   };
 
   const selectedImage = images.find(i => i.id === selectedImageId) || null;
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-cine-black text-zinc-400 font-sans">
-      
-      {/* API Key 授权弹窗 */}
-      {showApiKeyOverlay && (
-        <div className="fixed inset-0 z-[500] bg-black/95 backdrop-blur-2xl flex items-center justify-center p-6 animate-in fade-in duration-500">
-            <div className="max-w-md w-full bg-cine-dark border border-zinc-800 p-10 rounded-lg shadow-[0_0_100px_rgba(255,122,0,0.2)] text-center space-y-8">
-                <div className="w-20 h-20 bg-cine-accent/10 rounded-full flex items-center justify-center mx-auto border border-cine-accent/30 shadow-[0_0_30px_rgba(255,122,0,0.1)]">
-                    <Key size={32} className="text-cine-accent" />
-                </div>
-                <div className="space-y-4">
-                    <h2 className="text-white text-xl font-mono font-bold tracking-[0.2em] uppercase">引擎授权 (AUTH)</h2>
-                    <p className="text-zinc-400 text-sm leading-relaxed font-mono">
-                        本工具使用 <span className="text-cine-accent">Gemini 3 Pro</span> 电影级渲染引擎。请先选择一个有效的 Google Cloud 付费项目 API 密钥。
-                    </p>
-                </div>
-                <div className="pt-4 space-y-4">
-                    <Button variant="accent" className="w-full h-14 text-sm font-bold tracking-widest gap-3" onClick={handleOpenApiKeyDialog}>
-                        <ShieldCheck size={20} /> 选择 API 密钥
-                    </Button>
-                    <a 
-                        href="https://ai.google.dev/gemini-api/docs/billing" 
-                        target="_blank" 
-                        className="flex items-center justify-center gap-2 text-[10px] text-zinc-500 hover:text-cine-accent transition-colors font-mono uppercase tracking-widest"
-                    >
-                        查看计费文档 <ExternalLink size={10} />
-                    </a>
-                </div>
-            </div>
-        </div>
-      )}
-
       <aside className="w-[340px] flex flex-col border-r border-cine-border bg-cine-dark z-20 shadow-2xl">
         <div className="p-5 border-b border-cine-border bg-cine-black/50 flex justify-between items-center">
             <h1 className="text-white text-xs font-bold tracking-[0.15em] uppercase font-mono flex items-center gap-2.5">
@@ -401,7 +394,7 @@ const App: React.FC = () => {
         )}
 
         {error && (
-            <div className="absolute bottom-8 left-8 z-50 bg-red-950/80 backdrop-blur border border-red-500/30 text-red-200 p-4 rounded-md text-xs flex gap-3 animate-in slide-in-from-bottom-4">
+            <div className="absolute bottom-8 left-8 z-50 bg-red-950/80 backdrop-blur border border-red-500/30 text-red-200 p-4 rounded-md text-xs flex gap-3">
                 <AlertCircle size={16} /> <span className="font-mono">{error}</span> <button onClick={() => setError(null)}><XIcon size={14} /></button>
             </div>
         )}
