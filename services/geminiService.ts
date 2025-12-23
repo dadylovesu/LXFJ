@@ -109,35 +109,39 @@ export const generateMultiViewGrid = async (
   const bgs = categorizedRefs.filter(r => r.category === 'background');
   const props = categorizedRefs.filter(r => r.category === 'prop');
 
-  let systemPrompt = `[CORE TASK]: GENERATE A SINGLE ${gridType} CINEMATIC STORYBOARD GRID.
-    - OUTPUT FORMAT: Exactly ${totalViews} panels in a ${gridRows}x${gridCols} grid.
-    - ASPECT RATIO: Adapt all content to ${aspectRatio}.
-    - MAIN THEME: "${prompt}"`;
+  // 构建更强的一致性系统指令
+  let systemPrompt = `[CORE TASK]: AS A PROFESSIONAL CINEMATIC DIRECTOR, GENERATE A SINGLE ${gridType} STORYBOARD GRID.
+[CRITICAL REQUIREMENT: VISUAL CONSISTENCY]:
+1. THE FACIAL FEATURES, HAIR, CLOTHING, AND BODY PROPORTIONS OF EACH "ROLE" MUST BE 100% CONSISTENT ACROSS ALL PANELS.
+2. THE LIGHTING, TEXTURES, AND SPATIAL LAYOUT OF THE "BACKGROUND" MUST REMAIN PERMANENTLY ANCHORED.
+3. ALL "PROPS" MUST MAINTAIN THEIR SCALE AND DESIGN DETAILS.
 
-  if (collageRef) {
-      systemPrompt += `\n\n[COMPOSITION REFERENCE]: 
-      - The provided Collage image is a visual reference for camera framing and composition.
-      - TASK: Recognize camera angles and framing. Map these to the output grid.`;
-  }
+[ENTITY MAPPING]:
+${roles.map((r, i) => `- IMAGE_PART_${i}: This is the visual anchor for "ROLE ${r.roleIndex}". Extract and lock their identity.`).join('\n')}
+${bgs.map((b, i) => `- IMAGE_PART_${roles.length + i}: This is the visual anchor for the ENVIRONMENT.`).join('\n')}
+${props.map((p, i) => `- IMAGE_PART_${roles.length + bgs.length + i}: This is the visual anchor for "PROP ${p.roleIndex}".`).join('\n')}
 
-  if (panelInstructions && panelInstructions.length > 0) {
-      systemPrompt += `\n\n[PANEL SPECIFICS]:
-      ${panelInstructions.map((instr, idx) => `- Panel ${idx + 1}: ${instr || 'AI Choice'}`).join('\n')}`;
-  }
+[STORYBOARD CONTENT]:
+- MAIN THEME: "${prompt}"
+- ASPECT RATIO: Adapt all content to ${aspectRatio}.
+- LAYOUT: Exactly ${totalViews} distinct narrative panels.
 
-  if (roles.length > 0) {
-      systemPrompt += `\n\n[CHARACTER CONSISTENCY]:
-      ${roles.map((r, i) => `- Reference Image ${i+1} is "ROLE ${r.roleIndex}".`).join('\n')}`;
-  }
+${collageRef ? `\n[COMPOSITION REFERENCE]: Use the provided Collage image to guide camera angles, framing, and sequential flow.` : ''}
 
-  systemPrompt += `\n\n[STYLING]: Photorealistic, cinematic, professional storyboard. No text overlays.`;
+${panelInstructions && panelInstructions.length > 0 ? `\n[PANEL-BY-PANEL SPECIFICS]:\n${panelInstructions.map((instr, idx) => `Panel ${idx + 1}: ${instr || 'Evolve the narrative logically'}`).join('\n')}` : ''}
+
+[FINAL STYLE]: Ultra-realistic cinematic render, 35mm lens feel, high production value. No text or icons in the image.`;
 
   const parts: any[] = [];
-  if (collageRef) parts.push({ inlineData: { mimeType: 'image/png', data: collageRef.url.split(',')[1] } });
+  
+  // 严格排序以对应 Prompt 中的索引
   roles.forEach(r => parts.push({ inlineData: { mimeType: r.mimeType, data: r.data } }));
-  props.forEach(p => parts.push({ inlineData: { mimeType: p.mimeType, data: p.data } }));
   bgs.forEach(b => parts.push({ inlineData: { mimeType: b.mimeType, data: b.data } }));
+  props.forEach(p => parts.push({ inlineData: { mimeType: p.mimeType, data: p.data } }));
+
+  if (collageRef) parts.push({ inlineData: { mimeType: 'image/png', data: collageRef.url.split(',')[1] } });
   if (contextImage) parts.push({ inlineData: { mimeType: 'image/png', data: contextImage.split(',')[1] } });
+  
   parts.push({ text: systemPrompt });
 
   try {
@@ -181,7 +185,10 @@ export const editImage = async (
   const cleanBase64 = base64Image.includes(',') ? base64Image.split(',')[1] : base64Image;
   const parts: any[] = [{ inlineData: { mimeType: 'image/png', data: cleanBase64 } }];
   if (refImageBase64) parts.push({ inlineData: { mimeType: 'image/png', data: refImageBase64.split(',')[1] } });
-  parts.push({ text: `Edit instruction: "${editPrompt}". Photorealistic cinematic render.` });
+  
+  parts.push({ text: `MANDATORY INSTRUCTION: Update this storyboard panel based on: "${editPrompt}". 
+Maintain EXACT consistency with the character's facial features and environment from the original image. 
+Output: Cinematic High-Fidelity Render.` });
 
   try {
     const response = await withRetry<GenerateContentResponse>(() => {
@@ -248,9 +255,10 @@ export const generateScriptLines = async (instruction: string, count: number, at
                     { text: `你是一个专业的电影分镜脚本拆解师。
                     任务：将以下输入内容拆解为正好 ${count} 条独立的视觉描述指令。
                     要求：
-                    1. 每条指令必须严格遵循以下结构：“时间，景别，拍摄角度，构图，角色标号+名称，角色的行为动作，角色身上的服装道具，关键道具，环境描述”。
-                    2. 保持叙事的连贯性。
-                    3. 直接返回这 ${count} 条文本，每条占一行。不要编号。使用中文。
+                    1. 每条指令必须严格遵循以下结构：“时间，景别，拍摄角度，构图，角色标号+名称，角色的行为动作，关键道具，环境描述”。
+                    2. 【严格禁止】：不要描述角色身上的服装、细节或任何多余的角色长相细节。角色部分必须仅保留“角色标号+名称”。
+                    3. 保持叙事的连贯性。
+                    4. 直接返回这 ${count} 条文本，每条占一行。不要编号。使用中文。
                     
                     输入内容/文档：
                     ${attachmentText || ''}
@@ -264,7 +272,7 @@ export const generateScriptLines = async (instruction: string, count: number, at
         return (response.text || "").split('\n').filter(l => l.trim()).slice(0, count);
     } catch (e) {
         console.error(e);
-        return new Array(count).fill("时间，全景，平视，黄金分割，角色1，正在待命，普通服装，无，场景待定");
+        return new Array(count).fill("时间，全景，平视，黄金分割，角色1，正在待命，无，场景待定");
     }
 };
 
@@ -278,7 +286,8 @@ export const generateDirectorSummary = async (scripts: string[]): Promise<string
                 contents: { 
                   parts: [
                     { text: `根据以下分镜脚本，生成一段简短的、基于选中脚本的片段梗概。
-                    描述结构必须包含：时间，地点，角色标号+名称，角色的行为动作，角色身上的服装道具，关键道具，环境描述。
+                    描述结构必须包含：时间，地点，角色标号+名称，角色的行为动作，关键道具，环境描述。
+                    【注意】：不要描述角色身上的服装或多余角色细节。
                     使用中文，控制在100字以内。
                     
                     分镜脚本列表：
