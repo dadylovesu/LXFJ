@@ -228,19 +228,70 @@ const App: React.FC = () => {
   };
 
   const handleApplyScripts = (summary: string, scripts: string[]) => {
-      // Requirement 2: Summary to Director Prompt
       setPrompt(summary);
-      // Requirement 2: Scripts sync one-to-one to Camera Logic
       setPanelPrompts(scripts);
-      
-      // Auto-update grid if needed (optional but helpful)
       const count = scripts.length;
       if (count > gridRows * gridCols) {
-          // Adjust grid to fit at least the script count
           const nextSide = Math.ceil(Math.sqrt(count));
           setGridRows(nextSide);
           setGridCols(nextSide);
       }
+  };
+
+  const handleDownloadZip = async () => {
+    const selected = images.find(i => i.id === selectedImageId);
+    if (!selected || selected.nodeType !== 'render') {
+      alert("请先在画布上选择一个分镜组。");
+      return;
+    }
+
+    setGenerationStep("准备打包 ZIP...");
+    setIsGenerating(true);
+
+    try {
+      const zip = new JSZip();
+      const renderNodes = images.filter(i => i.nodeType === 'render');
+      const index = renderNodes.findIndex(i => i.id === selected.id) + 1;
+      const folderName = `镜头${index}`;
+      const folder = zip.folder(folderName);
+
+      const base64ToBlob = (b64: string) => {
+        const parts = b64.split(';base64,');
+        const byteCharacters = atob(parts[1]);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        return new Blob([byteArray], { type: 'image/png' });
+      };
+
+      // Full Grid
+      const fullGridBlob = base64ToBlob(selected.fullGridUrl || selected.url);
+      folder.file(`${folderName}_全景宫格.png`, fullGridBlob);
+
+      // Slices
+      if (selected.slices) {
+        selected.slices.forEach((sliceUrl, i) => {
+          const sliceBlob = base64ToBlob(sliceUrl);
+          folder.file(`${folderName}_分镜${i + 1}.png`, sliceBlob);
+        });
+      }
+
+      const content = await zip.generateAsync({ type: "blob" });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(content);
+      link.download = `${folderName}_分镜组.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error("ZIP Error:", err);
+      alert("ZIP 打包失败，请重试。");
+    } finally {
+      setIsGenerating(false);
+      setGenerationStep("");
+    }
   };
 
   return (
@@ -303,7 +354,7 @@ const App: React.FC = () => {
         <Canvas
             images={images} onSelect={(i) => { setSelectedImageId(i.id); setSelectedAssetId(undefined); }} 
             selectedId={selectedImageId} onDelete={handleDeleteNode} onUpdateNodePosition={handleUpdateNodePosition}
-            onDownloadAll={() => {}} assets={assets} onDeselectAll={() => { setSelectedImageId(undefined); setSelectedAssetId(undefined); }}
+            onDownloadAll={handleDownloadZip} assets={assets} onDeselectAll={() => { setSelectedImageId(undefined); setSelectedAssetId(undefined); }}
         />
         
         {isGenerating && (
