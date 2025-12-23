@@ -4,10 +4,7 @@ export enum AspectRatio {
   STANDARD = '4:3',
   PORTRAIT = '3:4',
   WIDE = '16:9',
-  MOBILE = '9:16',
-  CINEMA = '21:9',
-  PHOTO_LANDSCAPE = '3:2',
-  PHOTO_PORTRAIT = '2:3'
+  MOBILE = '9:16'
 }
 
 export enum PanelAspectRatio {

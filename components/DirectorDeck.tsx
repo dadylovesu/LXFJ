@@ -1,18 +1,15 @@
 
-import React, { useMemo } from 'react';
+import React from 'react';
 import { Button } from './Button';
 import { AspectRatio, ImageSize, PanelAspectRatio } from '../types';
-import { Settings2, GitMerge, Video, Layers, Zap, LayoutGrid, ChevronRight, ChevronLeft, XCircle, PlusCircle, Square, Wand2, Calculator, Info } from 'lucide-react';
+import { Settings2, GitMerge, Video, Layers, Zap, LayoutGrid, ChevronRight, ChevronLeft, XCircle, PlusCircle, Square, Wand2 } from 'lucide-react';
 
 interface DirectorDeckProps {
-  gridRows: number;
-  setGridRows: (r: number) => void;
-  gridCols: number;
-  setGridCols: (c: number) => void;
-  aspectRatio: AspectRatio | string;
-  setAspectRatio: (ar: AspectRatio | string) => void;
+  gridSize: number;
+  setGridSize: (s: number) => void;
+  aspectRatio: AspectRatio;
   panelAspectRatio: PanelAspectRatio;
-  setPanelAspectRatio: (ar: PanelAspectRatio) => void;
+  setPanelAspectRatio: (par: PanelAspectRatio) => void;
   imageSize: ImageSize;
   setImageSize: (size: ImageSize) => void;
   prompt: string;
@@ -28,12 +25,9 @@ interface DirectorDeckProps {
 }
 
 export const DirectorDeck: React.FC<DirectorDeckProps> = ({
-  gridRows,
-  setGridRows,
-  gridCols,
-  setGridCols,
+  gridSize,
+  setGridSize,
   aspectRatio,
-  setAspectRatio,
   panelAspectRatio,
   setPanelAspectRatio,
   imageSize,
@@ -59,48 +53,6 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
       }
   };
 
-  const calculatedTotalRatioString = useMemo(() => {
-    const [wStr, hStr] = panelAspectRatio.split(':');
-    const w = parseInt(wStr);
-    const h = parseInt(hStr);
-    const totalW = gridCols * w;
-    const totalH = gridRows * h;
-    
-    const gcd = (a: number, b: number): number => b === 0 ? a : gcd(b, a % b);
-    const common = gcd(totalW, totalH);
-    return `${totalW / common}:${totalH / common}`;
-  }, [gridRows, gridCols, panelAspectRatio]);
-
-  const engineBestFit = useMemo(() => {
-    const supported = [
-        { label: '1:1', val: 1.0 },
-        { label: '4:3', val: 1.333 },
-        { label: '3:4', val: 0.75 },
-        { label: '16:9', val: 1.777 },
-        { label: '9:16', val: 0.5625 }
-    ];
-
-    const [wStr, hStr] = calculatedTotalRatioString.split(':');
-    const target = parseInt(wStr) / parseInt(hStr);
-    
-    let best = supported[0];
-    let minDiff = Math.abs(target - best.val);
-    
-    for(const s of supported) {
-        const diff = Math.abs(target - s.val);
-        if(diff < minDiff) {
-            minDiff = diff;
-            best = s;
-        }
-    }
-    return best.label;
-  }, [calculatedTotalRatioString]);
-
-  // Sync the engine's real aspect ratio whenever calculation changes
-  React.useEffect(() => {
-      setAspectRatio(engineBestFit);
-  }, [engineBestFit, setAspectRatio]);
-
   return (
     <div className="flex flex-col h-full space-y-6 select-none">
       <div className="flex items-center justify-between border-t border-zinc-800/80 pt-6 mt-2">
@@ -120,35 +72,28 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
       <div className="space-y-4">
         <label className="text-[9px] text-zinc-600 font-mono uppercase tracking-[0.15em] flex items-center gap-2.5">
             <span className="w-1 h-3 bg-zinc-800 rounded-full"></span>
-            构图与宫格 (GRID & COMP)
+            构图与规模 (COMPOSITION)
         </label>
         
-        <div className="space-y-4 p-4 bg-zinc-900/40 border border-zinc-800/40 rounded-sm backdrop-blur-md">
-            {/* Grid Size */}
+        <div className="space-y-5 p-4 bg-zinc-900/40 border border-zinc-800/40 rounded-sm backdrop-blur-md">
+            {/* NxN Grid Size */}
             <div className="space-y-3">
                 <div className="flex justify-between items-center">
-                   <span className="text-[8px] text-zinc-600 font-mono uppercase tracking-widest">宫格行列 (ROWS x COLS)</span>
-                   <span className="text-[10px] text-cine-accent font-mono font-bold">{gridRows} x {gridCols}</span>
+                   <span className="text-[8px] text-zinc-600 font-mono uppercase tracking-widest">宫格规模 (GRID SIZE)</span>
+                   <span className="text-[10px] text-cine-accent font-mono font-bold">{gridSize} x {gridSize}</span>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                    <div className="flex items-center bg-black/40 border border-zinc-800 rounded-sm p-1">
-                        <button onClick={() => setGridRows(Math.max(1, gridRows - 1))} className="p-1 text-zinc-600 hover:text-white"><ChevronLeft size={14} /></button>
-                        <div className="flex-1 text-center font-mono text-xs text-zinc-300">R: {gridRows}</div>
-                        <button onClick={() => setGridRows(Math.min(4, gridRows + 1))} className="p-1 text-zinc-600 hover:text-white"><ChevronRight size={14} /></button>
-                    </div>
-                    <div className="flex items-center bg-black/40 border border-zinc-800 rounded-sm p-1">
-                        <button onClick={() => setGridCols(Math.max(1, gridCols - 1))} className="p-1 text-zinc-600 hover:text-white"><ChevronLeft size={14} /></button>
-                        <div className="flex-1 text-center font-mono text-xs text-zinc-300">C: {gridCols}</div>
-                        <button onClick={() => setGridCols(Math.min(4, gridCols + 1))} className="p-1 text-zinc-600 hover:text-white"><ChevronRight size={14} /></button>
-                    </div>
+                <div className="flex items-center bg-black/40 border border-zinc-800 rounded-sm p-1.5">
+                    <button onClick={() => setGridSize(Math.max(1, gridSize - 1))} className="p-1 text-zinc-600 hover:text-white transition-colors"><ChevronLeft size={16} /></button>
+                    <div className="flex-1 text-center font-mono text-[11px] text-zinc-300 tracking-widest">{gridSize} x {gridSize} 方阵</div>
+                    <button onClick={() => setGridSize(Math.min(4, gridSize + 1))} className="p-1 text-zinc-600 hover:text-white transition-colors"><ChevronRight size={16} /></button>
                 </div>
             </div>
 
-            {/* Panel Aspect Ratio - NEW REQUIREMENT */}
+            {/* Single Panel Aspect Ratio */}
             <div className="space-y-3 pt-3 border-t border-zinc-800/50">
                 <div className="flex justify-between items-center">
-                   <span className="text-[8px] text-zinc-600 font-mono uppercase tracking-widest">单分镜比例 (PANEL RATIO)</span>
-                   <span className="text-[10px] text-white font-mono font-bold">{panelAspectRatio}</span>
+                   <span className="text-[8px] text-zinc-600 font-mono uppercase tracking-widest">单分镜构图比例 (PANEL AR)</span>
+                   <span className="text-[9px] text-cine-accent font-mono font-bold">{panelAspectRatio}</span>
                 </div>
                 <div className="grid grid-cols-4 gap-1.5">
                     {Object.values(PanelAspectRatio).map((par) => (
@@ -156,7 +101,7 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
                             key={par}
                             onClick={() => setPanelAspectRatio(par)}
                             className={`text-[9px] h-7 border rounded-[1px] font-mono transition-all duration-300 flex items-center justify-center ${
-                                panelAspectRatio === par ? 'border-cine-accent text-cine-accent bg-cine-accent/5' : 'border-zinc-800/60 text-zinc-700 hover:border-zinc-700 hover:text-zinc-500 bg-transparent'
+                                panelAspectRatio === par ? 'border-cine-accent text-cine-accent bg-cine-accent/10 shadow-[0_0_10px_rgba(255,122,0,0.1)]' : 'border-zinc-800/60 text-zinc-700 hover:border-zinc-700 hover:text-zinc-500 bg-transparent'
                             }`}
                         >
                             {par}
@@ -165,27 +110,12 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
                 </div>
             </div>
 
-            {/* Optimized Result Display */}
-            <div className="space-y-2 pt-3 border-t border-zinc-800/50">
-                <div className="flex justify-between items-center mb-1">
-                    <span className="text-[8px] text-zinc-600 font-mono uppercase tracking-widest flex items-center gap-1.5">
-                        <Calculator size={10} /> 适配比例计算 (OPTIMIZER)
-                    </span>
-                </div>
-                <div className="bg-black/40 border border-zinc-800 rounded-[2px] p-2 flex items-center justify-between">
-                    <div className="flex flex-col gap-0.5">
-                        <span className="text-[7px] text-zinc-600 font-mono uppercase">理论总比例 (Calculated)</span>
-                        <span className="text-[11px] text-white font-bold font-mono tracking-wider">{calculatedTotalRatioString}</span>
-                    </div>
-                    <div className="w-[1px] h-6 bg-zinc-800"></div>
-                    <div className="flex flex-col gap-0.5 items-end">
-                        <span className="text-[7px] text-zinc-600 font-mono uppercase">引擎适配比例 (Target)</span>
-                        <div className="flex items-center gap-2">
-                            <span className="text-[11px] text-cine-accent font-black font-mono tracking-wider">{engineBestFit}</span>
-                            <Info size={10} className="text-zinc-700 cursor-help" title={`基于宫格 ${gridRows}x${gridCols} 与单分镜比例 ${panelAspectRatio} 自动匹配最接近的渲染引擎比例。`} />
-                        </div>
-                    </div>
-                </div>
+            {/* Auto Container Aspect Ratio Info */}
+            <div className="flex items-center justify-between pt-3 border-t border-zinc-800/50">
+               <span className="text-[8px] text-zinc-600 font-mono uppercase tracking-widest">输出画面比例 (AUTO)</span>
+               <div className="px-2 py-0.5 bg-zinc-800 rounded-[1px] text-[9px] font-mono text-zinc-400 border border-zinc-700">
+                  {aspectRatio}
+               </div>
             </div>
         </div>
       </div>
@@ -194,11 +124,11 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
       <div className="space-y-2.5">
         <label className="text-[9px] text-zinc-600 font-mono uppercase tracking-[0.15em] flex items-center gap-2.5">
             <span className="w-1 h-3 bg-zinc-800 rounded-full"></span>
-            渲染质量 (ENGINE)
+            输出引擎 (ENGINE)
         </label>
         <div className="p-3 bg-black/40 border border-zinc-800/60 rounded-sm space-y-3">
             <div className="flex items-center justify-between">
-                <span className="text-[9px] text-zinc-600 font-mono uppercase tracking-widest">GEMINI 3 PRO</span>
+                <span className="text-[9px] text-zinc-600 font-mono uppercase tracking-widest">GEN 3 PRO ENGINE</span>
                 <span className="text-[9px] text-cine-accent font-bold font-mono">{getQualityLabel()}</span>
             </div>
             <div className="grid grid-cols-3 gap-1.5">
@@ -250,15 +180,31 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
         </div>
       </div>
 
+      {/* Tools Row */}
       <div className="grid grid-cols-2 gap-2">
-          <Button variant="primary" size="sm" onClick={onOpenScriptDeconstruct} disabled={isGenerating} className="text-[9px] h-10 border-dashed border-zinc-800">
-              <Wand2 size={12} className="mr-2" /> 脚本拆解
+          <Button 
+            variant="primary" 
+            size="sm" 
+            onClick={onOpenScriptDeconstruct} 
+            disabled={isGenerating} 
+            className="text-[9px] h-10 border-dashed border-zinc-800 group"
+          >
+              <Wand2 size={12} className="mr-2 text-zinc-500 group-hover:text-cine-accent transition-colors" /> 
+              智能脚本拆解
           </Button>
-          <Button variant="primary" size="sm" onClick={onGenerateCamera} disabled={isGenerating || !prompt.trim()} className="text-[9px] h-10 border-dashed border-zinc-800">
-              <Video size={12} className="mr-2" /> 镜头逻辑
+          <Button 
+            variant="primary" 
+            size="sm" 
+            onClick={onGenerateCamera} 
+            disabled={isGenerating || !prompt.trim()} 
+            className="text-[9px] h-10 border-dashed border-zinc-800 group"
+          >
+              <Video size={12} className="mr-2 text-zinc-500 group-hover:text-cine-accent transition-colors" /> 
+              分镜镜头逻辑
           </Button>
       </div>
 
+      {/* Action Button Group */}
       <div className="flex gap-2">
         {isGenerating && onStop ? (
             <Button variant="primary" className="flex-1 tracking-[0.25em] h-12 border-red-900/30 text-red-500 hover:bg-red-500/10" onClick={onStop}>

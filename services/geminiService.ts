@@ -18,9 +18,6 @@ const getClient = () => {
   return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
-/**
- * Helper to wrap Gemini API calls with exponential backoff retry logic.
- */
 async function withRetry<T>(operation: () => Promise<T>, maxRetries = 3): Promise<T> {
   let lastError: any;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -41,17 +38,6 @@ async function withRetry<T>(operation: () => Promise<T>, maxRetries = 3): Promis
   }
   throw lastError;
 }
-
-const validateAspectRatio = (ar: AspectRatio | string): string => {
-  const supported = ["1:1", "3:4", "4:3", "9:16", "16:9"];
-  if (supported.includes(ar)) return ar;
-  switch (ar) {
-    case AspectRatio.CINEMA: return "16:9";
-    case AspectRatio.PHOTO_LANDSCAPE: return "4:3";
-    case AspectRatio.PHOTO_PORTRAIT: return "3:4";
-    default: return "16:9";
-  }
-};
 
 const sliceImageGrid = (base64Data: string, rows: number, cols: number): Promise<string[]> => {
   return new Promise((resolve, reject) => {
@@ -91,11 +77,10 @@ export interface ReferenceImageData {
 
 export const generateMultiViewGrid = async (
   prompt: string,
-  gridRows: number, 
-  gridCols: number, 
-  aspectRatio: AspectRatio | string,
-  imageSize: ImageSize, 
+  gridSize: number, 
   panelAspectRatio: PanelAspectRatio,
+  containerAspectRatio: AspectRatio,
+  imageSize: ImageSize, 
   categorizedRefs: ReferenceImageData[] = [],
   contextImage?: string,
   panelInstructions?: string[],
@@ -103,45 +88,54 @@ export const generateMultiViewGrid = async (
 ): Promise<{ fullImage: string, slices: string[] }> => {
   await ensureApiKey();
   
-  const totalViews = gridRows * gridCols;
-  const gridType = `${gridRows}x${gridCols}`;
+  const totalViews = gridSize * gridSize;
+  const gridType = `${gridSize}x${gridSize}`;
+
+  // 根据比例类型生成特定的构图强化指令
+  const isVertical = panelAspectRatio.includes('3:4') || panelAspectRatio.includes('9:16') || panelAspectRatio.includes('2:3');
+  const isSquare = panelAspectRatio === '1:1';
+  
+  let compositionInstruction = "";
+  if (isVertical) {
+    compositionInstruction = `MANDATORY COMPOSITION: Use NATIVE VERTICAL FRAMING for each panel. Every individual shot must be a portrait-style cinematic composition. NO HORIZONTAL LETTERBOXING. Ensure characters and action fill the ${panelAspectRatio} height.`;
+  } else if (isSquare) {
+    compositionInstruction = `MANDATORY COMPOSITION: Use NATIVE SQUARE FRAMING. Center-weighted cinematic composition for each of the ${totalViews} panels.`;
+  } else {
+    compositionInstruction = `MANDATORY COMPOSITION: Use NATIVE WIDESCREEN CINEMATOGRAPHY for each ${panelAspectRatio} panel.`;
+  }
 
   const roles = categorizedRefs.filter(r => r.category === 'role');
   const bgs = categorizedRefs.filter(r => r.category === 'background');
   const props = categorizedRefs.filter(r => r.category === 'prop');
 
-  let systemPrompt = `[CORE TASK]: AS A PROFESSIONAL CINEMATIC DIRECTOR, GENERATE A SINGLE ${gridType} STORYBOARD GRID.
+  let systemPrompt = `[CORE TASK]: GENERATE A SINGLE ${gridType} STORYBOARD GRID.
 
-[COMPOSITION FORMATTING]:
-- EACH INDIVIDUAL PANEL MUST BE IN ${panelAspectRatio} ASPECT RATIO.
-- THE FINAL IMAGE MUST BE FILLED SEAMLESSLY WITH THESE ${totalViews} PANELS.
-- ENSURE NO CROPPING OF THE PANEL CONTENT.
+[STRICT LAYOUT RULE]:
+- Exactly ${gridSize} rows and ${gridSize} columns.
+- THE FULL IMAGE RATIO IS ${containerAspectRatio}.
+- EACH INDIVIDUAL PANEL RATIO IS ${panelAspectRatio}.
 
-[CHARACTER ANATOMY FIDELITY]:
-1. DIRECTLY INHERIT THE PHYSICAL STRUCTURE AND ANATOMY FROM THE PROVIDED ROLE IMAGES.
-2. DO NOT ADD HUMAN LIMBS (ARMS, LEGS) OR HUMAN FEATURES TO ENTITIES THAT DO NOT HAVE THEM IN THE REFERENCE. 
-3. IF A CHARACTER IS A CARTOON OBJECT OR NON-HUMANOID, MAINTAIN ITS ORIGINAL SHAPE STRICTLY.
+[COMPOSITION RULE]:
+${compositionInstruction}
+- DO NOT stretch, distort, or add black bars.
+- THE CONTENT OF EACH PANEL MUST NATIVELY MATCH THE ${panelAspectRatio} SHAPE.
 
 [ENTITY MAPPING]:
-${roles.map((r, i) => `- IMAGE_PART_${i}: Visual source for "ROLE ${r.roleIndex}".`).join('\n')}
-${bgs.map((b, i) => `- IMAGE_PART_${roles.length + i}: Environment visual anchor.`).join('\n')}
-${props.map((p, i) => `- IMAGE_PART_${roles.length + bgs.length + i}: Prop visual anchor.`).join('\n')}
+${roles.map((r, i) => `- IMAGE_PART_${i}: ROLE ${r.roleIndex} visual identity.`).join('\n')}
+${bgs.map((b, i) => `- IMAGE_PART_${roles.length + i}: Environment style.`).join('\n')}
+${props.map((p, i) => `- IMAGE_PART_${roles.length + bgs.length + i}: Prop detail.`).join('\n')}
 
-[STORYBOARD CONTENT]:
-- MAIN THEME: "${prompt}"
-- LAYOUT: Exactly ${totalViews} distinct panels in a ${gridType} grid.
+[SCENE]: "${prompt}"
 
-${collageRef ? `\n[COMPOSITION REFERENCE]: Use the provided Collage image to guide camera angles.` : ''}
-${panelInstructions && panelInstructions.length > 0 ? `\n[PANEL SPECIFICS]:\n${panelInstructions.map((instr, idx) => `Panel ${idx + 1}: ${instr}`).join('\n')}` : ''}
+${collageRef ? `\n[ACTION REF]: Match the camera angles in the provided collage.` : ''}
+${panelInstructions && panelInstructions.length > 0 ? `\n[PANEL DETAILS]:\n${panelInstructions.map((instr, idx) => `Panel ${idx + 1}: ${instr}`).join('\n')}` : ''}
 
-[FINAL STYLE]: Ultra-realistic cinematic render, 35mm lens. No text.`;
+[STYLE]: Hyper-realistic cinematic film, 35mm, master lighting.`;
 
   const parts: any[] = [];
-  
   roles.forEach(r => parts.push({ inlineData: { mimeType: r.mimeType, data: r.data } }));
   bgs.forEach(b => parts.push({ inlineData: { mimeType: b.mimeType, data: b.data } }));
   props.forEach(p => parts.push({ inlineData: { mimeType: p.mimeType, data: p.data } }));
-
   if (collageRef) parts.push({ inlineData: { mimeType: 'image/png', data: collageRef.url.split(',')[1] } });
   if (contextImage) parts.push({ inlineData: { mimeType: 'image/png', data: contextImage.split(',')[1] } });
   
@@ -155,7 +149,7 @@ ${panelInstructions && panelInstructions.length > 0 ? `\n[PANEL SPECIFICS]:\n${p
           contents: { parts },
           config: {
             imageConfig: {
-              aspectRatio: validateAspectRatio(aspectRatio) as any,
+              aspectRatio: containerAspectRatio as any,
               imageSize: imageSize as any 
             }
           }
@@ -167,8 +161,8 @@ ${panelInstructions && panelInstructions.length > 0 ? `\n[PANEL SPECIFICS]:\n${p
       if (part.inlineData) fullImageBase64 = `data:image/png;base64,${part.inlineData.data}`;
     }
 
-    if (!fullImageBase64) throw new Error("Render engine returned no image data.");
-    const panels = await sliceImageGrid(fullImageBase64, gridRows, gridCols);
+    if (!fullImageBase64) throw new Error("No image generated.");
+    const panels = await sliceImageGrid(fullImageBase64, gridSize, gridSize);
     return { fullImage: fullImageBase64, slices: panels };
   } catch (error: any) {
     console.error("Grid gen error:", error);
@@ -189,9 +183,9 @@ export const editImage = async (
   const parts: any[] = [{ inlineData: { mimeType: 'image/png', data: cleanBase64 } }];
   if (refImageBase64) parts.push({ inlineData: { mimeType: 'image/png', data: refImageBase64.split(',')[1] } });
   
-  parts.push({ text: `MANDATORY: Edit this storyboard panel. 
-1. STRICTLY ADHERE TO THE ORIGINAL CHARACTER'S ANATOMY. 
-2. Edit Request: "${editPrompt}".` });
+  parts.push({ text: `EDIT TASK: Modify this ${aspectRatio} cinematic shot.
+REQUEST: "${editPrompt}"
+RULE: Maintain consistent character features and the original ${aspectRatio} aspect ratio content framing.` });
 
   try {
     const response = await withRetry<GenerateContentResponse>(() => {
@@ -201,7 +195,7 @@ export const editImage = async (
           contents: { parts },
           config: {
             imageConfig: {
-              aspectRatio: validateAspectRatio(aspectRatio) as any,
+              aspectRatio: aspectRatio as any,
               imageSize: modelName === 'gemini-3-pro-image-preview' ? imageSize as any : undefined
             }
           }
@@ -226,11 +220,13 @@ export const generateCameraSuggestions = async (prompt: string, panelCount: numb
                 model: 'gemini-3-flash-preview',
                 contents: { 
                   parts: [{ 
-                    text: `你是一个世界级的电影摄影指导（DoP）。
-                    任务：基于以下剧本/场景描述，规划 ${panelCount} 个电影级分镜。
+                    text: `你是一个世界级的电影摄影指导。基于场景描述，规划 ${panelCount} 个电影级分镜。
+                    
                     场景：${prompt}
+                    
                     输出格式参考：
                     “清晨金辉，全景，黄金分割构图，35mm焦段，低角度仰拍。角色1位于画面左侧偏下，面向右前方，画面占比30%。”
+                    
                     请输出 ${panelCount} 行纯文本：` 
                   }] 
                 }
@@ -278,8 +274,12 @@ export const generateScriptLines = async (instruction: string, count: number, at
                 contents: { 
                   parts: [
                     { text: `你是一个电影分镜脚本师。拆解为 ${count} 条独立指令。
-                    输入内容：${attachmentText || ''}
-                    附加指令：${instruction}` }
+                    
+                    输入内容：
+                    ${attachmentText || ''}
+                    
+                    附加指令：
+                    ${instruction}` }
                   ] 
                 }
             });
@@ -301,6 +301,7 @@ export const generateDirectorSummary = async (scripts: string[]): Promise<string
                 contents: { 
                   parts: [
                     { text: `生成剧情梗概。
+                    
                     分镜列表：
                     ${scripts.join('\n')}` }
                   ] 

@@ -7,7 +7,7 @@ import { Inspector } from './components/Inspector';
 import { CameraEditor } from './components/CameraEditor';
 import { CollageEditor } from './components/CollageEditor';
 import { ScriptEditor } from './components/ScriptEditor';
-import { Asset, GeneratedImage, AspectRatio, ImageSize, AssetCategory, CollageData, PanelAspectRatio } from './types';
+import { Asset, GeneratedImage, AspectRatio, PanelAspectRatio, ImageSize, AssetCategory, CollageData } from './types';
 import { generateMultiViewGrid, fileToBase64, enhancePrompt, analyzeAsset, ReferenceImageData, generateCameraMovement, editImage } from './services/geminiService';
 import { saveToStorage, loadFromStorage, clearStorage } from './services/persistenceService';
 import { AlertCircle, X as XIcon, Trash2, LayoutGrid } from 'lucide-react';
@@ -23,10 +23,9 @@ const App: React.FC = () => {
   const [selectedImageId, setSelectedImageId] = useState<string | undefined>(undefined);
   const [selectedAssetId, setSelectedAssetId] = useState<string | undefined>(undefined);
   
-  const [gridRows, setGridRows] = useState(2);
-  const [gridCols, setGridCols] = useState(2);
-  const [aspectRatio, setAspectRatio] = useState<AspectRatio | string>(AspectRatio.WIDE);
+  const [gridSize, setGridSize] = useState(2);
   const [panelAspectRatio, setPanelAspectRatio] = useState<PanelAspectRatio>(PanelAspectRatio.P16_9);
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>(AspectRatio.WIDE);
   const [imageSize, setImageSize] = useState<ImageSize>(ImageSize.K4);
   const [prompt, setPrompt] = useState<string>('');
   const [panelPrompts, setPanelPrompts] = useState<string[]>([]);
@@ -43,6 +42,19 @@ const App: React.FC = () => {
 
   const abortControllerRef = useRef<AbortController | null>(null);
 
+  // 关键修复：对于 N x N 宫格，容器比例必须严格匹配单格比例
+  useEffect(() => {
+    switch (panelAspectRatio) {
+      case PanelAspectRatio.P16_9: setAspectRatio(AspectRatio.WIDE); break;      // 16:9
+      case PanelAspectRatio.P9_16: setAspectRatio(AspectRatio.MOBILE); break;    // 9:16
+      case PanelAspectRatio.P3_4: setAspectRatio(AspectRatio.PORTRAIT); break;   // 3:4
+      case PanelAspectRatio.P4_3: setAspectRatio(AspectRatio.STANDARD); break;   // 4:3
+      case PanelAspectRatio.P2_3: setAspectRatio(AspectRatio.PORTRAIT); break;   // 2:3 -> 3:4 (最接近)
+      case PanelAspectRatio.P3_2: setAspectRatio(AspectRatio.STANDARD); break;   // 3:2 -> 4:3 (最接近)
+      case PanelAspectRatio.P1_1: setAspectRatio(AspectRatio.SQUARE); break;     // 1:1
+    }
+  }, [panelAspectRatio]);
+
   useEffect(() => {
     loadFromStorage<GeneratedImage[]>('cine_images').then(saved => {
         if (saved) setImages(saved);
@@ -57,6 +69,31 @@ const App: React.FC = () => {
     setHistory(prev => [...prev, images].slice(-30)); 
     setImages(newImages);
   }, [images]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedImageId) {
+        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+        handleDeleteNode(selectedImageId);
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+        e.preventDefault();
+        undo();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedImageId, history, images]);
+
+  const undo = useCallback(() => {
+    if (history.length > 0) {
+      const prev = history[history.length - 1];
+      setImages(prev);
+      setHistory(prevStack => prevStack.slice(0, -1));
+      setSelectedImageId(undefined);
+    }
+  }, [history]);
 
   const handleDeleteNode = useCallback((id: string) => {
     updateImagesWithHistory(images.filter(i => i.id !== id));
@@ -93,6 +130,7 @@ const App: React.FC = () => {
             return a;
         });
     });
+    if (selectedAssetId === id) setSelectedAssetId(undefined);
   };
 
   const handleGenerate = async () => {
@@ -125,7 +163,7 @@ const App: React.FC = () => {
       }
 
       const finalResult = await generateMultiViewGrid(
-          prompt, gridRows, gridCols, aspectRatio, imageSize, panelAspectRatio,
+          prompt, gridSize, panelAspectRatio, aspectRatio, imageSize, 
           referenceData, previousContextImage, panelPrompts, activeCollage || undefined
       );
       
@@ -139,8 +177,8 @@ const App: React.FC = () => {
           prompt,
           textData: prompt, 
           assetIds: assets.map(a => a.id), 
-          aspectRatio: typeof aspectRatio === 'string' ? aspectRatio : String(aspectRatio),
-          panelAspectRatio: panelAspectRatio,
+          aspectRatio, // 这里同步的是自动适配后的容器比例
+          panelAspectRatio,
           timestamp: Date.now(),
           nodeType: 'render',
           parentId: parentNode?.id, 
@@ -148,8 +186,8 @@ const App: React.FC = () => {
           cameraDescription: cameraMove,
           slices: finalResult.slices,
           sliceHistory: {}, 
-          gridRows,
-          gridCols
+          gridRows: gridSize,
+          gridCols: gridSize
       };
 
       updateImagesWithHistory([...images, finalNode]);
@@ -169,6 +207,7 @@ const App: React.FC = () => {
       const image = images.find(img => img.id === imageId);
       if (!image || !image.slices) return;
       const model = usePro ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
+      // 编辑单图时也应保持单图比例
       const newSliceUrl = await editImage(image.slices[sliceIndex], editPrompt, model, image.panelAspectRatio || image.aspectRatio, refImage, targetImageSize);
       const newImages = images.map(img => {
         if (img.id === imageId) {
@@ -207,38 +246,64 @@ const App: React.FC = () => {
       setPrompt(summary);
       setPanelPrompts(scripts);
       const count = scripts.length;
-      if (count > gridRows * gridCols) {
+      if (count > gridSize * gridSize) {
           const nextSide = Math.ceil(Math.sqrt(count));
-          setGridRows(nextSide);
-          setGridCols(nextSide);
+          setGridSize(nextSide);
       }
   };
 
   const handleDownloadZip = async () => {
     const selected = images.find(i => i.id === selectedImageId);
     if (!selected || selected.nodeType !== 'render') {
-      alert("请先选择一个分镜组。");
+      alert("请先在画布上选择一个分镜组。");
       return;
     }
+
+    setGenerationStep("准备打包 ZIP...");
     setIsGenerating(true);
+
     try {
       const zip = new JSZip();
-      const folderName = `ShotGroup_${selected.id.slice(0, 8)}`;
+      const renderNodes = images.filter(i => i.nodeType === 'render');
+      const index = renderNodes.findIndex(i => i.id === selected.id) + 1;
+      const folderName = `镜头${index}`;
       const folder = zip.folder(folderName);
+
       const base64ToBlob = (b64: string) => {
-        const byteCharacters = atob(b64.split(',')[1]);
+        const parts = b64.split(';base64,');
+        const byteCharacters = atob(parts[1]);
         const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) byteNumbers[i] = byteCharacters.charCodeAt(i);
-        return new Blob([new Uint8Array(byteNumbers)], { type: 'image/png' });
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        return new Blob([byteArray], { type: 'image/png' });
       };
-      folder.file(`FullGrid.png`, base64ToBlob(selected.fullGridUrl || selected.url));
-      selected.slices?.forEach((s, i) => folder.file(`Panel_${i + 1}.png`, base64ToBlob(s)));
+
+      const fullGridBlob = base64ToBlob(selected.fullGridUrl || selected.url);
+      folder.file(`${folderName}_全景宫格.png`, fullGridBlob);
+
+      if (selected.slices) {
+        selected.slices.forEach((sliceUrl, i) => {
+          const sliceBlob = base64ToBlob(sliceUrl);
+          folder.file(`${folderName}_分镜${i + 1}.png`, sliceBlob);
+        });
+      }
+
       const content = await zip.generateAsync({ type: "blob" });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(content);
-      link.download = `${folderName}.zip`;
+      link.download = `${folderName}_分镜组.zip`;
+      document.body.appendChild(link);
       link.click();
-    } catch (err) { alert("打包失败"); } finally { setIsGenerating(false); }
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error("ZIP Error:", err);
+      alert("ZIP 打包失败，请重试。");
+    } finally {
+      setIsGenerating(false);
+      setGenerationStep("");
+    }
   };
 
   return (
@@ -261,10 +326,27 @@ const App: React.FC = () => {
                 selectedAssetId={selectedAssetId} onOpenCollage={() => setIsCollageEditorOpen(true)}
             />
 
+            <div className="px-2">
+                {activeCollage ? (
+                  <div className="p-3 bg-cine-accent/10 border border-cine-accent/30 rounded-sm space-y-2">
+                     <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-cine-accent font-bold uppercase tracking-widest flex items-center gap-2">
+                           <LayoutGrid size={12} /> 镜头组参考 (ACTIVE)
+                        </span>
+                        <button onClick={() => setActiveCollage(null)} className="text-cine-accent hover:text-white"><XIcon size={12} /></button>
+                     </div>
+                     <img src={activeCollage.url} className="w-full aspect-video object-contain bg-black rounded-sm border border-cine-accent/20" />
+                  </div>
+                ) : (
+                  <div className="p-3 bg-zinc-900/40 border border-zinc-800/40 border-dashed rounded-sm text-center">
+                     <p className="text-[9px] text-zinc-600 font-mono">未激活镜头组参考</p>
+                  </div>
+                )}
+            </div>
+
             <DirectorDeck 
-                gridRows={gridRows} setGridRows={setGridRows}
-                gridCols={gridCols} setGridCols={setGridCols}
-                aspectRatio={aspectRatio} setAspectRatio={setAspectRatio}
+                gridSize={gridSize} setGridSize={setGridSize}
+                aspectRatio={aspectRatio} 
                 panelAspectRatio={panelAspectRatio} setPanelAspectRatio={setPanelAspectRatio}
                 imageSize={imageSize} setImageSize={setImageSize}
                 prompt={prompt} setPrompt={setPrompt}
@@ -304,7 +386,7 @@ const App: React.FC = () => {
 
         <CameraEditor 
           isOpen={isCameraEditorOpen} onClose={() => setIsCameraEditorOpen(false)}
-          rows={gridRows} cols={gridCols} mainPrompt={prompt}
+          rows={gridSize} cols={gridSize} mainPrompt={prompt}
           initialPrompts={panelPrompts} onSave={(newPrompts) => setPanelPrompts(newPrompts)}
         />
 
@@ -315,7 +397,7 @@ const App: React.FC = () => {
 
         <ScriptEditor 
           isOpen={isScriptEditorOpen} onClose={() => setIsScriptEditorOpen(false)}
-          defaultPanelCount={gridRows * gridCols} onApplyScripts={handleApplyScripts}
+          defaultPanelCount={gridSize * gridSize} onApplyScripts={handleApplyScripts}
         />
       </main>
 

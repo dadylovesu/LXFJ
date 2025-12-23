@@ -78,6 +78,13 @@ const Node = memo(({ image, selected, onSelect, onDelete, onMouseDown, allAssets
     const isRenderNode = image.nodeType === 'render';
     const hasSlices = isRenderNode && image.slices && image.slices.length > 0;
     const cols = image.gridCols || 2;
+    
+    // 关键修复：确保预览容器比例与 PanelAspectRatio 逻辑一致
+    const nodeAspectRatio = useMemo(() => {
+        // 如果是单图，使用其自身的比例
+        if (image.aspectRatio) return image.aspectRatio.replace(':', '/');
+        return '16/9';
+    }, [image.aspectRatio]);
 
     return (
         <div 
@@ -176,8 +183,8 @@ const Node = memo(({ image, selected, onSelect, onDelete, onMouseDown, allAssets
 
                         {/* Main Image / Grid */}
                         <div 
-                            className="relative w-full bg-zinc-900 rounded-sm border border-zinc-800 overflow-hidden pointer-events-auto"
-                            style={{ aspectRatio: image.aspectRatio ? image.aspectRatio.replace(':', '/') : '16/9' }}
+                            className="relative w-full bg-zinc-900 rounded-sm border border-zinc-800 overflow-hidden pointer-events-auto shadow-inner"
+                            style={{ aspectRatio: nodeAspectRatio }}
                         >
                             {expandedSlice ? (
                                 <div className="w-full h-full relative group/expanded">
@@ -198,13 +205,12 @@ const Node = memo(({ image, selected, onSelect, onDelete, onMouseDown, allAssets
                                         {image.slices!.map((sliceUrl, idx) => (
                                             <div 
                                                 key={idx} 
-                                                className="relative w-full h-full overflow-hidden cursor-pointer group/slice"
+                                                className="relative w-full h-full overflow-hidden cursor-pointer group/slice border border-zinc-800/20"
                                                 onClick={(e) => { e.stopPropagation(); setExpandedSlice(sliceUrl); onSelect(); }}
                                             >
                                                 <img src={sliceUrl} className="w-full h-full object-cover group-hover/slice:scale-110 transition-transform duration-500" />
-                                                <div className="absolute inset-0 bg-white/0 group-hover/slice:bg-white/10 transition-colors pointer-events-none" />
+                                                <div className="absolute inset-0 bg-white/0 group-hover/slice:bg-white/5 transition-colors pointer-events-none" />
                                                 
-                                                {/* History Indicator Overlay */}
                                                 {image.sliceHistory?.[idx] && image.sliceHistory[idx].length > 0 && (
                                                     <div className="absolute bottom-1 right-1 px-1 py-0.5 bg-black/70 backdrop-blur-md rounded-[1px] text-cine-accent opacity-0 group-hover/slice:opacity-100 transition-opacity">
                                                         <History size={8} />
@@ -281,6 +287,11 @@ const DetailViewOverlay: React.FC<{ image: GeneratedImage; onClose: () => void }
     const [expandedSlice, setExpandedSlice] = useState<string | null>(null);
     const hasSlices = image.slices && image.slices.length > 0;
     const cols = image.gridCols || 2;
+    
+    const containerAspectRatio = useMemo(() => {
+        if (image.aspectRatio) return image.aspectRatio.replace(':', '/');
+        return '16/9';
+    }, [image.aspectRatio]);
 
     return (
         <div className="absolute inset-0 bg-black/95 z-50 flex flex-col animate-in fade-in zoom-in-95 duration-200">
@@ -299,7 +310,7 @@ const DetailViewOverlay: React.FC<{ image: GeneratedImage; onClose: () => void }
                 <div className="relative w-full max-w-5xl h-full flex flex-col justify-center">
                     <div 
                         className="relative w-full bg-zinc-900 border border-zinc-800 shadow-2xl rounded-sm overflow-hidden mx-auto"
-                        style={{ aspectRatio: image.aspectRatio ? image.aspectRatio.replace(':', '/') : '16/9', maxHeight: '80vh' }}
+                        style={{ aspectRatio: containerAspectRatio, maxHeight: '80vh' }}
                     >
                         {expandedSlice ? (
                              <div className="w-full h-full relative group">
@@ -350,7 +361,6 @@ export const Canvas: React.FC<CanvasProps> = ({ images, assets, onSelect, select
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDraggingCanvas, setIsDraggingCanvas] = useState(false);
   
-  // 核心优化：局部拖拽状态。只在 Canvas 内部管理当前的拖拽坐标，不触发全局 App 刷新
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
   const [localDragPos, setLocalDragPos] = useState<{x: number, y: number} | null>(null);
   
@@ -374,7 +384,6 @@ export const Canvas: React.FC<CanvasProps> = ({ images, assets, onSelect, select
   };
 
   const handleNodeMouseDown = useCallback((e: React.MouseEvent, id: string) => {
-      // 防止文字误选
       window.getSelection()?.removeAllRanges();
       setDraggingNodeId(id);
       
@@ -394,7 +403,6 @@ export const Canvas: React.FC<CanvasProps> = ({ images, assets, onSelect, select
       if (isDraggingCanvas) {
           setPan(prev => ({ x: prev.x + dx, y: prev.y + dy }));
       } else if (draggingNodeId && localDragPos) {
-          // 优化：仅更新局部状态，大幅提升帧率
           setLocalDragPos(prev => prev ? ({
               x: prev.x + (dx / scale),
               y: prev.y + (dy / scale)
@@ -404,7 +412,6 @@ export const Canvas: React.FC<CanvasProps> = ({ images, assets, onSelect, select
 
   const handleMouseUp = () => {
       if (draggingNodeId && localDragPos) {
-          // 在松开鼠标时，一次性同步给全局状态
           onUpdateNodePosition(draggingNodeId, localDragPos.x, localDragPos.y);
       }
       setIsDraggingCanvas(false);
@@ -433,7 +440,6 @@ export const Canvas: React.FC<CanvasProps> = ({ images, assets, onSelect, select
       setDetailViewItem(img);
   };
 
-  // 渲染优化：根据拖拽状态实时合并坐标
   const renderedNodes = useMemo(() => {
       return images.map(img => {
           if (img.id === draggingNodeId && localDragPos) {
