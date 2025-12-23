@@ -6,6 +6,7 @@ import { Canvas } from './components/Canvas';
 import { Inspector } from './components/Inspector';
 import { CameraEditor } from './components/CameraEditor';
 import { CollageEditor } from './components/CollageEditor';
+import { ScriptEditor } from './components/ScriptEditor';
 import { Asset, GeneratedImage, AspectRatio, ImageSize, AssetCategory, CollageData } from './types';
 import { generateMultiViewGrid, fileToBase64, enhancePrompt, analyzeAsset, ReferenceImageData, generateCameraMovement, editImage } from './services/geminiService';
 import { saveToStorage, loadFromStorage, clearStorage } from './services/persistenceService';
@@ -30,6 +31,7 @@ const App: React.FC = () => {
   const [panelPrompts, setPanelPrompts] = useState<string[]>([]);
   const [isCameraEditorOpen, setIsCameraEditorOpen] = useState(false);
   const [isCollageEditorOpen, setIsCollageEditorOpen] = useState(false);
+  const [isScriptEditorOpen, setIsScriptEditorOpen] = useState(false);
   const [activeCollage, setActiveCollage] = useState<CollageData | null>(null);
   
   const [isGenerating, setIsGenerating] = useState(false);
@@ -40,41 +42,33 @@ const App: React.FC = () => {
 
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // 初始化加载
   useEffect(() => {
     loadFromStorage<GeneratedImage[]>('cine_images').then(saved => {
-        if (saved) {
-          setImages(saved);
-        }
+        if (saved) setImages(saved);
     });
   }, []);
 
-  // 状态变更保存
   useEffect(() => {
     saveToStorage('cine_images', images);
   }, [images]);
 
-  // 更新图片状态并记录历史
   const updateImagesWithHistory = useCallback((newImages: GeneratedImage[]) => {
     setHistory(prev => [...prev, images].slice(-30)); 
     setImages(newImages);
   }, [images]);
 
-  // 快捷键监听
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedImageId) {
         if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
         handleDeleteNode(selectedImageId);
       }
-      
       if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
         if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
         e.preventDefault();
         undo();
       }
     };
-
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedImageId, history, images]);
@@ -116,15 +110,10 @@ const App: React.FC = () => {
   const handleRemoveAsset = (id: string) => {
     setAssets((prev) => {
         const filtered = prev.filter((a) => a.id !== id);
-        let roleIdx = 1;
-        let propIdx = 1;
+        let roleIdx = 1; let propIdx = 1;
         return filtered.map(a => {
-            if (a.category === 'role') {
-                return { ...a, index: roleIdx++ };
-            }
-            if (a.category === 'prop') {
-                return { ...a, index: propIdx++ };
-            }
+            if (a.category === 'role') return { ...a, index: roleIdx++ };
+            if (a.category === 'prop') return { ...a, index: propIdx++ };
             return a;
         });
     });
@@ -137,12 +126,8 @@ const App: React.FC = () => {
     abortControllerRef.current = new AbortController();
 
     try {
-      const timestamp = Date.now();
       const parentNode = images.find(i => i.id === selectedImageId && i.nodeType === 'render');
-      
-      let startX = 100;
-      let startY = 100;
-      let previousContextImage = undefined;
+      let startX = 100, startY = 100, previousContextImage = undefined;
       
       if (parentNode) {
           startX = (parentNode.position?.x || 0); 
@@ -153,8 +138,7 @@ const App: React.FC = () => {
           startX = rootNodes.length === 0 ? 100 : (rootNodes[rootNodes.length-1].position?.x || 100) + 420;
       }
 
-      setGenerationStep(activeCollage ? "正在分析拼贴镜头组的构图与景别逻辑..." : "正在渲染分镜...");
-      
+      setGenerationStep("正在渲染分镜...");
       const referenceData: ReferenceImageData[] = [];
       for (const asset of assets) {
           referenceData.push({
@@ -165,45 +149,35 @@ const App: React.FC = () => {
           });
       }
 
-      // No longer overriding user settings with collage settings. 
-      // Users can independently set grid and aspect ratio.
       const finalResult = await generateMultiViewGrid(
-          prompt, 
-          gridRows, 
-          gridCols, 
-          aspectRatio, 
-          imageSize, 
-          referenceData,
-          previousContextImage,
-          panelPrompts,
-          activeCollage || undefined
+          prompt, gridRows, gridCols, aspectRatio, imageSize, 
+          referenceData, previousContextImage, panelPrompts, activeCollage || undefined
       );
       
-      setGenerationStep("正在分析最终画面动线...");
+      setGenerationStep("正在分析动线...");
       const cameraMove = await generateCameraMovement(prompt);
 
       const finalNode: GeneratedImage = {
           id: crypto.randomUUID(),
           url: finalResult.fullImage,
           fullGridUrl: finalResult.fullImage,
-          prompt: prompt,
+          prompt,
           textData: prompt, 
           assetIds: assets.map(a => a.id), 
-          aspectRatio: aspectRatio,
-          timestamp: timestamp + 1,
+          aspectRatio,
+          timestamp: Date.now(),
           nodeType: 'render',
           parentId: parentNode?.id, 
           position: { x: startX, y: startY },
           cameraDescription: cameraMove,
           slices: finalResult.slices,
           sliceHistory: {}, 
-          gridRows: gridRows,
-          gridCols: gridCols
+          gridRows,
+          gridCols
       };
 
       updateImagesWithHistory([...images, finalNode]);
       setSelectedImageId(finalNode.id);
-
     } catch (err: any) {
       setError(err.message || "生成失败");
     } finally {
@@ -214,55 +188,38 @@ const App: React.FC = () => {
 
   const handleEditSlice = async (imageId: string, sliceIndex: number, editPrompt: string, usePro: boolean, refImage?: string, targetImageSize: ImageSize = ImageSize.K1) => {
     setIsGenerating(true);
-    setGenerationStep("正在应用AI重绘与增强...");
+    setGenerationStep("正在重绘...");
     try {
       const image = images.find(img => img.id === imageId);
       if (!image || !image.slices) return;
-
-      const currentSlice = image.slices[sliceIndex];
       const model = usePro ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
-      
-      const newSliceUrl = await editImage(currentSlice, editPrompt, model, image.aspectRatio, refImage, targetImageSize);
-
+      const newSliceUrl = await editImage(image.slices[sliceIndex], editPrompt, model, image.aspectRatio, refImage, targetImageSize);
       const newImages = images.map(img => {
         if (img.id === imageId) {
           const newSlices = [...(img.slices || [])];
           const newHistory = { ...(img.sliceHistory || {}) };
-          
           if (!newHistory[sliceIndex]) newHistory[sliceIndex] = [];
-          newHistory[sliceIndex].push(currentSlice);
-          
+          newHistory[sliceIndex].push(image.slices![sliceIndex]);
           newSlices[sliceIndex] = newSliceUrl;
-          
           return { ...img, slices: newSlices, sliceHistory: newHistory };
         }
         return img;
       });
-
       updateImagesWithHistory(newImages);
-    } catch (err: any) {
-      setError(err.message || "重绘失败");
-    } finally {
-      setIsGenerating(false);
-    }
+    } catch (err: any) { setError(err.message || "失败"); } finally { setIsGenerating(false); }
   };
 
-  // Fixed the error where 'idx' was undefined; changed it to 'sliceIndex'.
   const handleRevertSlice = (imageId: string, sliceIndex: number, historyIndex: number) => {
     const newImages = images.map(img => {
       if (img.id === imageId) {
         const history = img.sliceHistory?.[sliceIndex] || [];
-        const targetUrl = history[historyIndex];
         const newSlices = [...(img.slices || [])];
         const newHistoryList = [...history];
-        
         const current = newSlices[sliceIndex];
-        newSlices[sliceIndex] = targetUrl;
+        newSlices[sliceIndex] = history[historyIndex];
         newHistoryList[historyIndex] = current; 
-        
         const updatedHistory = { ...(img.sliceHistory || {}) };
         updatedHistory[sliceIndex] = newHistoryList;
-
         return { ...img, slices: newSlices, sliceHistory: updatedHistory };
       }
       return img;
@@ -270,61 +227,20 @@ const App: React.FC = () => {
     updateImagesWithHistory(newImages);
   };
 
-  const handleDownloadSelected = async () => {
-    const selected = images.find(i => i.id === selectedImageId);
-    if (!selected || selected.nodeType !== 'render') {
-      alert("请先在画布中选择一个分镜组（RENDER NODE）进行下载。");
-      return;
-    }
-
-    try {
-      setGenerationStep("正在准备 ZIP 下载文件...");
-      setIsGenerating(true);
-
-      const renderNodes = images
-        .filter(i => i.nodeType === 'render')
-        .sort((a, b) => a.timestamp - b.timestamp);
+  const handleApplyScripts = (summary: string, scripts: string[]) => {
+      // Requirement 2: Summary to Director Prompt
+      setPrompt(summary);
+      // Requirement 2: Scripts sync one-to-one to Camera Logic
+      setPanelPrompts(scripts);
       
-      const groupIndex = renderNodes.findIndex(i => i.id === selected.id) + 1;
-      const zipName = `组${groupIndex}.zip`;
-
-      const zip = new JSZip();
-
-      const addToZip = async (url: string, filename: string) => {
-        const response = await fetch(url);
-        const blob = await response.blob();
-        zip.file(filename, blob);
-      };
-
-      const fullImageUrl = selected.fullGridUrl || selected.url;
-      if (fullImageUrl) {
-        await addToZip(fullImageUrl, `full_grid_${groupIndex}.png`);
+      // Auto-update grid if needed (optional but helpful)
+      const count = scripts.length;
+      if (count > gridRows * gridCols) {
+          // Adjust grid to fit at least the script count
+          const nextSide = Math.ceil(Math.sqrt(count));
+          setGridRows(nextSide);
+          setGridCols(nextSide);
       }
-
-      if (selected.slices) {
-        for (let i = 0; i < selected.slices.length; i++) {
-          await addToZip(selected.slices[i], `panel_${i + 1}.png`);
-        }
-      }
-
-      const content = await zip.generateAsync({ type: "blob" });
-      const downloadLink = document.createElement('a');
-      downloadLink.href = URL.createObjectURL(content);
-      downloadLink.download = zipName;
-      document.body.appendChild(downloadLink);
-      downloadLink.click();
-      document.body.removeChild(downloadLink);
-    } catch (err: any) {
-      setError("下载 ZIP 失败: " + err.message);
-    } finally {
-      setIsGenerating(false);
-      setGenerationStep("");
-    }
-  };
-
-  const handleSaveCollage = (base64Url: string, rows: number, cols: number, ar: string) => {
-    setActiveCollage({ url: base64Url, rows, cols, aspectRatio: ar });
-    setIsCollageEditorOpen(false);
   };
 
   return (
@@ -342,30 +258,21 @@ const App: React.FC = () => {
 
         <div className="flex-1 flex flex-col p-4 gap-7 overflow-y-auto custom-scrollbar">
             <AssetBay 
-                assets={assets} 
-                onAddAsset={handleAddAsset} 
-                onRemoveAsset={handleRemoveAsset} 
+                assets={assets} onAddAsset={handleAddAsset} onRemoveAsset={handleRemoveAsset} 
                 onSelectAsset={(a) => { setSelectedAssetId(a.id); setSelectedImageId(undefined); }}
-                selectedAssetId={selectedAssetId}
-                onOpenCollage={() => setIsCollageEditorOpen(true)}
+                selectedAssetId={selectedAssetId} onOpenCollage={() => setIsCollageEditorOpen(true)}
             />
 
             <div className="px-2">
                 {activeCollage ? (
-                  <div className="p-3 bg-cine-accent/10 border border-cine-accent/30 rounded-sm space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div className="p-3 bg-cine-accent/10 border border-cine-accent/30 rounded-sm space-y-2">
                      <div className="flex items-center justify-between">
                         <span className="text-[10px] text-cine-accent font-bold uppercase tracking-widest flex items-center gap-2">
-                           <LayoutGrid size={12} />
-                           镜头组参考模式 (ACTIVE)
+                           <LayoutGrid size={12} /> 镜头组参考 (ACTIVE)
                         </span>
-                        <button onClick={() => setActiveCollage(null)} className="text-cine-accent hover:text-white transition-colors">
-                           <XIcon size={12} />
-                        </button>
+                        <button onClick={() => setActiveCollage(null)} className="text-cine-accent hover:text-white"><XIcon size={12} /></button>
                      </div>
-                     <div className="aspect-video bg-black rounded-sm overflow-hidden border border-cine-accent/20">
-                        <img src={activeCollage.url} className="w-full h-full object-contain" />
-                     </div>
-                     <p className="text-[8px] text-zinc-500 font-mono uppercase tracking-widest">AI 将提取此图的镜头布局与角度</p>
+                     <img src={activeCollage.url} className="w-full aspect-video object-contain bg-black rounded-sm border border-cine-accent/20" />
                   </div>
                 ) : (
                   <div className="p-3 bg-zinc-900/40 border border-zinc-800/40 border-dashed rounded-sm text-center">
@@ -384,7 +291,8 @@ const App: React.FC = () => {
                 onStop={() => setIsGenerating(false)}
                 isGenerating={isGenerating}
                 onEnhancePrompt={async () => setPrompt(await enhancePrompt(prompt))}
-                onGenerateCamera={() => setIsCameraEditorOpen(true)} 
+                onGenerateCamera={() => setIsCameraEditorOpen(true)}
+                onOpenScriptDeconstruct={() => setIsScriptEditorOpen(true)}
                 isContinuing={!!(selectedImageId && images.find(i => i.id === selectedImageId)?.nodeType === 'render')}
                 onDeselect={() => { setSelectedImageId(undefined); setSelectedAssetId(undefined); }}
             />
@@ -393,51 +301,40 @@ const App: React.FC = () => {
 
       <main className="flex-1 relative bg-cine-black">
         <Canvas
-            images={images} 
-            onSelect={(i) => { setSelectedImageId(i.id); setSelectedAssetId(undefined); }} 
-            selectedId={selectedImageId}
-            onDelete={handleDeleteNode} 
-            onUpdateNodePosition={handleUpdateNodePosition}
-            onDownloadAll={handleDownloadSelected}
-            assets={assets} 
-            onDeselectAll={() => { setSelectedImageId(undefined); setSelectedAssetId(undefined); }}
+            images={images} onSelect={(i) => { setSelectedImageId(i.id); setSelectedAssetId(undefined); }} 
+            selectedId={selectedImageId} onDelete={handleDeleteNode} onUpdateNodePosition={handleUpdateNodePosition}
+            onDownloadAll={() => {}} assets={assets} onDeselectAll={() => { setSelectedImageId(undefined); setSelectedAssetId(undefined); }}
         />
         
         {isGenerating && (
-            <div className="absolute inset-0 bg-cine-black/90 backdrop-blur-xl z-50 flex flex-col items-center justify-center space-y-8">
+            <div className="absolute inset-0 bg-cine-black/90 backdrop-blur-xl z-[150] flex flex-col items-center justify-center space-y-8">
                  <div className="w-16 h-16 border-t-2 border-cine-accent rounded-full animate-spin"></div>
                  <div className="text-center space-y-2">
                      <p className="text-white font-mono tracking-[0.3em] text-sm uppercase font-bold">{generationStep}</p>
-                     <p className="text-cine-accent/50 font-mono text-[10px]">AI ENGINE: GEMINI MULTIMODAL</p>
                  </div>
             </div>
         )}
 
         {error && (
             <div className="absolute bottom-8 left-8 z-50 bg-red-950/80 backdrop-blur border border-red-500/30 text-red-200 p-4 rounded-md text-xs flex gap-3">
-                <AlertCircle size={16} className="text-red-400" />
-                <span className="font-mono">{error}</span>
-                <button onClick={() => setError(null)}><XIcon size={14} /></button>
+                <AlertCircle size={16} /> <span className="font-mono">{error}</span> <button onClick={() => setError(null)}><XIcon size={14} /></button>
             </div>
         )}
 
-        {/* Camera Logic Editor */}
         <CameraEditor 
-          isOpen={isCameraEditorOpen}
-          onClose={() => setIsCameraEditorOpen(false)}
-          rows={gridRows}
-          cols={gridCols}
-          mainPrompt={prompt}
-          initialPrompts={panelPrompts}
-          onSave={(newPrompts) => setPanelPrompts(newPrompts)}
+          isOpen={isCameraEditorOpen} onClose={() => setIsCameraEditorOpen(false)}
+          rows={gridRows} cols={gridCols} mainPrompt={prompt}
+          initialPrompts={panelPrompts} onSave={(newPrompts) => setPanelPrompts(newPrompts)}
         />
 
-        {/* Collage Editor */}
         <CollageEditor 
-          isOpen={isCollageEditorOpen}
-          onClose={() => setIsCollageEditorOpen(false)}
-          onSave={handleSaveCollage}
-          defaultAspectRatio={aspectRatio}
+          isOpen={isCollageEditorOpen} onClose={() => setIsCollageEditorOpen(false)}
+          onSave={(url, r, c, ar) => { setActiveCollage({ url, rows: r, cols: c, aspectRatio: ar }); setIsCollageEditorOpen(false); }}
+        />
+
+        <ScriptEditor 
+          isOpen={isScriptEditorOpen} onClose={() => setIsScriptEditorOpen(false)}
+          defaultPanelCount={gridRows * gridCols} onApplyScripts={handleApplyScripts}
         />
       </main>
 
@@ -454,8 +351,7 @@ const App: React.FC = () => {
             }}
             isAnalyzing={isAnalyzing}
             analysisResult={analysisResult}
-            onEditSlice={handleEditSlice}
-            onRevertSlice={handleRevertSlice}
+            onEditSlice={handleEditSlice} onRevertSlice={handleRevertSlice}
          />
       </aside>
     </div>

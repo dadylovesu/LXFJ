@@ -20,7 +20,6 @@ const getClient = () => {
 
 /**
  * Helper to wrap Gemini API calls with exponential backoff retry logic.
- * Handles 503 (Overloaded) and 429 (Rate Limit) errors.
  */
 async function withRetry<T>(operation: () => Promise<T>, maxRetries = 3): Promise<T> {
   let lastError: any;
@@ -29,13 +28,11 @@ async function withRetry<T>(operation: () => Promise<T>, maxRetries = 3): Promis
       return await operation();
     } catch (error: any) {
       lastError = error;
-      // Check if error is a 503 (UNAVAILABLE) or 429 (RESOURCE_EXHAUSTED)
       const isOverloaded = error?.status === 'UNAVAILABLE' || error?.code === 503;
       const isRateLimited = error?.status === 'RESOURCE_EXHAUSTED' || error?.code === 429;
 
       if ((isOverloaded || isRateLimited) && attempt < maxRetries) {
         const delay = Math.pow(2, attempt) * 2000 + Math.random() * 1000;
-        console.warn(`Gemini API ${isOverloaded ? 'overloaded' : 'rate limited'}. Retrying in ${Math.round(delay)}ms... (Attempt ${attempt + 1}/${maxRetries})`);
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
       }
@@ -120,50 +117,27 @@ export const generateMultiViewGrid = async (
   if (collageRef) {
       systemPrompt += `\n\n[COMPOSITION REFERENCE]: 
       - The provided Collage image is a visual reference for camera framing and composition.
-      - It contains a grid of ${collageRef.rows}x${collageRef.cols} panels.
-      - TASK: Recognize the camera angles, shot types (Close-up, Wide, etc.), and framing from the collage panels.
-      - ADAPT: Map these compositional ideas to the current target grid of ${gridRows}x${gridCols} and the output aspect ratio of ${aspectRatio}.
-      - DO NOT replicate the literal pixel content of the collage; only use its staging, angles, and camera logic.`;
+      - TASK: Recognize camera angles and framing. Map these to the output grid.`;
   }
 
   if (panelInstructions && panelInstructions.length > 0) {
-      systemPrompt += `\n\n[PANEL SPECIFICS]: Follow these specific instructions for each panel index:
+      systemPrompt += `\n\n[PANEL SPECIFICS]:
       ${panelInstructions.map((instr, idx) => `- Panel ${idx + 1}: ${instr || 'AI Choice'}`).join('\n')}`;
   }
 
   if (roles.length > 0) {
       systemPrompt += `\n\n[CHARACTER CONSISTENCY]:
-      ${roles.map((r, i) => `- Reference Image ${i+1} is "ROLE ${r.roleIndex}". Maintain this character across all panels.`).join('\n')}`;
-  }
-
-  if (props.length > 0) {
-      systemPrompt += `\n\n[PROP CONSISTENCY]:
-      ${props.map((p, i) => `- Maintain the design of "KEY PROP ${p.roleIndex}" as shown in references.`).join('\n')}`;
-  }
-
-  if (contextImage) {
-      systemPrompt += `\n\n[STORY CONTINUITY]:
-      - Use the separate context image for narrative flow.`;
+      ${roles.map((r, i) => `- Reference Image ${i+1} is "ROLE ${r.roleIndex}".`).join('\n')}`;
   }
 
   systemPrompt += `\n\n[STYLING]: Photorealistic, cinematic, professional storyboard. No text overlays.`;
 
   const parts: any[] = [];
-  
-  if (collageRef) {
-      const cleanCollage = collageRef.url.includes(',') ? collageRef.url.split(',')[1] : collageRef.url;
-      parts.push({ inlineData: { mimeType: 'image/png', data: cleanCollage } });
-  }
-
+  if (collageRef) parts.push({ inlineData: { mimeType: 'image/png', data: collageRef.url.split(',')[1] } });
   roles.forEach(r => parts.push({ inlineData: { mimeType: r.mimeType, data: r.data } }));
   props.forEach(p => parts.push({ inlineData: { mimeType: p.mimeType, data: p.data } }));
   bgs.forEach(b => parts.push({ inlineData: { mimeType: b.mimeType, data: b.data } }));
-  
-  if (contextImage) {
-      const cleanBase64 = contextImage.includes(',') ? contextImage.split(',')[1] : contextImage;
-      parts.push({ inlineData: { mimeType: 'image/png', data: cleanBase64 } });
-  }
-  
+  if (contextImage) parts.push({ inlineData: { mimeType: 'image/png', data: contextImage.split(',')[1] } });
   parts.push({ text: systemPrompt });
 
   try {
@@ -183,9 +157,7 @@ export const generateMultiViewGrid = async (
 
     let fullImageBase64 = '';
     for (const part of response.candidates?.[0]?.content?.parts || []) {
-      if (part.inlineData) {
-        fullImageBase64 = `data:image/png;base64,${part.inlineData.data}`;
-      }
+      if (part.inlineData) fullImageBase64 = `data:image/png;base64,${part.inlineData.data}`;
     }
 
     if (!fullImageBase64) throw new Error("Render engine returned no image data.");
@@ -206,28 +178,10 @@ export const editImage = async (
   imageSize: ImageSize = ImageSize.K1
 ): Promise<string> => {
   await ensureApiKey();
-  
   const cleanBase64 = base64Image.includes(',') ? base64Image.split(',')[1] : base64Image;
-
-  const parts: any[] = [
-    { inlineData: { mimeType: 'image/png', data: cleanBase64 } }
-  ];
-
-  if (refImageBase64) {
-    const cleanRef = refImageBase64.includes(',') ? refImageBase64.split(',')[1] : refImageBase64;
-    parts.push({ inlineData: { mimeType: 'image/png', data: cleanRef } });
-  }
-
-  let finalPrompt = editPrompt.trim() 
-    ? `Edit this image according to the instruction: "${editPrompt}".` 
-    : "Enhance this image to high resolution while maintaining all details and composition.";
-
-  if (refImageBase64) {
-    finalPrompt += " Use the provided second image as a visual style and content reference for the edit.";
-  }
-
-  finalPrompt += " Photorealistic cinematic render.";
-  parts.push({ text: finalPrompt });
+  const parts: any[] = [{ inlineData: { mimeType: 'image/png', data: cleanBase64 } }];
+  if (refImageBase64) parts.push({ inlineData: { mimeType: 'image/png', data: refImageBase64.split(',')[1] } });
+  parts.push({ text: `Edit instruction: "${editPrompt}". Photorealistic cinematic render.` });
 
   try {
     const response = await withRetry<GenerateContentResponse>(() => {
@@ -243,13 +197,10 @@ export const editImage = async (
           }
         });
     });
-
     for (const part of response.candidates?.[0]?.content?.parts || []) {
-      if (part.inlineData) {
-        return `data:image/png;base64,${part.inlineData.data}`;
-      }
+      if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
     }
-    throw new Error("No image data returned from edit engine.");
+    throw new Error("No image data returned.");
   } catch (error: any) {
     console.error("Image edit error:", error);
     throw error;
@@ -263,16 +214,11 @@ export const generateCameraSuggestions = async (prompt: string, panelCount: numb
             const ai = getClient();
             return ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
-                contents: { parts: [{ text: `根据以下电影场景，建议 ${panelCount} 个逻辑性、渐进式的分镜镜头描述或构图。
-                要求：仅列出建议，每行一个。不要编号。使用中文。
-                场景内容：${prompt}` }] }
+                contents: { parts: [{ text: `根据分镜场景建议 ${panelCount} 个镜头。场景：${prompt}` }] }
             });
         });
-        const text = response.text || "";
-        return text.split('\n').filter(line => line.trim().length > 0).slice(0, panelCount);
-    } catch { 
-        return new Array(panelCount).fill("电影级构图。"); 
-    }
+        return (response.text || "").split('\n').filter(l => l.trim()).slice(0, panelCount);
+    } catch { return new Array(panelCount).fill("电影级构图。"); }
 };
 
 export const generateCameraMovement = async (prompt: string): Promise<string> => {
@@ -283,11 +229,68 @@ export const generateCameraMovement = async (prompt: string): Promise<string> =>
             return ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
                 contents: { parts: [{ text: `场景: ${prompt}` }] },
-                config: { systemInstruction: "Output ONLY a technical camera movement description for the overall scene. Max 10 words. Chinese." }
+                config: { systemInstruction: "Output a camera movement description (Chinese). Max 10 words." }
             });
         });
         return response.text || "固定镜头。";
     } catch { return "电影动效。"; }
+};
+
+export const generateScriptLines = async (instruction: string, count: number, attachmentText?: string): Promise<string[]> => {
+    await ensureApiKey();
+    try {
+        const response = await withRetry<GenerateContentResponse>(() => {
+            const ai = getClient();
+            return ai.models.generateContent({
+                model: 'gemini-3-flash-preview',
+                contents: { 
+                  parts: [
+                    { text: `你是一个专业的电影分镜脚本拆解师。
+                    任务：将以下输入内容拆解为正好 ${count} 条独立的视觉描述指令。
+                    要求：
+                    1. 每条指令必须严格遵循以下结构：“时间，景别，拍摄角度，构图，角色标号+名称，角色的行为动作，角色身上的服装道具，关键道具，环境描述”。
+                    2. 保持叙事的连贯性。
+                    3. 直接返回这 ${count} 条文本，每条占一行。不要编号。使用中文。
+                    
+                    输入内容/文档：
+                    ${attachmentText || ''}
+                    
+                    附加指令：
+                    ${instruction}` }
+                  ] 
+                }
+            });
+        });
+        return (response.text || "").split('\n').filter(l => l.trim()).slice(0, count);
+    } catch (e) {
+        console.error(e);
+        return new Array(count).fill("时间，全景，平视，黄金分割，角色1，正在待命，普通服装，无，场景待定");
+    }
+};
+
+export const generateDirectorSummary = async (scripts: string[]): Promise<string> => {
+    await ensureApiKey();
+    try {
+        const response = await withRetry<GenerateContentResponse>(() => {
+            const ai = getClient();
+            return ai.models.generateContent({
+                model: 'gemini-3-flash-preview',
+                contents: { 
+                  parts: [
+                    { text: `根据以下分镜脚本，生成一段简短的、基于选中脚本的片段梗概。
+                    描述结构必须包含：时间，地点，角色标号+名称，角色的行为动作，角色身上的服装道具，关键道具，环境描述。
+                    使用中文，控制在100字以内。
+                    
+                    分镜脚本列表：
+                    ${scripts.join('\n')}` }
+                  ] 
+                }
+            });
+        });
+        return response.text?.trim() || "生成的梗概。";
+    } catch {
+        return "无法生成梗概。";
+    }
 };
 
 export const enhancePrompt = async (rawPrompt: string): Promise<string> => {
@@ -297,7 +300,7 @@ export const enhancePrompt = async (rawPrompt: string): Promise<string> => {
         const ai = getClient();
         return ai.models.generateContent({
           model: 'gemini-3-flash-preview',
-          contents: `Enhance this cinematic storyboard prompt. Keep it under 60 words. Use Chinese. Input: "${rawPrompt}"`,
+          contents: `Enhance cinematic prompt: "${rawPrompt}" (Chinese, <60 words)`,
         });
     });
     return response.text || rawPrompt;
@@ -314,8 +317,8 @@ export const analyzeAsset = async (fileBase64: string, mimeType: string, prompt:
           contents: { parts: [{ inlineData: { mimeType, data: fileBase64 } }, { text: prompt }] }
         });
     });
-    return response.text || "No analysis result.";
-  } catch { return "Analysis failed."; }
+    return response.text || "No analysis.";
+  } catch { return "Failed."; }
 };
 
 export const fileToBase64 = (file: File): Promise<string> => {

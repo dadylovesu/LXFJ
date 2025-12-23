@@ -2,7 +2,7 @@
 import React from 'react';
 import { Button } from './Button';
 import { AspectRatio, ImageSize } from '../types';
-import { Settings2, GitMerge, Video, Layers, Zap, LayoutGrid, ChevronRight, ChevronLeft, XCircle, PlusCircle, Square, Sparkles } from 'lucide-react';
+import { Settings2, GitMerge, Video, Layers, Zap, LayoutGrid, ChevronRight, ChevronLeft, XCircle, PlusCircle, Square, Sparkles, Wand2 } from 'lucide-react';
 
 interface DirectorDeckProps {
   gridRows: number;
@@ -20,6 +20,7 @@ interface DirectorDeckProps {
   isGenerating: boolean;
   onEnhancePrompt?: () => void;
   onGenerateCamera?: () => void;
+  onOpenScriptDeconstruct?: () => void;
   isContinuing?: boolean;
   onDeselect?: () => void;
 }
@@ -40,6 +41,7 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
   isGenerating,
   onEnhancePrompt,
   onGenerateCamera,
+  onOpenScriptDeconstruct,
   isContinuing = false,
   onDeselect
 }) => {
@@ -76,49 +78,25 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
         </label>
         
         <div className="space-y-4 p-4 bg-zinc-900/40 border border-zinc-800/40 rounded-sm backdrop-blur-md">
-             {/* Dynamic Grid Controls */}
             <div className="space-y-3">
                 <div className="flex justify-between items-center">
                    <span className="text-[8px] text-zinc-600 font-mono uppercase tracking-widest">宫格行列 (ROWS x COLS)</span>
                    <span className="text-[10px] text-cine-accent font-mono font-bold">{gridRows} x {gridCols}</span>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                    {/* Rows */}
                     <div className="flex items-center bg-black/40 border border-zinc-800 rounded-sm p-1">
-                        <button 
-                            onClick={() => setGridRows(Math.max(1, gridRows - 1))}
-                            className="p-1 text-zinc-600 hover:text-white transition-colors"
-                        >
-                            <ChevronLeft size={14} />
-                        </button>
+                        <button onClick={() => setGridRows(Math.max(1, gridRows - 1))} className="p-1 text-zinc-600 hover:text-white"><ChevronLeft size={14} /></button>
                         <div className="flex-1 text-center font-mono text-xs text-zinc-300">R: {gridRows}</div>
-                        <button 
-                            onClick={() => setGridRows(Math.min(4, gridRows + 1))}
-                            className="p-1 text-zinc-600 hover:text-white transition-colors"
-                        >
-                            <ChevronRight size={14} />
-                        </button>
+                        <button onClick={() => setGridRows(Math.min(4, gridRows + 1))} className="p-1 text-zinc-600 hover:text-white"><ChevronRight size={14} /></button>
                     </div>
-                    {/* Cols */}
                     <div className="flex items-center bg-black/40 border border-zinc-800 rounded-sm p-1">
-                        <button 
-                            onClick={() => setGridCols(Math.max(1, gridCols - 1))}
-                            className="p-1 text-zinc-600 hover:text-white transition-colors"
-                        >
-                            <ChevronLeft size={14} />
-                        </button>
+                        <button onClick={() => setGridCols(Math.max(1, gridCols - 1))} className="p-1 text-zinc-600 hover:text-white"><ChevronLeft size={14} /></button>
                         <div className="flex-1 text-center font-mono text-xs text-zinc-300">C: {gridCols}</div>
-                        <button 
-                            onClick={() => setGridCols(Math.min(4, gridCols + 1))}
-                            className="p-1 text-zinc-600 hover:text-white transition-colors"
-                        >
-                            <ChevronRight size={14} />
-                        </button>
+                        <button onClick={() => setGridCols(Math.min(4, gridCols + 1))} className="p-1 text-zinc-600 hover:text-white"><ChevronRight size={14} /></button>
                     </div>
                 </div>
             </div>
 
-            {/* Aspect Ratio */}
              <div className="space-y-2 pt-2.5 border-t border-zinc-800/50">
                 <div className="flex justify-between items-center">
                    <span className="text-[8px] text-zinc-600 font-mono uppercase tracking-widest">画面比例 (RATIO)</span>
@@ -130,9 +108,7 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
                             key={ar}
                             onClick={() => setAspectRatio(ar)}
                             className={`text-[9px] h-7 border rounded-[1px] font-mono transition-all duration-300 flex items-center justify-center ${
-                                aspectRatio === ar 
-                                ? 'border-zinc-600 text-white bg-zinc-800 shadow-inner' 
-                                : 'border-zinc-800/60 text-zinc-700 hover:border-zinc-700 hover:text-zinc-500 bg-transparent'
+                                aspectRatio === ar ? 'border-zinc-600 text-white bg-zinc-800 shadow-inner' : 'border-zinc-800/60 text-zinc-700 hover:border-zinc-700 hover:text-zinc-500 bg-transparent'
                             }`}
                         >
                             {ar}
@@ -147,14 +123,11 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
       <div className="space-y-2.5">
         <label className="text-[9px] text-zinc-600 font-mono uppercase tracking-[0.15em] flex items-center gap-2.5">
             <span className="w-1 h-3 bg-zinc-800 rounded-full"></span>
-            输出引擎 & 分辨率 (ENGINE & RES)
+            输出引擎 (ENGINE)
         </label>
         <div className="p-3 bg-black/40 border border-zinc-800/60 rounded-sm space-y-3">
             <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <LayoutGrid size={9} className="text-zinc-700" />
-                    <span className="text-[9px] text-zinc-600 font-mono uppercase tracking-widest">GEN 3 PRO ENGINE</span>
-                </div>
+                <span className="text-[9px] text-zinc-600 font-mono uppercase tracking-widest">GEN 3 PRO ENGINE</span>
                 <span className="text-[9px] text-cine-accent font-bold font-mono">{getQualityLabel()}</span>
             </div>
             <div className="grid grid-cols-3 gap-1.5">
@@ -163,9 +136,7 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
                         key={sz}
                         onClick={() => setImageSize(sz)}
                         className={`text-[9px] h-7 border rounded-[1px] font-mono transition-all duration-300 ${
-                            imageSize === sz 
-                            ? 'border-cine-accent/50 text-cine-accent bg-cine-accent/5 shadow-inner' 
-                            : 'border-zinc-800/60 text-zinc-700 hover:border-zinc-700 hover:text-zinc-500 bg-transparent'
+                            imageSize === sz ? 'border-cine-accent/50 text-cine-accent bg-cine-accent/5' : 'border-zinc-800/60 text-zinc-700 hover:border-zinc-700 hover:text-zinc-500 bg-transparent'
                         }`}
                     >
                         {sz}
@@ -184,18 +155,15 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
             </label>
             
             {isContinuing ? (
-                <button 
-                  onClick={onDeselect}
-                  className="flex items-center gap-1.5 bg-cine-accent/5 text-cine-accent px-2.5 py-1 rounded-full border border-cine-accent/40 animate-in fade-in duration-500 shadow-[0_0_10px_rgba(255,122,0,0.1)] hover:bg-cine-accent/20 transition-all group"
-                >
-                    <GitMerge size={10} className="group-hover:rotate-180 transition-transform duration-500" />
-                    <span className="text-[8px] font-mono tracking-widest font-bold">续写模式 (CONTINUE)</span>
+                <button onClick={onDeselect} className="flex items-center gap-1.5 bg-cine-accent/5 text-cine-accent px-2.5 py-1 rounded-full border border-cine-accent/40 animate-in fade-in duration-500 shadow-[0_0_10px_rgba(255,122,0,0.1)] hover:bg-cine-accent/20 transition-all group">
+                    <GitMerge size={10} />
+                    <span className="text-[8px] font-mono tracking-widest font-bold">续写模式</span>
                     <XCircle size={10} className="opacity-60" />
                 </button>
             ) : (
                 <div className="flex items-center gap-1.5 text-zinc-600 px-2.5 py-1 font-mono text-[8px] tracking-widest">
                     <PlusCircle size={10} />
-                    <span>独立创作模式 (NEW)</span>
+                    <span>新创作模式</span>
                 </div>
             )}
         </div>
@@ -204,10 +172,8 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
             <textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                placeholder={isContinuing ? "// 继续扩展该分镜的世界观..." : "// 描述一个电影级画面，包括构图、光影、氛围..."}
-                className={`w-full h-full absolute inset-0 bg-black/60 backdrop-blur-sm border-none p-4 text-[13px] text-zinc-300 focus:ring-0 resize-none font-mono leading-relaxed placeholder:text-zinc-800 custom-scrollbar transition-all duration-500 focus:bg-zinc-900/20 ${
-                    isContinuing ? 'text-cine-accent/90' : ''
-                }`}
+                placeholder={isContinuing ? "// 继续扩展该分镜的世界观..." : "// 描述一个电影级画面..."}
+                className="w-full h-full absolute inset-0 bg-black/60 backdrop-blur-sm border-none p-4 text-[13px] text-zinc-300 focus:ring-0 resize-none font-mono leading-relaxed placeholder:text-zinc-800 custom-scrollbar transition-all duration-500 focus:bg-zinc-900/20"
                 spellCheck={false}
             />
             <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-black/40 to-transparent pointer-events-none"></div>
@@ -215,53 +181,44 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
       </div>
 
       {/* Tools Row */}
-      {onGenerateCamera && (
-          <div className="flex">
-              <Button 
-                variant="secondary" 
-                size="sm" 
-                onClick={onGenerateCamera} 
-                disabled={isGenerating || !prompt.trim()} 
-                className="w-full text-[9px] h-10 border-dashed border-zinc-800 hover:border-zinc-700 bg-zinc-900/20 group relative overflow-hidden"
-              >
-                  <Video size={12} className="mr-2 text-zinc-500 group-hover:text-cine-accent transition-colors" /> 
-                  配置分镜镜头逻辑 (CAM-LOGIC)
-                  <Sparkles size={8} className="absolute top-2 right-2 text-cine-accent opacity-40 group-hover:opacity-100 transition-opacity" />
-              </Button>
-          </div>
-      )}
+      <div className="grid grid-cols-2 gap-2">
+          <Button 
+            variant="primary" 
+            size="sm" 
+            onClick={onOpenScriptDeconstruct} 
+            disabled={isGenerating} 
+            className="text-[9px] h-10 border-dashed border-zinc-800 group"
+          >
+              <Wand2 size={12} className="mr-2 text-zinc-500 group-hover:text-cine-accent transition-colors" /> 
+              智能脚本拆解
+          </Button>
+          <Button 
+            variant="primary" 
+            size="sm" 
+            onClick={onGenerateCamera} 
+            disabled={isGenerating || !prompt.trim()} 
+            className="text-[9px] h-10 border-dashed border-zinc-800 group"
+          >
+              <Video size={12} className="mr-2 text-zinc-500 group-hover:text-cine-accent transition-colors" /> 
+              分镜镜头逻辑
+          </Button>
+      </div>
 
       {/* Action Button Group */}
       <div className="flex gap-2">
         {isGenerating && onStop ? (
-            <Button 
-                variant="primary"
-                className="flex-1 py-4.5 tracking-[0.25em] uppercase font-mono text-[10px] font-bold h-12 border-red-900/30 text-red-500 hover:bg-red-500/10"
-                onClick={onStop}
-            >
-                <Square size={14} className="mr-2" fill="currentColor" /> 停止渲染 (STOP)
+            <Button variant="primary" className="flex-1 tracking-[0.25em] h-12 border-red-900/30 text-red-500 hover:bg-red-500/10" onClick={onStop}>
+                <Square size={14} className="mr-2" fill="currentColor" /> 停止 (STOP)
             </Button>
         ) : (
-            <Button 
-                variant="accent" 
-                className="w-full py-4.5 tracking-[0.25em] uppercase font-mono text-[10px] font-bold relative overflow-hidden group transition-all duration-500 h-12"
-                onClick={onGenerate}
-                disabled={isGenerating || !prompt.trim()}
-            >
-                <span className="relative z-10 flex items-center justify-center gap-3">
+            <Button variant="accent" className="w-full tracking-[0.25em] h-12 shadow-[0_0_20px_rgba(255,122,0,0.3)]" onClick={onGenerate} disabled={isGenerating || !prompt.trim()}>
+                <span className="flex items-center justify-center gap-3">
                     {isGenerating ? <Zap size={14} className="animate-spin" /> : (isContinuing ? <GitMerge size={14} /> : <Layers size={14} />)}
-                    {isGenerating ? '渲染中...' : (isContinuing ? '续写当前分镜' : '执行 新渲染')}
+                    {isGenerating ? '渲染中...' : (isContinuing ? '续写分镜' : '执行渲染')}
                 </span>
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:animate-[shimmer_2s_infinite] pointer-events-none" />
             </Button>
         )}
       </div>
-
-      <style>{`
-          @keyframes shimmer {
-            100% { transform: translateX(100%); }
-          }
-      `}</style>
     </div>
   );
 };

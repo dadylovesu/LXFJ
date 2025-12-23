@@ -61,3 +61,16 @@ export interface CollageData {
 }
 
 export type InspectorTab = 'details' | 'analysis';
+
+export interface ScriptItem {
+  id: string;
+  content: string;
+  selected: boolean;
+}
+
+export interface SavedPrompt {
+  id: string;
+  title: string;
+  content: string;
+  timestamp: number;
+}
