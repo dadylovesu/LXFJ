@@ -3,8 +3,16 @@ import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { AspectRatio, ImageSize, Asset, CollageData, PanelAspectRatio } from "../types";
 
 const getClient = () => {
-  // 直接使用注入的环境变量 API_KEY
-  return new GoogleGenAI({ apiKey: process.env.API_KEY });
+  // 从 window.process 或环境变量中抓取 Key
+  const apiKey = (process.env as any).API_KEY;
+  
+  if (!apiKey || apiKey === "") {
+    console.error("Critical Error: API_KEY is missing in the runtime environment.");
+    // 抛出错误以防止后续代码导致 "An API Key must be set when running in a browser" 警告弹窗
+    throw new Error("Missing API Key. Please configure it in your environment or select one via the UI.");
+  }
+  
+  return new GoogleGenAI({ apiKey });
 };
 
 async function withRetry<T>(operation: () => Promise<T>, maxRetries = 3): Promise<T> {

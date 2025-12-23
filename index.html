@@ -5,6 +5,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>橙意机构 - 连续分镜创作器</title>
+    <!-- 关键修复：确保浏览器能识别环境变量 -->
+    <script>
+      window.process = window.process || { env: {} };
+      // 如果环境中存在 API_KEY，则注入
+      if (!window.process.env.API_KEY) {
+        // 此处通常由 Vercel 或构建环境自动替换，但我们提供一个占位
+        window.process.env.API_KEY = ""; 
+      }
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -39,43 +48,10 @@
         width: 100vw;
         height: 100vh;
       }
-      /* Custom Scrollbar */
-      ::-webkit-scrollbar {
-        width: 6px;
-        height: 6px;
-      }
-      ::-webkit-scrollbar-track {
-        background: transparent; 
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #222; 
-        border-radius: 10px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #333; 
-      }
-      
-      .glass-panel {
-        background: rgba(18, 18, 18, 0.7);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-      }
-
-      @keyframes subtle-pulse {
-        0%, 100% { opacity: 1; transform: scale(1); }
-        50% { opacity: 0.8; transform: scale(0.98); }
-      }
-      .animate-subtle-pulse {
-        animation: subtle-pulse 2s infinite ease-in-out;
-      }
-
-      @keyframes flow {
-        from { stroke-dashoffset: 20; }
-        to { stroke-dashoffset: 0; }
-      }
-      .animate-flow {
-        animation: flow 1s linear infinite;
-      }
+      ::-webkit-scrollbar { width: 6px; height: 6px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: #222; border-radius: 10px; }
+      ::-webkit-scrollbar-thumb:hover { background: #333; }
     </style>
   <script type="importmap">
 {
@@ -92,7 +68,6 @@
 </head>
   <body>
     <div id="root"></div>
-    <!-- 移除了干扰环境变量的 process 垫片 -->
     <script type="module" src="index.tsx"></script>
   </body>
 </html>
