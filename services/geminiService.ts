@@ -2,9 +2,13 @@
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { AspectRatio, ImageSize, Asset, CollageData, PanelAspectRatio } from "../types";
 
-// 严格按照指令：在调用时直接使用 process.env.API_KEY 初始化
+// 严格按照指令：每次 API 调用前重新初始化 GoogleGenAI 实例，以确保使用最新的 API KEY
 const createAIInstance = () => {
-  return new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    throw new Error("API Key is missing from process.env. Ensure authorization step is completed.");
+  }
+  return new GoogleGenAI({ apiKey });
 };
 
 async function withRetry<T>(operation: () => Promise<T>, maxRetries = 3): Promise<T> {

@@ -10,12 +10,15 @@ import { ScriptEditor } from './components/ScriptEditor';
 import { Asset, GeneratedImage, AspectRatio, PanelAspectRatio, ImageSize, AssetCategory, CollageData } from './types';
 import { generateMultiViewGrid, fileToBase64, enhancePrompt, analyzeAsset, ReferenceImageData, generateCameraMovement, editImage } from './services/geminiService';
 import { saveToStorage, loadFromStorage, clearStorage } from './services/persistenceService';
-import { AlertCircle, X as XIcon, Trash2, LayoutGrid } from 'lucide-react';
+import { AlertCircle, X as XIcon, Trash2, LayoutGrid, ShieldCheck, ExternalLink, Zap } from 'lucide-react';
 import { Button } from './components/Button';
 // @ts-ignore
 import JSZip from 'jszip';
 
 const App: React.FC = () => {
+  const [isKeyReady, setIsKeyReady] = useState<boolean>(false);
+  const [isCheckingKey, setIsCheckingKey] = useState<boolean>(true);
+  
   const [assets, setAssets] = useState<Asset[]>([]);
   const [images, setImages] = useState<GeneratedImage[]>([]);
   const [history, setHistory] = useState<GeneratedImage[][]>([]);
@@ -41,6 +44,24 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  // 初始化检查 API KEY 状态
+  useEffect(() => {
+    const checkKey = async () => {
+      // @ts-ignore
+      const ready = await window.aistudio.hasSelectedApiKey();
+      setIsKeyReady(ready);
+      setIsCheckingKey(false);
+    };
+    checkKey();
+  }, []);
+
+  const handleOpenKeyDialog = async () => {
+    // @ts-ignore
+    await window.aistudio.openSelectKey();
+    // 根据文档，触发后直接假设成功并进入应用
+    setIsKeyReady(true);
+  };
 
   useEffect(() => {
     switch (panelAspectRatio) {
@@ -160,7 +181,6 @@ const App: React.FC = () => {
           });
       }
 
-      // If activeCollage is present, we DISCARD text-based panelPrompts to prioritize visual recognition.
       const instructionsToSend = activeCollage ? undefined : panelPrompts;
 
       const finalResult = await generateMultiViewGrid(
@@ -195,6 +215,10 @@ const App: React.FC = () => {
       setSelectedImageId(finalNode.id);
     } catch (err: any) {
       setError(err.message || "生成失败");
+      // 如果错误提示 entity not found，可能需要重新选择 Key
+      if (err.message?.includes("not found")) {
+        setIsKeyReady(false);
+      }
     } finally {
       setIsGenerating(false);
       setGenerationStep("");
@@ -320,6 +344,44 @@ const App: React.FC = () => {
       setGenerationStep("");
     }
   };
+
+  if (isCheckingKey) {
+    return <div className="h-screen w-screen bg-cine-black flex items-center justify-center">
+      <div className="w-10 h-10 border-2 border-cine-accent border-t-transparent rounded-full animate-spin"></div>
+    </div>;
+  }
+
+  if (!isKeyReady) {
+    return (
+      <div className="h-screen w-screen bg-cine-black flex items-center justify-center p-6 relative overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-cine-accent/10 via-transparent to-transparent"></div>
+        <div className="max-w-md w-full glass-panel border border-zinc-800 p-10 rounded-lg space-y-8 text-center relative z-10 shadow-2xl">
+           <div className="w-20 h-20 bg-cine-accent/10 border border-cine-accent/30 rounded-full flex items-center justify-center mx-auto shadow-[0_0_30px_rgba(255,122,0,0.2)]">
+              <ShieldCheck className="text-cine-accent" size={40} />
+           </div>
+           <div className="space-y-3">
+              <h2 className="text-white text-xl font-bold tracking-widest font-mono uppercase">授权生产环境 (PRO KEY)</h2>
+              <p className="text-zinc-500 text-xs leading-relaxed font-mono px-4">
+                检测到渲染引擎需要接入高阶视觉能力。请点击下方按钮完成鉴权握手，以激活环境变量。
+              </p>
+           </div>
+           <div className="pt-4 space-y-4">
+              <Button variant="accent" className="w-full h-14 text-sm font-bold gap-3" onClick={handleOpenKeyDialog}>
+                 <Zap size={18} />
+                 连接生产密钥 (AUTHORIZE)
+              </Button>
+              <a 
+                href="https://ai.google.dev/gemini-api/docs/billing" 
+                target="_blank" 
+                className="flex items-center justify-center gap-2 text-zinc-500 hover:text-zinc-300 text-[10px] font-mono transition-colors"
+              >
+                查看计费文档 <ExternalLink size={10} />
+              </a>
+           </div>
+        </div>
+      </div>
+    );
+  }
 
   const selectedImage = images.find(i => i.id === selectedImageId) || null;
 
