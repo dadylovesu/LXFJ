@@ -16,8 +16,8 @@ import { Button } from './components/Button';
 import JSZip from 'jszip';
 
 const App: React.FC = () => {
-  const [isKeyReady, setIsKeyReady] = useState<boolean>(false);
-  const [isCheckingKey, setIsCheckingKey] = useState<boolean>(true);
+  // 移除阻塞状态，直接进入应用
+  const [isKeyReady, setIsKeyReady] = useState<boolean>(true);
   
   const [assets, setAssets] = useState<Asset[]>([]);
   const [images, setImages] = useState<GeneratedImage[]>([]);
@@ -45,22 +45,32 @@ const App: React.FC = () => {
 
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // 初始化检查 API KEY 状态
+  // 仅在静默状态下检查 Key，不阻塞 UI 渲染
   useEffect(() => {
     const checkKey = async () => {
-      // @ts-ignore
-      const ready = await window.aistudio.hasSelectedApiKey();
-      setIsKeyReady(ready);
-      setIsCheckingKey(false);
+      try {
+        // @ts-ignore
+        if (window.aistudio && typeof window.aistudio.hasSelectedApiKey === 'function') {
+           // @ts-ignore
+           const ready = await window.aistudio.hasSelectedApiKey();
+           setIsKeyReady(ready);
+        }
+      } catch (e) {
+        console.warn("Key check failed, proceeding with env variable.");
+      }
     };
     checkKey();
   }, []);
 
   const handleOpenKeyDialog = async () => {
-    // @ts-ignore
-    await window.aistudio.openSelectKey();
-    // 根据文档，触发后直接假设成功并进入应用
-    setIsKeyReady(true);
+    try {
+      // @ts-ignore
+      await window.aistudio.openSelectKey();
+      setIsKeyReady(true);
+      setError(null);
+    } catch (e) {
+      setError("无法打开 Key 选择对话框");
+    }
   };
 
   useEffect(() => {
@@ -214,9 +224,11 @@ const App: React.FC = () => {
       updateImagesWithHistory([...images, finalNode]);
       setSelectedImageId(finalNode.id);
     } catch (err: any) {
-      setError(err.message || "生成失败");
-      // 如果错误提示 entity not found，可能需要重新选择 Key
-      if (err.message?.includes("not found")) {
+      console.error("Generate error:", err);
+      const msg = err.message || "生成失败";
+      setError(msg);
+      // 如果报错显示 entity not found 或 API key 相关，显示激活 Key 的引导
+      if (msg.toLowerCase().includes("not found") || msg.toLowerCase().includes("api key")) {
         setIsKeyReady(false);
       }
     } finally {
@@ -345,44 +357,6 @@ const App: React.FC = () => {
     }
   };
 
-  if (isCheckingKey) {
-    return <div className="h-screen w-screen bg-cine-black flex items-center justify-center">
-      <div className="w-10 h-10 border-2 border-cine-accent border-t-transparent rounded-full animate-spin"></div>
-    </div>;
-  }
-
-  if (!isKeyReady) {
-    return (
-      <div className="h-screen w-screen bg-cine-black flex items-center justify-center p-6 relative overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-cine-accent/10 via-transparent to-transparent"></div>
-        <div className="max-w-md w-full glass-panel border border-zinc-800 p-10 rounded-lg space-y-8 text-center relative z-10 shadow-2xl">
-           <div className="w-20 h-20 bg-cine-accent/10 border border-cine-accent/30 rounded-full flex items-center justify-center mx-auto shadow-[0_0_30px_rgba(255,122,0,0.2)]">
-              <ShieldCheck className="text-cine-accent" size={40} />
-           </div>
-           <div className="space-y-3">
-              <h2 className="text-white text-xl font-bold tracking-widest font-mono uppercase">授权生产环境 (PRO KEY)</h2>
-              <p className="text-zinc-500 text-xs leading-relaxed font-mono px-4">
-                检测到渲染引擎需要接入高阶视觉能力。请点击下方按钮完成鉴权握手，以激活环境变量。
-              </p>
-           </div>
-           <div className="pt-4 space-y-4">
-              <Button variant="accent" className="w-full h-14 text-sm font-bold gap-3" onClick={handleOpenKeyDialog}>
-                 <Zap size={18} />
-                 连接生产密钥 (AUTHORIZE)
-              </Button>
-              <a 
-                href="https://ai.google.dev/gemini-api/docs/billing" 
-                target="_blank" 
-                className="flex items-center justify-center gap-2 text-zinc-500 hover:text-zinc-300 text-[10px] font-mono transition-colors"
-              >
-                查看计费文档 <ExternalLink size={10} />
-              </a>
-           </div>
-        </div>
-      </div>
-    );
-  }
-
   const selectedImage = images.find(i => i.id === selectedImageId) || null;
 
   return (
@@ -446,6 +420,29 @@ const App: React.FC = () => {
             onDownloadAll={handleDownloadZip} assets={assets} onDeselectAll={() => { setSelectedImageId(undefined); setSelectedAssetId(undefined); }}
         />
         
+        {/* API Key 激活浮层 - 仅在报错或未授权时显示 */}
+        {!isKeyReady && (
+            <div className="absolute inset-0 bg-cine-black/90 backdrop-blur-xl z-[200] flex items-center justify-center p-6">
+                <div className="max-w-md w-full glass-panel border border-zinc-800 p-10 rounded-lg space-y-8 text-center shadow-2xl animate-in zoom-in-95 duration-300">
+                    <div className="w-20 h-20 bg-cine-accent/10 border border-cine-accent/30 rounded-full flex items-center justify-center mx-auto shadow-[0_0_30px_rgba(255,122,0,0.2)]">
+                        <ShieldCheck className="text-cine-accent" size={40} />
+                    </div>
+                    <div className="space-y-3">
+                        <h2 className="text-white text-xl font-bold tracking-widest font-mono uppercase">激活渲染引擎 (AUTH)</h2>
+                        <p className="text-zinc-500 text-xs leading-relaxed font-mono px-4">
+                            系统检测到需要手动激活 Pro 级视觉能力。请点击下方按钮完成环境授权。
+                        </p>
+                    </div>
+                    <div className="pt-4 space-y-4">
+                        <Button variant="accent" className="w-full h-14 text-sm font-bold gap-3" onClick={handleOpenKeyDialog}>
+                            <Zap size={18} />
+                            连接生产密钥 (AUTHORIZE)
+                        </Button>
+                    </div>
+                </div>
+            </div>
+        )}
+
         {isGenerating && (
             <div className="absolute inset-0 bg-cine-black/90 backdrop-blur-xl z-[150] flex flex-col items-center justify-center space-y-8">
                  <div className="w-16 h-16 border-t-2 border-cine-accent rounded-full animate-spin"></div>
