@@ -16,8 +16,6 @@ import { Button } from './components/Button';
 import JSZip from 'jszip';
 
 const App: React.FC = () => {
-  // Check for API key selection state as required for high-quality models
-  const [apiKeySelected, setApiKeySelected] = useState<boolean | null>(null);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [images, setImages] = useState<GeneratedImage[]>([]);
   const [history, setHistory] = useState<GeneratedImage[][]>([]);
@@ -41,25 +39,6 @@ const App: React.FC = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
-
-  const abortControllerRef = useRef<AbortController | null>(null);
-
-  // Mandatory check for API key selection when using high-quality models (gemini-3-pro-image-preview)
-  useEffect(() => {
-    const checkKey = async () => {
-      if (window.aistudio) {
-        try {
-          const has = await window.aistudio.hasSelectedApiKey();
-          setApiKeySelected(has);
-        } catch (e) {
-          setApiKeySelected(true); // Fallback to assumed selected
-        }
-      } else {
-        setApiKeySelected(true); // Fallback for non-AI Studio environments
-      }
-    };
-    checkKey();
-  }, []);
 
   useEffect(() => {
     switch (panelAspectRatio) {
@@ -116,14 +95,6 @@ const App: React.FC = () => {
     setSelectedImageId(undefined);
   }, [images, updateImagesWithHistory]);
 
-  const handleSelectKey = async () => {
-    if (window.aistudio) {
-      await window.aistudio.openSelectKey();
-      // Assume selection successful to mitigate race conditions per guidelines
-      setApiKeySelected(true);
-    }
-  };
-
   const handleGenerate = async () => {
     if (!prompt.trim() || isGenerating) return;
     setIsGenerating(true);
@@ -175,10 +146,6 @@ const App: React.FC = () => {
       setGenerationStep('');
     } catch (err: any) {
       console.error(err);
-      // Reset key selection if entity not found error occurs (implies project/billing issues)
-      if (err.message && err.message.includes("Requested entity was not found.")) {
-        setApiKeySelected(false);
-      }
       setError(err.message || '生成失败');
     } finally {
       setIsGenerating(false);
@@ -215,9 +182,6 @@ const App: React.FC = () => {
         sliceHistory: newHistory
       } : img));
     } catch (err: any) {
-      if (err.message && err.message.includes("Requested entity was not found.")) {
-        setApiKeySelected(false);
-      }
       setError(err.message || '重绘失败');
     } finally {
       setIsGenerating(false);
@@ -247,42 +211,6 @@ const App: React.FC = () => {
     link.download = 'OrangeStudio-Export.zip';
     link.click();
   };
-
-  // UI for mandatory API key selection
-  if (apiKeySelected === false) {
-    return (
-      <div className="h-screen w-screen bg-[#050505] flex flex-col items-center justify-center p-6 text-center space-y-8 animate-in fade-in duration-500">
-        <div className="max-w-md space-y-4">
-          <div className="w-16 h-16 bg-cine-accent rounded-2xl flex items-center justify-center mx-auto shadow-[0_0_30px_rgba(255,122,0,0.3)]">
-            <LayoutGrid className="text-black w-8 h-8" />
-          </div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Project API Key Required</h1>
-          <p className="text-zinc-400 text-sm leading-relaxed">
-            To use high-quality cinematic models like gemini-3-pro-image-preview, you must select an API key from a paid Google Cloud project.
-          </p>
-          <div className="pt-2">
-            <a 
-              href="https://ai.google.dev/gemini-api/docs/billing" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="text-cine-accent text-xs hover:underline inline-flex items-center gap-1 font-mono"
-            >
-              Billing Documentation <XIcon size={12} className="rotate-45" />
-            </a>
-          </div>
-        </div>
-        <Button 
-          variant="accent" 
-          onClick={handleSelectKey}
-          className="px-12 h-12 text-sm font-bold tracking-[0.2em]"
-        >
-          Select Paid API Key
-        </Button>
-      </div>
-    );
-  }
-
-  if (apiKeySelected === null) return null; // Wait for selection state check
 
   const selectedImage = images.find(i => i.id === selectedImageId) || null;
   const selectedAsset = assets.find(a => a.id === selectedAssetId) || null;
