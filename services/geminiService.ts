@@ -2,6 +2,18 @@
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { AspectRatio, ImageSize, Asset, CollageData, PanelAspectRatio } from "../types";
 
+export const ensureApiKey = async () => {
+  // @ts-ignore
+  if (window.aistudio && window.aistudio.hasSelectedApiKey) {
+    // @ts-ignore
+    const hasKey = await window.aistudio.hasSelectedApiKey();
+    if (!hasKey) {
+      // @ts-ignore
+      await window.aistudio.openSelectKey();
+    }
+  }
+};
+
 const getClient = () => {
   return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
@@ -75,6 +87,8 @@ export const generateMultiViewGrid = async (
   panelInstructions?: string[],
   collageRef?: CollageData 
 ): Promise<{ fullImage: string, slices: string[] }> => {
+  await ensureApiKey();
+  
   const totalViews = gridSize * gridSize;
   const gridType = `${gridSize}x${gridSize}`;
 
@@ -173,6 +187,7 @@ export const editImage = async (
   refImageBase64?: string,
   imageSize: ImageSize = ImageSize.K1
 ): Promise<string> => {
+  await ensureApiKey();
   const cleanBase64 = base64Image.includes(',') ? base64Image.split(',')[1] : base64Image;
   const parts: any[] = [{ inlineData: { mimeType: 'image/png', data: cleanBase64 } }];
   if (refImageBase64) parts.push({ inlineData: { mimeType: 'image/png', data: refImageBase64.split(',')[1] } });
@@ -207,6 +222,7 @@ RULE: ABSOLUTELY NO BLACK/WHITE BORDERS. Maintain full-bleed framing.` });
 };
 
 export const generateCameraSuggestions = async (prompt: string, panelCount: number): Promise<string[]> => {
+    await ensureApiKey();
     try {
         const response = await withRetry<GenerateContentResponse>(() => {
             const ai = getClient();
@@ -251,6 +267,7 @@ export const generateCameraSuggestions = async (prompt: string, panelCount: numb
 };
 
 export const generateCameraMovement = async (prompt: string): Promise<string> => {
+    await ensureApiKey();
     try {
         const response = await withRetry<GenerateContentResponse>(() => {
             const ai = getClient();
@@ -265,6 +282,7 @@ export const generateCameraMovement = async (prompt: string): Promise<string> =>
 };
 
 export const generateScriptLines = async (instruction: string, count: number, attachmentText?: string): Promise<string[]> => {
+    await ensureApiKey();
     try {
         const response = await withRetry<GenerateContentResponse>(() => {
             const ai = getClient();
@@ -293,6 +311,7 @@ export const generateScriptLines = async (instruction: string, count: number, at
 };
 
 export const generateDirectorSummary = async (scripts: string[]): Promise<string> => {
+    await ensureApiKey();
     try {
         const response = await withRetry<GenerateContentResponse>(() => {
             const ai = getClient();
@@ -313,6 +332,7 @@ export const generateDirectorSummary = async (scripts: string[]): Promise<string
 };
 
 export const enhancePrompt = async (rawPrompt: string): Promise<string> => {
+  await ensureApiKey();
   try {
     const response = await withRetry<GenerateContentResponse>(() => {
         const ai = getClient();
@@ -326,6 +346,7 @@ export const enhancePrompt = async (rawPrompt: string): Promise<string> => {
 };
 
 export const analyzeAsset = async (fileBase64: string, mimeType: string, prompt: string): Promise<string> => {
+  await ensureApiKey();
   try {
     const response = await withRetry<GenerateContentResponse>(() => {
         const ai = getClient();
