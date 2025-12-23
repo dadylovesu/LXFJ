@@ -79,9 +79,7 @@ const Node = memo(({ image, selected, onSelect, onDelete, onMouseDown, allAssets
     const hasSlices = isRenderNode && image.slices && image.slices.length > 0;
     const cols = image.gridCols || 2;
     
-    // 关键修复：确保预览容器比例与 PanelAspectRatio 逻辑一致
     const nodeAspectRatio = useMemo(() => {
-        // 如果是单图，使用其自身的比例
         if (image.aspectRatio) return image.aspectRatio.replace(':', '/');
         return '16/9';
     }, [image.aspectRatio]);
@@ -161,27 +159,6 @@ const Node = memo(({ image, selected, onSelect, onDelete, onMouseDown, allAssets
                              </div>
                         )}
 
-                        {image.assetIds && image.assetIds.length > 0 && (
-                            <div className="bg-zinc-900/30 p-2 rounded-sm border border-zinc-800/30">
-                                <div className="flex items-center gap-1.5 mb-1.5 opacity-50">
-                                     <Images size={8} />
-                                     <span className="text-[8px] font-mono uppercase tracking-wider">Refs ({image.assetIds.length})</span>
-                                 </div>
-                                 <div className="flex gap-1.5 overflow-x-auto custom-scrollbar">
-                                     {image.assetIds.map(id => {
-                                         const asset = allAssets?.find(a => a.id === id);
-                                         if (!asset) return null;
-                                         return (
-                                             <div key={id} className="w-10 h-10 flex-shrink-0 rounded-[1px] overflow-hidden border border-zinc-700 bg-black">
-                                                 <img src={asset.previewUrl} className="w-full h-full object-cover" alt="ref" />
-                                             </div>
-                                         )
-                                     })}
-                                 </div>
-                            </div>
-                        )}
-
-                        {/* Main Image / Grid */}
                         <div 
                             className="relative w-full bg-zinc-900 rounded-sm border border-zinc-800 overflow-hidden pointer-events-auto shadow-inner"
                             style={{ aspectRatio: nodeAspectRatio }}
@@ -199,16 +176,16 @@ const Node = memo(({ image, selected, onSelect, onDelete, onMouseDown, allAssets
                             ) : (
                                 hasSlices ? (
                                     <div 
-                                        className="grid w-full h-full gap-[1px] bg-black"
+                                        className="grid w-full h-full gap-0 bg-black"
                                         style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}
                                     >
                                         {image.slices!.map((sliceUrl, idx) => (
                                             <div 
                                                 key={idx} 
-                                                className="relative w-full h-full overflow-hidden cursor-pointer group/slice border border-zinc-800/20"
+                                                className="relative w-full h-full overflow-hidden cursor-pointer group/slice"
                                                 onClick={(e) => { e.stopPropagation(); setExpandedSlice(sliceUrl); onSelect(); }}
                                             >
-                                                <img src={sliceUrl} className="w-full h-full object-cover group-hover/slice:scale-110 transition-transform duration-500" />
+                                                <img src={sliceUrl} className="w-full h-full object-cover group-hover/slice:scale-105 transition-transform duration-700" />
                                                 <div className="absolute inset-0 bg-white/0 group-hover/slice:bg-white/5 transition-colors pointer-events-none" />
                                                 
                                                 {image.sliceHistory?.[idx] && image.sliceHistory[idx].length > 0 && (
@@ -309,7 +286,7 @@ const DetailViewOverlay: React.FC<{ image: GeneratedImage; onClose: () => void }
             <div className="flex-1 p-8 flex items-center justify-center overflow-hidden relative">
                 <div className="relative w-full max-w-5xl h-full flex flex-col justify-center">
                     <div 
-                        className="relative w-full bg-zinc-900 border border-zinc-800 shadow-2xl rounded-sm overflow-hidden mx-auto"
+                        className="relative w-full bg-zinc-900 shadow-2xl rounded-sm overflow-hidden mx-auto"
                         style={{ aspectRatio: containerAspectRatio, maxHeight: '80vh' }}
                     >
                         {expandedSlice ? (
@@ -325,12 +302,12 @@ const DetailViewOverlay: React.FC<{ image: GeneratedImage; onClose: () => void }
                         ) : (
                             hasSlices ? (
                                 <div 
-                                    className="grid w-full h-full gap-[2px] bg-black"
+                                    className="grid w-full h-full gap-0 bg-black"
                                     style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}
                                 >
                                     {image.slices!.map((sliceUrl, idx) => (
                                         <div key={idx} className="relative w-full h-full overflow-hidden cursor-pointer group/slice" onClick={() => setExpandedSlice(sliceUrl)}>
-                                            <img src={sliceUrl} className="w-full h-full object-cover transition-transform duration-500 group-hover/slice:scale-105" />
+                                            <img src={sliceUrl} className="w-full h-full object-cover transition-transform duration-700 group-hover/slice:scale-105" />
                                             <div className="absolute inset-0 bg-black/0 group-hover/slice:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover/slice:opacity-100">
                                                 <Maximize2 className="text-white drop-shadow-md" size={32} />
                                             </div>
@@ -489,7 +466,7 @@ export const Canvas: React.FC<CanvasProps> = ({ images, assets, onSelect, select
                         OrangeStudio 橙意机构
                     </h1>
                     <p className="text-zinc-500 text-sm max-w-md mx-auto leading-relaxed">
-                        专业的连续分镜创作器。现支持 <span className="text-cine-accent">动态宫格配置</span>，以及 <span className="text-white">智能局部版本重绘</span>。
+                        专业的连续分镜创作器。现支持 <span className="text-cine-accent">无缝宫格渲染</span>，以及 <span className="text-white">分镜局部 AI 重绘</span>。
                     </p>
                 </div>
             </div>
@@ -534,9 +511,9 @@ export const Canvas: React.FC<CanvasProps> = ({ images, assets, onSelect, select
                 )}
                 {(viewMode === 'grid' || viewMode === 'table') && (
                     <div className="h-full overflow-y-auto p-6 pt-20 custom-scrollbar">
-                        <div className={`grid gap-4 items-start ${viewMode === 'grid' ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5' : 'grid-cols-1'}`}>
+                        <div className={`grid gap-0 items-start ${viewMode === 'grid' ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5' : 'grid-cols-1'}`}>
                             {images.filter(i => i.nodeType === 'render').map((img) => (
-                                <div key={img.id} className={`group relative bg-zinc-900 border transition-all duration-200 cursor-pointer overflow-hidden rounded-sm ${selectedId === img.id ? 'border-cine-accent ring-1 ring-cine-accent/50' : 'border-zinc-800 hover:border-zinc-600'} ${viewMode === 'table' ? 'flex flex-row gap-4 p-4' : ''}`} onClick={() => handleItemClick(img)}>
+                                <div key={img.id} className={`group relative bg-zinc-900 border transition-all duration-200 cursor-pointer overflow-hidden ${selectedId === img.id ? 'border-cine-accent ring-1 ring-cine-accent/50' : 'border-zinc-800 hover:border-zinc-600'} ${viewMode === 'table' ? 'flex flex-row gap-4 p-4' : ''}`} onClick={() => handleItemClick(img)}>
                                     <div className={`${viewMode === 'table' ? 'w-48' : 'w-full'} relative aspect-video pointer-events-none`}>
                                         <img src={img.url} alt="node" className="w-full h-full object-cover" />
                                         <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded-[2px] text-[8px] font-bold font-mono tracking-wider border backdrop-blur-sm bg-cine-accent text-black border-cine-accent">
