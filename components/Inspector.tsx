@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { GeneratedImage, Asset, ImageSize } from '../types';
 import { Download, Copy, Maximize2, Wand2, X, MessageSquare, Info, Video, Fingerprint, Eye, Sparkle, LayoutGrid, ChevronLeft, ChevronRight, History, Layers, Zap, Upload, Image as ImageIcon, Plus, Trash2 } from 'lucide-react';
@@ -73,8 +72,6 @@ export const Inspector: React.FC<InspectorProps> = ({
 
   const handleEdit = () => {
     if (selectedImage && isSliceView && onEditSlice) {
-      // Use the first ref image if multiple provided (Gemini edit typically uses one primary ref image + original)
-      // or we can modify the service to accept multiple. For now, we use the first selected one.
       const primaryRef = editRefImages.length > 0 ? editRefImages[0] : undefined;
       onEditSlice(selectedImage.id, currentSliceIndex, editPrompt, useProModel, primaryRef, upscaleSize);
       setEditPrompt("");
@@ -100,13 +97,13 @@ export const Inspector: React.FC<InspectorProps> = ({
 
   if (!hasContent) {
     return (
-      <div className="h-full flex flex-col items-center justify-center text-zinc-700 space-y-4 p-10 text-center bg-cine-dark">
+      <div className="h-full flex flex-col items-center justify-center text-zinc-300 space-y-4 p-10 text-center bg-cine-dark">
         <div className="w-12 h-12 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center opacity-40">
            <Eye size={20} />
         </div>
         <div className="space-y-2">
-          <p className="font-mono text-[10px] uppercase tracking-[0.3em] font-bold text-zinc-600">监视器就绪 (IDLE)</p>
-          <p className="text-[10px] text-zinc-800 leading-relaxed font-mono">请在画布中选择一个<br/>分镜任务查看细节。</p>
+          <p className="font-mono text-[10px] uppercase tracking-[0.3em] font-bold text-zinc-400">监视器就绪 (IDLE)</p>
+          <p className="text-[10px] text-zinc-500 leading-relaxed font-mono">请在画布中选择一个<br/>分镜任务查看细节。</p>
         </div>
       </div>
     );
@@ -120,11 +117,11 @@ export const Inspector: React.FC<InspectorProps> = ({
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-cine-border bg-cine-black/40 backdrop-blur-md relative z-10">
         <div className="flex items-center gap-3">
-            <span className="text-zinc-500 text-[10px] uppercase tracking-[0.25em] font-mono font-bold">
+            <span className="text-zinc-300 text-[10px] uppercase tracking-[0.25em] font-mono font-bold">
                 03. 导演监视器 (INSPECTOR)
             </span>
         </div>
-        <button onClick={onClose} className="text-zinc-600 hover:text-white transition-all hover:rotate-90 duration-300">
+        <button onClick={onClose} className="text-zinc-500 hover:text-white transition-all hover:rotate-90 duration-300">
             <X size={16} />
         </button>
       </div>
@@ -134,7 +131,7 @@ export const Inspector: React.FC<InspectorProps> = ({
          {displayUrl ? (
              <img src={displayUrl} alt="Inspector View" className="max-w-full max-h-full object-contain" />
          ) : (
-             <div className="flex flex-col items-center gap-3 text-zinc-800">
+             <div className="flex flex-col items-center gap-3 text-zinc-700">
                  <Video size={40} className="opacity-20" />
                  <span className="text-[9px] font-mono uppercase tracking-[0.4em] font-bold">No Signal</span>
              </div>
@@ -165,7 +162,7 @@ export const Inspector: React.FC<InspectorProps> = ({
              <div className="absolute bottom-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0">
                  <button 
                     onClick={() => setShowFullGrid(!showFullGrid)}
-                    className="bg-black/70 backdrop-blur-md text-white text-[9px] px-3 py-1.5 rounded-[2px] border border-zinc-800 hover:border-cine-accent flex items-center gap-2 transition-all uppercase tracking-widest font-mono font-bold"
+                    className="bg-black/70 backdrop-blur-md text-white text-[9px] px-3 py-1.5 rounded-[2px] border border-zinc-700 hover:border-cine-accent flex items-center gap-2 transition-all uppercase tracking-widest font-mono font-bold"
                  >
                     <Maximize2 size={10} />
                     {showFullGrid ? "查看当前格" : "查看总宫格"}
@@ -178,21 +175,21 @@ export const Inspector: React.FC<InspectorProps> = ({
       <div className="flex border-b border-cine-border relative z-10">
           <button 
             onClick={() => setActiveTab('view')}
-            className={`flex-1 py-3.5 text-[9px] font-mono uppercase tracking-[0.2em] font-bold transition-all ${activeTab === 'view' ? 'text-cine-accent bg-cine-accent/5' : 'text-zinc-600 hover:text-zinc-400'}`}
+            className={`flex-1 py-3.5 text-[9px] font-mono uppercase tracking-[0.2em] font-bold transition-all ${activeTab === 'view' ? 'text-cine-accent bg-cine-accent/5' : 'text-zinc-500 hover:text-zinc-300'}`}
           >
             画面属性
           </button>
           {isSliceView && (
               <button 
                 onClick={() => setActiveTab('edit')}
-                className={`flex-1 py-3.5 text-[9px] font-mono uppercase tracking-[0.2em] font-bold transition-all ${activeTab === 'edit' ? 'text-cine-accent bg-cine-accent/5' : 'text-zinc-600 hover:text-zinc-400'}`}
+                className={`flex-1 py-3.5 text-[9px] font-mono uppercase tracking-[0.2em] font-bold transition-all ${activeTab === 'edit' ? 'text-cine-accent bg-cine-accent/5' : 'text-zinc-500 hover:text-zinc-300'}`}
               >
                 AI 重绘
               </button>
           )}
           <button 
             onClick={() => setActiveTab('analyze')}
-            className={`flex-1 py-3.5 text-[9px] font-mono uppercase tracking-[0.2em] font-bold transition-all ${activeTab === 'analyze' ? 'text-cine-accent bg-cine-accent/5' : 'text-zinc-600 hover:text-zinc-400'}`}
+            className={`flex-1 py-3.5 text-[9px] font-mono uppercase tracking-[0.2em] font-bold transition-all ${activeTab === 'analyze' ? 'text-cine-accent bg-cine-accent/5' : 'text-zinc-500 hover:text-zinc-300'}`}
           >
             视觉分析
           </button>
@@ -212,7 +209,7 @@ export const Inspector: React.FC<InspectorProps> = ({
                              </div>
                              <div>
                                  <p className="text-[10px] text-cine-accent font-bold uppercase tracking-wider">当前分镜 Panel</p>
-                                 <p className="text-[8px] text-zinc-600 font-mono">INDEX: {currentSliceIndex} / {selectedImage?.slices?.length}</p>
+                                 <p className="text-[8px] text-zinc-400 font-mono">INDEX: {currentSliceIndex} / {selectedImage?.slices?.length}</p>
                              </div>
                          </div>
                     </div>
@@ -220,18 +217,18 @@ export const Inspector: React.FC<InspectorProps> = ({
 
                 {/* Metadata */}
                 <div className="space-y-4">
-                    <h3 className="text-zinc-500 text-[10px] font-bold uppercase tracking-[0.2em] flex items-center gap-2">
-                        <Fingerprint size={12} className="text-zinc-700" />
+                    <h3 className="text-zinc-300 text-[10px] font-bold uppercase tracking-[0.2em] flex items-center gap-2">
+                        <Fingerprint size={12} className="text-zinc-500" />
                         元数据 (METADATA)
                     </h3>
                     <div className="grid grid-cols-2 gap-y-5 gap-x-4 text-[10px] font-mono">
                         <div className="flex flex-col gap-1">
-                            <span className="uppercase text-zinc-700 text-[8px] tracking-widest">类型</span>
-                            <span className="text-zinc-400 font-bold">{selectedImage ? '分镜节点' : '原始资产'}</span>
+                            <span className="uppercase text-zinc-500 text-[8px] tracking-widest">类型</span>
+                            <span className="text-zinc-200 font-bold">{selectedImage ? '分镜节点' : '原始资产'}</span>
                         </div>
                         <div className="flex flex-col gap-1">
-                            <span className="uppercase text-zinc-700 text-[8px] tracking-widest">比例</span>
-                            <span className="text-zinc-400 font-bold">
+                            <span className="uppercase text-zinc-500 text-[8px] tracking-widest">比例</span>
+                            <span className="text-zinc-200 font-bold">
                                 {selectedImage ? selectedImage.aspectRatio : 'ORIGINAL'}
                             </span>
                         </div>
@@ -253,31 +250,31 @@ export const Inspector: React.FC<InspectorProps> = ({
              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500 h-full flex flex-col pb-10">
                  {/* Model Selector */}
                  <div className="space-y-3">
-                    <label className="text-zinc-500 text-[9px] font-bold uppercase tracking-[0.2em]">渲染引擎 (MODEL)</label>
+                    <label className="text-zinc-300 text-[9px] font-bold uppercase tracking-[0.2em]">渲染引擎 (MODEL)</label>
                     <div className="grid grid-cols-2 gap-2">
                         <button 
                             onClick={() => setUseProModel(false)}
                             className={`flex flex-col items-center justify-center gap-1.5 p-3 border rounded-sm transition-all ${!useProModel ? 'border-cine-accent bg-cine-accent/5' : 'border-zinc-800 bg-black/40 hover:border-zinc-700'}`}
                         >
-                            <span className={`text-[10px] font-bold font-mono tracking-widest ${!useProModel ? 'text-cine-accent' : 'text-zinc-500'}`}>NANOBANANA</span>
-                            <span className="text-[7px] text-zinc-600 uppercase font-mono tracking-tighter">Fast Edit</span>
+                            <span className={`text-[10px] font-bold font-mono tracking-widest ${!useProModel ? 'text-cine-accent' : 'text-zinc-400'}`}>NANOBANANA</span>
+                            <span className="text-[7px] text-zinc-500 uppercase font-mono tracking-tighter">Fast Edit</span>
                         </button>
                         <button 
                             onClick={() => setUseProModel(true)}
                             className={`flex flex-col items-center justify-center gap-1.5 p-3 border rounded-sm transition-all ${useProModel ? 'border-cine-accent bg-cine-accent/5 shadow-[0_0_15px_rgba(255,122,0,0.1)]' : 'border-zinc-800 bg-black/40 hover:border-zinc-700'}`}
                         >
-                            <span className={`text-[10px] font-bold font-mono tracking-widest ${useProModel ? 'text-cine-accent' : 'text-zinc-500'}`}>PRO ENGINE</span>
-                            <span className="text-[7px] text-zinc-600 uppercase font-mono tracking-tighter">High Fidelity</span>
+                            <span className={`text-[10px] font-bold font-mono tracking-widest ${useProModel ? 'text-cine-accent' : 'text-zinc-400'}`}>PRO ENGINE</span>
+                            <span className="text-[7px] text-zinc-500 uppercase font-mono tracking-tighter">High Fidelity</span>
                         </button>
                     </div>
                  </div>
 
                  <div className="space-y-3">
-                    <label className="text-zinc-500 text-[9px] font-bold uppercase tracking-[0.2em]">重绘指令</label>
+                    <label className="text-zinc-300 text-[9px] font-bold uppercase tracking-[0.2em]">重绘指令</label>
                     <textarea 
                         value={editPrompt}
                         onChange={(e) => setEditPrompt(e.target.value)}
-                        className="w-full bg-black/40 border border-zinc-800/80 rounded-sm p-4 text-[11px] text-zinc-400 focus:border-cine-accent focus:ring-0 resize-none font-mono min-h-[80px] leading-relaxed transition-all placeholder:text-zinc-800"
+                        className="w-full bg-black/40 border border-zinc-800/80 rounded-sm p-4 text-[11px] text-zinc-200 focus:border-cine-accent focus:ring-0 resize-none font-mono min-h-[80px] leading-relaxed transition-all placeholder:text-zinc-700"
                         placeholder="例如：给角色戴上墨镜，或者改变背景灯光..."
                     />
                  </div>
@@ -285,7 +282,7 @@ export const Inspector: React.FC<InspectorProps> = ({
                  {/* Reference Images */}
                  <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                        <label className="text-zinc-500 text-[9px] font-bold uppercase tracking-[0.2em]">参考图库 (REFERENCES)</label>
+                        <label className="text-zinc-300 text-[9px] font-bold uppercase tracking-[0.2em]">参考图库 (REFERENCES)</label>
                         <button onClick={() => editRefInputRef.current?.click()} className="text-[8px] text-cine-accent font-bold font-mono border border-cine-accent/30 px-2 py-0.5 rounded-full hover:bg-cine-accent/10 transition-all flex items-center gap-1">
                             <Plus size={10} /> ADD
                         </button>
@@ -304,7 +301,7 @@ export const Inspector: React.FC<InspectorProps> = ({
                         {editRefImages.length === 0 && (
                             <div className="col-span-4 py-4 border border-dashed border-zinc-800/50 rounded-sm flex flex-col items-center justify-center opacity-30">
                                 <ImageIcon size={16} className="mb-1" />
-                                <span className="text-[8px] font-mono tracking-widest">NO ASSET</span>
+                                <span className="text-[8px] font-mono tracking-widest text-zinc-500">NO ASSET</span>
                             </div>
                         )}
                     </div>
@@ -313,13 +310,13 @@ export const Inspector: React.FC<InspectorProps> = ({
                  {/* High Fidelity Upscale */}
                  {useProModel && (
                     <div className="space-y-3 pt-2">
-                        <label className="text-zinc-500 text-[9px] font-bold uppercase tracking-[0.2em]">高清放大 (UPSCALE)</label>
+                        <label className="text-zinc-300 text-[9px] font-bold uppercase tracking-[0.2em]">高清放大 (UPSCALE)</label>
                         <div className="flex gap-2">
                             {[ImageSize.K1, ImageSize.K2, ImageSize.K4].map((sz) => (
                                 <button 
                                     key={sz}
                                     onClick={() => setUpscaleSize(sz)}
-                                    className={`flex-1 h-9 border rounded-sm text-[9px] font-mono font-bold transition-all ${upscaleSize === sz ? 'border-cine-accent text-cine-accent bg-cine-accent/5' : 'border-zinc-800 text-zinc-600 bg-black/40 hover:border-zinc-700'}`}
+                                    className={`flex-1 h-9 border rounded-sm text-[9px] font-mono font-bold transition-all ${upscaleSize === sz ? 'border-cine-accent text-cine-accent bg-cine-accent/5' : 'border-zinc-800 text-zinc-400 bg-black/40 hover:border-zinc-700'}`}
                                 >
                                     {sz} 导出
                                 </button>
@@ -345,8 +342,8 @@ export const Inspector: React.FC<InspectorProps> = ({
                  {historyForCurrentSlice.length > 0 && (
                      <div className="pt-6 border-t border-zinc-800/50">
                         <div className="flex items-center justify-between mb-3">
-                            <span className="text-zinc-500 text-[9px] font-bold uppercase tracking-[0.2em]">往期版本</span>
-                            <span className="text-zinc-700 text-[8px] font-mono">{historyForCurrentSlice.length} VERSIONS</span>
+                            <span className="text-zinc-300 text-[9px] font-bold uppercase tracking-[0.2em]">往期版本</span>
+                            <span className="text-zinc-500 text-[8px] font-mono">{historyForCurrentSlice.length} VERSIONS</span>
                         </div>
                         <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
                             {historyForCurrentSlice.map((url, i) => (
@@ -363,11 +360,11 @@ export const Inspector: React.FC<InspectorProps> = ({
         {activeTab === 'analyze' && (
              <div className="space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-500 h-full flex flex-col">
                 <div className="space-y-3">
-                    <label className="text-zinc-500 text-[10px] font-bold uppercase tracking-[0.2em]">分析指令</label>
+                    <label className="text-zinc-300 text-[10px] font-bold uppercase tracking-[0.2em]">分析指令</label>
                     <textarea 
                         value={analysisPrompt}
                         onChange={(e) => setAnalysisPrompt(e.target.value)}
-                        className="w-full bg-black/40 border border-zinc-800/80 rounded-sm p-4 text-[11px] text-zinc-400 focus:border-cine-accent focus:ring-0 resize-none font-mono min-h-[80px] leading-relaxed transition-all"
+                        className="w-full bg-black/40 border border-zinc-800/80 rounded-sm p-4 text-[11px] text-zinc-200 focus:border-cine-accent focus:ring-0 resize-none font-mono min-h-[80px] leading-relaxed transition-all"
                     />
                     <Button 
                         variant="accent" 
@@ -384,9 +381,9 @@ export const Inspector: React.FC<InspectorProps> = ({
                 <div className="flex-1 min-h-0 flex flex-col space-y-3 pt-2 border-t border-zinc-800/50">
                     <div className="flex-1 bg-black/50 border border-zinc-900/80 rounded-sm p-5 overflow-y-auto custom-scrollbar shadow-inner relative">
                         {analysisResult ? (
-                            <p className="text-zinc-400 text-xs leading-relaxed whitespace-pre-wrap font-mono tracking-tight">{analysisResult}</p>
+                            <p className="text-zinc-300 text-xs leading-relaxed whitespace-pre-wrap font-mono tracking-tight">{analysisResult}</p>
                         ) : (
-                            <div className="h-full flex flex-col items-center justify-center text-zinc-800 gap-4 opacity-30">
+                            <div className="h-full flex flex-col items-center justify-center text-zinc-700 gap-4 opacity-30">
                                 <Sparkle size={24} />
                                 <span className="text-[10px] font-mono tracking-[0.3em] uppercase text-center">等待 AI 分析反馈</span>
                             </div>

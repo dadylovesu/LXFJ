@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useLayoutEffect, useCallback, memo, useMemo } from 'react';
 import { GeneratedImage, Asset } from '../types';
 import { Trash2, Archive, LayoutGrid, List, MonitorPlay, Workflow, Type, Images, Video, X, Maximize2, ArrowLeft, History } from 'lucide-react';
@@ -102,7 +101,7 @@ const Node = memo(({ image, selected, onSelect, onDelete, onMouseDown, allAssets
         >
             {/* Node Header */}
             <div className={`px-3 py-2 border-b flex justify-between items-center rounded-t-md cursor-grab active:cursor-grabbing ${getHeaderColor()}`}>
-                 <div className="flex items-center gap-2 text-zinc-300 pointer-events-none">
+                 <div className="flex items-center gap-2 text-zinc-200 pointer-events-none">
                      {getIcon()}
                      <span className="text-[9px] font-mono uppercase tracking-wider font-bold">
                          {getLabel()}
@@ -126,7 +125,7 @@ const Node = memo(({ image, selected, onSelect, onDelete, onMouseDown, allAssets
             {/* Content Body */}
             <div className="p-2 bg-black/80 pointer-events-none">
                 {image.nodeType === 'prompt' && (
-                    <div className="p-3 text-zinc-300 text-xs font-mono leading-relaxed bg-zinc-900 rounded-sm border border-zinc-800 min-h-[80px]">
+                    <div className="p-3 text-zinc-200 text-xs font-mono leading-relaxed bg-zinc-900 rounded-sm border border-zinc-800 min-h-[80px]">
                         "{image.textData}"
                     </div>
                 )}
@@ -153,7 +152,7 @@ const Node = memo(({ image, selected, onSelect, onDelete, onMouseDown, allAssets
                                      <Type size={8} />
                                      <span className="text-[8px] font-mono uppercase tracking-wider">Director Prompt</span>
                                  </div>
-                                 <p className="text-[10px] text-zinc-300 font-mono leading-relaxed line-clamp-4">
+                                 <p className="text-[10px] text-zinc-200 font-mono leading-relaxed line-clamp-4">
                                      {image.textData}
                                  </p>
                              </div>
@@ -210,7 +209,7 @@ const Node = memo(({ image, selected, onSelect, onDelete, onMouseDown, allAssets
                         {image.cameraDescription && (
                             <div className="flex items-start gap-2 p-2 bg-cine-accent/5 border border-cine-accent/20 rounded-[2px]">
                                 <Video size={12} className="text-cine-accent mt-0.5 flex-shrink-0" />
-                                <p className="text-[9px] text-zinc-300 font-mono leading-relaxed">
+                                <p className="text-[9px] text-zinc-200 font-mono leading-relaxed">
                                     <span className="text-cine-accent/70 uppercase">Camera:</span> {image.cameraDescription}
                                 </p>
                             </div>
@@ -221,10 +220,10 @@ const Node = memo(({ image, selected, onSelect, onDelete, onMouseDown, allAssets
 
             {/* HANDLES */}
             {image.nodeType !== 'prompt' && (
-                 <div className="absolute left-1/2 -translate-x-1/2 -top-1.5 w-3 h-3 bg-zinc-600 rounded-full border-2 border-zinc-950 z-20"></div>
+                 <div className="absolute left-1/2 -translate-x-1/2 -top-1.5 w-3 h-3 bg-zinc-500 rounded-full border-2 border-zinc-950 z-20"></div>
             )}
             {image.nodeType !== 'slice' && (
-                 <div className="absolute left-1/2 -translate-x-1/2 -bottom-1.5 w-3 h-3 bg-zinc-400 rounded-full border-2 border-zinc-950 group-hover:bg-cine-accent transition-colors z-20"></div>
+                 <div className="absolute left-1/2 -translate-x-1/2 -bottom-1.5 w-3 h-3 bg-zinc-300 rounded-full border-2 border-zinc-950 group-hover:bg-cine-accent transition-colors z-20"></div>
             )}
         </div>
     );
@@ -274,7 +273,7 @@ const DetailViewOverlay: React.FC<{ image: GeneratedImage; onClose: () => void }
         <div className="absolute inset-0 bg-black/95 z-50 flex flex-col animate-in fade-in zoom-in-95 duration-200">
             <div className="h-14 px-6 flex items-center justify-between border-b border-zinc-800 bg-zinc-900/50">
                 <div className="flex items-center gap-4">
-                     <button onClick={onClose} className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors text-xs font-mono uppercase tracking-wider">
+                     <button onClick={onClose} className="flex items-center gap-2 text-zinc-300 hover:text-white transition-colors text-xs font-mono uppercase tracking-wider">
                         <ArrowLeft size={16} />
                         返回 (Back)
                     </button>
@@ -431,20 +430,20 @@ export const Canvas: React.FC<CanvasProps> = ({ images, assets, onSelect, select
       {detailViewItem && <DetailViewOverlay image={detailViewItem} onClose={() => setDetailViewItem(null)} />}
       <div className="absolute top-0 left-0 right-0 h-14 px-6 flex items-center justify-between z-20 bg-gradient-to-b from-black via-black/90 to-transparent pointer-events-none">
          <div className="flex items-center gap-4 pointer-events-auto">
-             <span className="text-cine-text-muted text-[10px] uppercase tracking-[0.2em] font-mono font-bold">
+             <span className="text-zinc-300 text-[10px] uppercase tracking-[0.2em] font-mono font-bold">
                画布 CANVAS / {images.filter(i => i.nodeType === 'render').length} TASKS
              </span>
          </div>
          <div className="flex items-center gap-2 pointer-events-auto">
              <div className="flex bg-zinc-900/80 rounded-sm p-0.5 border border-zinc-800 backdrop-blur-sm mr-4">
-                 <button onClick={() => setViewMode('workflow')} className={`p-1.5 rounded-[1px] transition-all flex items-center gap-1.5 px-2 ${viewMode === 'workflow' ? 'bg-zinc-700 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}>
+                 <button onClick={() => setViewMode('workflow')} className={`p-1.5 rounded-[1px] transition-all flex items-center gap-1.5 px-2 ${viewMode === 'workflow' ? 'bg-zinc-700 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}>
                      <Workflow size={14} />
                      {viewMode === 'workflow' && <span className="text-[10px] font-mono uppercase">Node Graph</span>}
                  </button>
-                 <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded-[1px] transition-all ${viewMode === 'grid' ? 'bg-zinc-700 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}>
+                 <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded-[1px] transition-all ${viewMode === 'grid' ? 'bg-zinc-700 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}>
                      <LayoutGrid size={14} />
                  </button>
-                 <button onClick={() => setViewMode('table')} className={`p-1.5 rounded-[1px] transition-all ${viewMode === 'table' ? 'bg-zinc-700 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}>
+                 <button onClick={() => setViewMode('table')} className={`p-1.5 rounded-[1px] transition-all ${viewMode === 'table' ? 'bg-zinc-700 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}>
                      <List size={14} />
                  </button>
              </div>
@@ -465,7 +464,7 @@ export const Canvas: React.FC<CanvasProps> = ({ images, assets, onSelect, select
                         <div className="w-3 h-3 bg-cine-accent rounded-sm shadow-[0_0_15px_rgba(255,122,0,0.6)]"></div>
                         OrangeStudio 橙意机构
                     </h1>
-                    <p className="text-zinc-500 text-sm max-w-md mx-auto leading-relaxed">
+                    <p className="text-zinc-400 text-sm max-w-md mx-auto leading-relaxed">
                         专业的连续分镜创作器。现支持 <span className="text-cine-accent">无缝宫格渲染</span>，以及 <span className="text-white">分镜局部 AI 重绘</span>。
                     </p>
                 </div>
@@ -522,7 +521,7 @@ export const Canvas: React.FC<CanvasProps> = ({ images, assets, onSelect, select
                                     </div>
                                     {viewMode === 'table' && (
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-zinc-300 text-xs font-mono mb-2">{img.prompt}</p>
+                                            <p className="text-zinc-200 text-xs font-mono mb-2">{img.prompt}</p>
                                             <p className="text-zinc-500 text-[10px]">ID: {img.id}</p>
                                         </div>
                                     )}

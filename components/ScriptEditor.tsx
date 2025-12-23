@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { X, FileText, Send, Check, Trash2, Plus, Sparkles, Save, BookOpen, Layers, CheckCircle2, Circle, Hash, FileUp, Eraser } from 'lucide-react';
 import { Button } from './Button';
@@ -60,7 +59,6 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
     if (!instruction.trim() && !attachmentContent) return;
     setIsGenerating(true);
     const lines = await generateScriptLines(instruction, panelCount, attachmentContent || undefined);
-    // Requirement 3: Default to non-selected
     setScriptItems(lines.map(l => ({ id: crypto.randomUUID(), content: l, selected: false })));
     setIsGenerating(false);
   };
@@ -91,9 +89,7 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
     setIsSummarizing(true);
     try {
         const selectedTexts = selectedItems.map(i => i.content);
-        // Requirement 2: Generate summary based on selected scripts
         const summary = await generateDirectorSummary(selectedTexts);
-        // Sync both summary and individual scripts
         onApplyScripts(summary, selectedTexts);
         onClose();
     } catch (e) {
@@ -128,12 +124,12 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
               <h2 className="text-white font-mono uppercase tracking-[0.25em] text-sm font-bold">
                 智能脚本拆解 (AI SCRIPT DECONSTRUCT)
               </h2>
-              <p className="text-[10px] text-zinc-500 font-mono mt-0.5 uppercase tracking-widest">
+              <p className="text-[10px] text-zinc-300 font-mono mt-0.5 uppercase tracking-widest">
                 结构：时间，景别，拍摄角度，构图，角色标号+名称，角色的行为动作...
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="text-zinc-600 hover:text-white transition-all hover:rotate-90">
+          <button onClick={onClose} className="text-zinc-500 hover:text-white transition-all hover:rotate-90">
             <X size={20} />
           </button>
         </div>
@@ -143,11 +139,11 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
           <div className="w-[380px] border-r border-zinc-800 p-6 flex flex-col gap-6 bg-zinc-900/30 overflow-y-auto custom-scrollbar">
             <div className="space-y-4">
               <div className="flex justify-between items-center">
-                <label className="text-[10px] uppercase text-zinc-500 font-bold tracking-[0.2em] flex items-center gap-2">
+                <label className="text-[10px] uppercase text-zinc-300 font-bold tracking-[0.2em] flex items-center gap-2">
                   <FileText size={12} /> 文档与提示词输入
                 </label>
                 {instruction.trim() && (
-                    <button onClick={() => setInstruction("")} className="text-zinc-700 hover:text-red-500 transition-colors">
+                    <button onClick={() => setInstruction("")} className="text-zinc-500 hover:text-red-500 transition-colors">
                         <Eraser size={12} />
                     </button>
                 )}
@@ -156,7 +152,7 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
                 value={instruction}
                 onChange={(e) => setInstruction(e.target.value)}
                 placeholder="在此输入故事大纲、场景描述或点击下方上传文档..."
-                className="w-full bg-black/40 border border-zinc-800 rounded-sm p-4 text-[12px] text-zinc-300 font-mono min-h-[160px] focus:border-cine-accent focus:ring-0 resize-none leading-relaxed"
+                className="w-full bg-black/40 border border-zinc-800 rounded-sm p-4 text-[12px] text-zinc-200 font-mono min-h-[160px] focus:border-cine-accent focus:ring-0 resize-none leading-relaxed placeholder:text-zinc-600"
               />
               <div className="flex gap-2">
                 <div className="flex-1 relative">
@@ -170,7 +166,7 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
                       {fileName ? `${fileName.slice(0, 15)}...` : '上传文档 (.txt)'}
                     </Button>
                     {fileName && (
-                        <button onClick={handleClearAttachment} className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-red-500">
+                        <button onClick={handleClearAttachment} className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-red-500">
                             <X size={14} />
                         </button>
                     )}
@@ -183,10 +179,9 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
             </div>
 
             <div className="space-y-4">
-               <label className="text-[10px] uppercase text-zinc-500 font-bold tracking-[0.2em] flex items-center gap-2">
+               <label className="text-[10px] uppercase text-zinc-300 font-bold tracking-[0.2em] flex items-center gap-2">
                 <Hash size={12} /> 拆解脚本条数 (手动输入)
               </label>
-              {/* Requirement 1: Manual Input instead of slider */}
               <div className="flex items-center gap-4 bg-black/40 border border-zinc-800 p-3 rounded-sm">
                 <input 
                     type="number" 
@@ -196,28 +191,27 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
                     onChange={(e) => setPanelCount(Math.min(64, Math.max(1, parseInt(e.target.value) || 1)))}
                     className="flex-1 bg-transparent border-none text-cine-accent font-mono font-bold text-sm focus:ring-0 text-center"
                 />
-                <span className="text-[9px] text-zinc-600 font-mono uppercase">PANELS</span>
+                <span className="text-[9px] text-zinc-500 font-mono uppercase">PANELS</span>
               </div>
             </div>
 
             <div className="space-y-4 flex-1">
-               <label className="text-[10px] uppercase text-zinc-500 font-bold tracking-[0.2em] flex items-center gap-2">
+               <label className="text-[10px] uppercase text-zinc-300 font-bold tracking-[0.2em] flex items-center gap-2">
                 <BookOpen size={12} /> 已保存指令库
               </label>
               <div className="space-y-2 max-h-[240px] overflow-y-auto custom-scrollbar pr-2">
                 {savedPrompts.map(p => (
                   <div key={p.id} className="group relative bg-black/40 border border-zinc-800/60 p-2.5 rounded-sm hover:border-zinc-600 transition-all cursor-pointer" onClick={() => setInstruction(p.content)}>
-                    <div className="text-[9px] text-zinc-400 font-mono truncate pr-6">{p.title}</div>
-                    {/* Requirement 1: Already has delete functionality */}
+                    <div className="text-[9px] text-zinc-300 font-mono truncate pr-6">{p.title}</div>
                     <button 
                       onClick={(e) => { e.stopPropagation(); handleRemoveSavedPrompt(p.id); }}
-                      className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-red-500 transition-all"
+                      className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-red-500 transition-all"
                     >
                       <Trash2 size={11} />
                     </button>
                   </div>
                 ))}
-                {savedPrompts.length === 0 && <p className="text-[9px] text-zinc-700 font-mono italic p-2">暂无保存指令</p>}
+                {savedPrompts.length === 0 && <p className="text-[9px] text-zinc-600 font-mono italic p-2">暂无保存指令</p>}
               </div>
             </div>
 
@@ -237,12 +231,12 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
           {/* Right: Results Area */}
           <div className="flex-1 bg-black/60 p-8 flex flex-col">
             <div className="flex items-center justify-between mb-6">
-              <label className="text-[10px] uppercase text-zinc-500 font-bold tracking-[0.2em] flex items-center gap-2">
+              <label className="text-[10px] uppercase text-zinc-300 font-bold tracking-[0.2em] flex items-center gap-2">
                 <Layers size={14} /> 生成脚本详情 (PREVIEW)
               </label>
               <div className="flex gap-4">
-                <button onClick={() => setScriptItems(s => s.map(i => ({...i, selected: true})))} className="text-[9px] text-zinc-500 hover:text-white font-mono uppercase tracking-widest border-b border-zinc-800 hover:border-white transition-all">全选</button>
-                <button onClick={() => setScriptItems(s => s.map(i => ({...i, selected: false})))} className="text-[9px] text-zinc-500 hover:text-white font-mono uppercase tracking-widest border-b border-zinc-800 hover:border-white transition-all">取消全选</button>
+                <button onClick={() => setScriptItems(s => s.map(i => ({...i, selected: true})))} className="text-[9px] text-zinc-400 hover:text-white font-mono uppercase tracking-widest border-b border-zinc-800 hover:border-white transition-all">全选</button>
+                <button onClick={() => setScriptItems(s => s.map(i => ({...i, selected: false})))} className="text-[9px] text-zinc-400 hover:text-white font-mono uppercase tracking-widest border-b border-zinc-800 hover:border-white transition-all">取消全选</button>
               </div>
             </div>
 
@@ -250,17 +244,17 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
                <div className="grid grid-cols-1 gap-4">
                  {scriptItems.map((item, idx) => (
                    <div key={item.id} className={`flex gap-4 items-start p-4 bg-zinc-900/40 border rounded-sm transition-all duration-300 ${item.selected ? 'border-cine-accent/50 bg-cine-accent/5 shadow-[0_0_15px_rgba(255,122,0,0.05)]' : 'border-zinc-800'}`}>
-                      <div className={`w-8 h-8 rounded-full border flex items-center justify-center text-[11px] font-bold font-mono transition-colors ${item.selected ? 'bg-cine-accent border-cine-accent text-black' : 'bg-zinc-800 border-zinc-700 text-zinc-500'}`}>
+                      <div className={`w-8 h-8 rounded-full border flex items-center justify-center text-[11px] font-bold font-mono transition-colors ${item.selected ? 'bg-cine-accent border-cine-accent text-black' : 'bg-zinc-800 border-zinc-700 text-zinc-400'}`}>
                         {String(idx + 1).padStart(2, '0')}
                       </div>
                       <textarea 
                         value={item.content}
                         onChange={(e) => updateScriptContent(item.id, e.target.value)}
-                        className="flex-1 bg-transparent border-none p-0 text-[13px] text-zinc-300 font-mono focus:ring-0 resize-none min-h-[50px] leading-relaxed"
+                        className="flex-1 bg-transparent border-none p-0 text-[13px] text-zinc-200 font-mono focus:ring-0 resize-none min-h-[50px] leading-relaxed"
                       />
                       <button 
                         onClick={() => toggleSelection(item.id)}
-                        className={`px-4 h-9 rounded-sm transition-all border flex items-center gap-2 text-[10px] font-mono tracking-widest font-bold ${item.selected ? 'bg-cine-accent text-black border-cine-accent shadow-[0_0_10px_rgba(255,122,0,0.3)]' : 'bg-black/40 text-zinc-600 border-zinc-800 hover:text-white hover:border-zinc-700'}`}
+                        className={`px-4 h-9 rounded-sm transition-all border flex items-center gap-2 text-[10px] font-mono tracking-widest font-bold ${item.selected ? 'bg-cine-accent text-black border-cine-accent shadow-[0_0_10px_rgba(255,122,0,0.3)]' : 'bg-black/40 text-zinc-500 border-zinc-800 hover:text-white hover:border-zinc-700'}`}
                       >
                         {item.selected ? <CheckCircle2 size={14} /> : <Circle size={14} />}
                         {item.selected ? '已选用' : '选用'}
@@ -268,7 +262,7 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
                    </div>
                  ))}
                  {!isGenerating && scriptItems.length === 0 && (
-                   <div className="h-full flex flex-col items-center justify-center text-zinc-800 gap-6 py-20">
+                   <div className="h-full flex flex-col items-center justify-center text-zinc-700 gap-6 py-20">
                      <div className="w-16 h-16 rounded-full bg-zinc-900 flex items-center justify-center border border-zinc-800 opacity-30">
                         <Sparkles size={32} />
                      </div>
@@ -279,7 +273,7 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
             </div>
 
             <div className="mt-8 flex justify-end gap-6 border-t border-zinc-800 pt-6">
-               <span className="text-[10px] font-mono text-zinc-600 flex items-center gap-2">
+               <span className="text-[10px] font-mono text-zinc-400 flex items-center gap-2">
                  已选择 <span className="text-cine-accent font-bold">{scriptItems.filter(i => i.selected).length}</span> 条脚本同步至镜头逻辑
                </span>
                <div className="flex gap-4">

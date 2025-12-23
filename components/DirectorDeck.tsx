@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Button } from './Button';
 import { AspectRatio, ImageSize, PanelAspectRatio } from '../types';
@@ -56,7 +55,7 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
   return (
     <div className="flex flex-col h-full space-y-6 select-none">
       <div className="flex items-center justify-between border-t border-zinc-800/80 pt-6 mt-2">
-         <span className="text-zinc-500 text-[10px] uppercase tracking-[0.25em] font-mono font-bold flex items-center gap-2">
+         <span className="text-zinc-300 text-[10px] uppercase tracking-[0.25em] font-mono font-bold flex items-center gap-2">
             <Settings2 size={10} className="text-cine-accent opacity-50" />
             02. 导演控制台 (CONTROL)
          </span>
@@ -70,8 +69,8 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
 
       {/* Composition Group */}
       <div className="space-y-4">
-        <label className="text-[9px] text-zinc-600 font-mono uppercase tracking-[0.15em] flex items-center gap-2.5">
-            <span className="w-1 h-3 bg-zinc-800 rounded-full"></span>
+        <label className="text-[9px] text-zinc-400 font-mono uppercase tracking-[0.15em] flex items-center gap-2.5">
+            <span className="w-1 h-3 bg-zinc-700 rounded-full"></span>
             构图与规模 (COMPOSITION)
         </label>
         
@@ -79,20 +78,20 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
             {/* NxN Grid Size */}
             <div className="space-y-3">
                 <div className="flex justify-between items-center">
-                   <span className="text-[8px] text-zinc-600 font-mono uppercase tracking-widest">宫格规模 (GRID SIZE)</span>
+                   <span className="text-[8px] text-zinc-400 font-mono uppercase tracking-widest">宫格规模 (GRID SIZE)</span>
                    <span className="text-[10px] text-cine-accent font-mono font-bold">{gridSize} x {gridSize}</span>
                 </div>
                 <div className="flex items-center bg-black/40 border border-zinc-800 rounded-sm p-1.5">
-                    <button onClick={() => setGridSize(Math.max(1, gridSize - 1))} className="p-1 text-zinc-600 hover:text-white transition-colors"><ChevronLeft size={16} /></button>
+                    <button onClick={() => setGridSize(Math.max(1, gridSize - 1))} className="p-1 text-zinc-500 hover:text-white transition-colors"><ChevronLeft size={16} /></button>
                     <div className="flex-1 text-center font-mono text-[11px] text-zinc-300 tracking-widest">{gridSize} x {gridSize} 方阵</div>
-                    <button onClick={() => setGridSize(Math.min(4, gridSize + 1))} className="p-1 text-zinc-600 hover:text-white transition-colors"><ChevronRight size={16} /></button>
+                    <button onClick={() => setGridSize(Math.min(4, gridSize + 1))} className="p-1 text-zinc-500 hover:text-white transition-colors"><ChevronRight size={16} /></button>
                 </div>
             </div>
 
             {/* Single Panel Aspect Ratio */}
             <div className="space-y-3 pt-3 border-t border-zinc-800/50">
                 <div className="flex justify-between items-center">
-                   <span className="text-[8px] text-zinc-600 font-mono uppercase tracking-widest">单分镜构图比例 (PANEL AR)</span>
+                   <span className="text-[8px] text-zinc-400 font-mono uppercase tracking-widest">单分镜构图比例 (PANEL AR)</span>
                    <span className="text-[9px] text-cine-accent font-mono font-bold">{panelAspectRatio}</span>
                 </div>
                 <div className="grid grid-cols-4 gap-1.5">
@@ -101,7 +100,7 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
                             key={par}
                             onClick={() => setPanelAspectRatio(par)}
                             className={`text-[9px] h-7 border rounded-[1px] font-mono transition-all duration-300 flex items-center justify-center ${
-                                panelAspectRatio === par ? 'border-cine-accent text-cine-accent bg-cine-accent/10 shadow-[0_0_10px_rgba(255,122,0,0.1)]' : 'border-zinc-800/60 text-zinc-700 hover:border-zinc-700 hover:text-zinc-500 bg-transparent'
+                                panelAspectRatio === par ? 'border-cine-accent text-cine-accent bg-cine-accent/10 shadow-[0_0_10px_rgba(255,122,0,0.1)]' : 'border-zinc-800/60 text-zinc-500 hover:border-zinc-700 hover:text-zinc-300 bg-transparent'
                             }`}
                         >
                             {par}
@@ -112,8 +111,8 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
 
             {/* Auto Container Aspect Ratio Info */}
             <div className="flex items-center justify-between pt-3 border-t border-zinc-800/50">
-               <span className="text-[8px] text-zinc-600 font-mono uppercase tracking-widest">输出画面比例 (AUTO)</span>
-               <div className="px-2 py-0.5 bg-zinc-800 rounded-[1px] text-[9px] font-mono text-zinc-400 border border-zinc-700">
+               <span className="text-[8px] text-zinc-400 font-mono uppercase tracking-widest">输出画面比例 (AUTO)</span>
+               <div className="px-2 py-0.5 bg-zinc-800 rounded-[1px] text-[9px] font-mono text-zinc-300 border border-zinc-700">
                   {aspectRatio}
                </div>
             </div>
@@ -122,13 +121,13 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
 
       {/* Quality Group */}
       <div className="space-y-2.5">
-        <label className="text-[9px] text-zinc-600 font-mono uppercase tracking-[0.15em] flex items-center gap-2.5">
-            <span className="w-1 h-3 bg-zinc-800 rounded-full"></span>
+        <label className="text-[9px] text-zinc-400 font-mono uppercase tracking-[0.15em] flex items-center gap-2.5">
+            <span className="w-1 h-3 bg-zinc-700 rounded-full"></span>
             输出引擎 (ENGINE)
         </label>
         <div className="p-3 bg-black/40 border border-zinc-800/60 rounded-sm space-y-3">
             <div className="flex items-center justify-between">
-                <span className="text-[9px] text-zinc-600 font-mono uppercase tracking-widest">GEN 3 PRO ENGINE</span>
+                <span className="text-[9px] text-zinc-400 font-mono uppercase tracking-widest">GEN 3 PRO ENGINE</span>
                 <span className="text-[9px] text-cine-accent font-bold font-mono">{getQualityLabel()}</span>
             </div>
             <div className="grid grid-cols-3 gap-1.5">
@@ -137,7 +136,7 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
                         key={sz}
                         onClick={() => setImageSize(sz)}
                         className={`text-[9px] h-7 border rounded-[1px] font-mono transition-all duration-300 ${
-                            imageSize === sz ? 'border-cine-accent/50 text-cine-accent bg-cine-accent/5' : 'border-zinc-800/60 text-zinc-700 hover:border-zinc-700 hover:text-zinc-500 bg-transparent'
+                            imageSize === sz ? 'border-cine-accent/50 text-cine-accent bg-cine-accent/5' : 'border-zinc-800/60 text-zinc-500 hover:border-zinc-700 hover:text-zinc-300 bg-transparent'
                         }`}
                     >
                         {sz}
@@ -150,7 +149,7 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
       {/* Prompt Area */}
       <div className="space-y-2.5 flex-1 flex flex-col min-h-[160px]">
         <div className="flex justify-between items-end">
-            <label className="text-[9px] text-zinc-600 font-mono uppercase tracking-[0.15em] flex items-center gap-2.5">
+            <label className="text-[9px] text-zinc-400 font-mono uppercase tracking-[0.15em] flex items-center gap-2.5">
                 <span className="w-1 h-3 bg-cine-accent rounded-full shadow-[0_0_8px_#FF7A00]"></span>
                 创作指令 (DIRECTOR PROMPT)
             </label>
@@ -162,7 +161,7 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
                     <XCircle size={10} className="opacity-60" />
                 </button>
             ) : (
-                <div className="flex items-center gap-1.5 text-zinc-600 px-2.5 py-1 font-mono text-[8px] tracking-widest">
+                <div className="flex items-center gap-1.5 text-zinc-400 px-2.5 py-1 font-mono text-[8px] tracking-widest">
                     <PlusCircle size={10} />
                     <span>新创作模式</span>
                 </div>
@@ -174,7 +173,7 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder={isContinuing ? "// 继续扩展该分镜的世界观..." : "// 描述一个电影级画面..."}
-                className="w-full h-full absolute inset-0 bg-black/60 backdrop-blur-sm border-none p-4 text-[13px] text-zinc-300 focus:ring-0 resize-none font-mono leading-relaxed placeholder:text-zinc-800 custom-scrollbar transition-all duration-500 focus:bg-zinc-900/20"
+                className="w-full h-full absolute inset-0 bg-black/60 backdrop-blur-sm border-none p-4 text-[13px] text-zinc-200 focus:ring-0 resize-none font-mono leading-relaxed placeholder:text-zinc-600 custom-scrollbar transition-all duration-500 focus:bg-zinc-900/20"
                 spellCheck={false}
             />
         </div>
@@ -189,7 +188,7 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
             disabled={isGenerating} 
             className="text-[9px] h-10 border-dashed border-zinc-800 group"
           >
-              <Wand2 size={12} className="mr-2 text-zinc-500 group-hover:text-cine-accent transition-colors" /> 
+              <Wand2 size={12} className="mr-2 text-zinc-400 group-hover:text-cine-accent transition-colors" /> 
               智能脚本拆解
           </Button>
           <Button 
@@ -199,7 +198,7 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
             disabled={isGenerating || !prompt.trim()} 
             className="text-[9px] h-10 border-dashed border-zinc-800 group"
           >
-              <Video size={12} className="mr-2 text-zinc-500 group-hover:text-cine-accent transition-colors" /> 
+              <Video size={12} className="mr-2 text-zinc-400 group-hover:text-cine-accent transition-colors" /> 
               分镜镜头逻辑
           </Button>
       </div>

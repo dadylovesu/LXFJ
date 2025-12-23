@@ -1,4 +1,3 @@
-
 import React, { useRef, useState } from 'react';
 import { X, Film, Image as ImageIcon, Plus, UploadCloud, UserSquare2, Mountain, Database, Box, LayoutGrid } from 'lucide-react';
 import { Asset, AssetCategory } from '../types';
@@ -50,11 +49,11 @@ export const AssetBay: React.FC<AssetBayProps> = ({
         onDrop={(e) => handleDrop(e, category)}
     >
         <div className="flex items-center justify-between px-1">
-            <span className="text-zinc-500 text-[9px] uppercase tracking-[0.2em] font-mono font-bold flex items-center gap-2">
+            <span className="text-zinc-300 text-[9px] uppercase tracking-[0.2em] font-mono font-bold flex items-center gap-2">
                 {icon}
                 {title}
             </span>
-            <span className="text-[8px] font-mono text-zinc-700">{list.length} REF</span>
+            <span className="text-[8px] font-mono text-zinc-500">{list.length} REF</span>
         </div>
 
         <div className="grid grid-cols-3 gap-2">
@@ -73,7 +72,7 @@ export const AssetBay: React.FC<AssetBayProps> = ({
                         e.target.value = '';
                     }}
                 />
-                <Plus className="w-4 h-4 text-zinc-700 group-hover:text-cine-accent group-hover:scale-110 transition-all" />
+                <Plus className="w-4 h-4 text-zinc-600 group-hover:text-cine-accent group-hover:scale-110 transition-all" />
             </div>
 
             {list.map((asset) => (
@@ -120,7 +119,7 @@ export const AssetBay: React.FC<AssetBayProps> = ({
   return (
     <div className="flex flex-col space-y-4">
       <div className="flex items-center justify-between px-1">
-          <div className="flex items-center gap-2 text-zinc-400">
+          <div className="flex items-center gap-2 text-zinc-300">
              <Database size={10} />
              <span className="text-[10px] uppercase tracking-[0.25em] font-mono font-bold">01. 核心资产库 (ASSETS)</span>
           </div>

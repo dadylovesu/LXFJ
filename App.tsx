@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AssetBay } from './components/AssetBay';
 import { DirectorDeck } from './components/DirectorDeck';
@@ -329,9 +328,6 @@ const App: React.FC = () => {
                 <span className="w-2.5 h-2.5 bg-cine-accent rounded-[1px]"></span>
                 橙意机构 - 连续分镜
             </h1>
-            <button onClick={() => { if(confirm("重置工作区？")) { setImages([]); setHistory([]); setPanelPrompts([]); setActiveCollage(null); clearStorage(); } }} className="text-zinc-700 hover:text-red-500 transition-colors">
-              <Trash2 size={14} />
-            </button>
         </div>
 
         <div className="flex-1 flex flex-col p-4 gap-7 overflow-y-auto custom-scrollbar">
@@ -354,7 +350,7 @@ const App: React.FC = () => {
                   </div>
                 ) : (
                   <div className="p-3 bg-zinc-900/40 border border-zinc-800/40 border-dashed rounded-sm text-center">
-                     <p className="text-[9px] text-zinc-600 font-mono">未激活镜头组参考</p>
+                     <p className="text-[9px] text-zinc-400 font-mono">未激活镜头组参考</p>
                   </div>
                 )}
             </div>

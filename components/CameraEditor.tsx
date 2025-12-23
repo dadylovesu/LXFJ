@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { X, Video, Sparkles, Check, RefreshCw, Trash2, LayoutGrid, Info, Wand2, Zap } from 'lucide-react';
 import { Button } from './Button';
@@ -80,10 +79,10 @@ export const CameraEditor: React.FC<CameraEditorProps> = ({
               <h2 className="text-white font-mono uppercase tracking-[0.2em] text-sm font-bold">
                 分镜镜头逻辑编辑器 (CAM-LOGIC)
               </h2>
-              <p className="text-[10px] text-zinc-500 font-mono mt-0.5 uppercase tracking-widest">为 {rows}x{cols} 宫格中的每一格定义专属镜头语言</p>
+              <p className="text-[10px] text-zinc-300 font-mono mt-0.5 uppercase tracking-widest">为 {rows}x{cols} 宫格中的每一格定义专属镜头语言</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-zinc-500 hover:text-white transition-all hover:rotate-90">
+          <button onClick={onClose} className="text-zinc-300 hover:text-white transition-all hover:rotate-90">
             <X size={20} />
           </button>
         </div>
@@ -123,7 +122,7 @@ export const CameraEditor: React.FC<CameraEditorProps> = ({
                       value={val}
                       onChange={(e) => handleUpdatePanel(idx, e.target.value)}
                       placeholder={`// 描述第 ${idx + 1} 格的构图、角度、光影...`}
-                      className="flex-1 bg-transparent p-4 text-[11px] text-zinc-300 font-mono resize-none focus:ring-0 placeholder:text-zinc-800 leading-relaxed custom-scrollbar"
+                      className="flex-1 bg-transparent p-4 text-[11px] text-zinc-200 font-mono resize-none focus:ring-0 placeholder:text-zinc-700 leading-relaxed custom-scrollbar"
                     />
                   </div>
                 </div>
@@ -134,11 +133,11 @@ export const CameraEditor: React.FC<CameraEditorProps> = ({
           {/* Right Sidebar - Tools */}
           <div className="w-72 border-l border-zinc-800 p-6 space-y-8 bg-zinc-900/20">
             <div className="space-y-4">
-               <h3 className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest flex items-center gap-2">
+               <h3 className="text-[10px] text-zinc-300 uppercase font-bold tracking-widest flex items-center gap-2">
                  <Sparkles size={12} className="text-cine-accent" />
                  智能生成建议
                </h3>
-               <p className="text-[10px] text-zinc-600 font-mono leading-relaxed">
+               <p className="text-[10px] text-zinc-400 font-mono leading-relaxed">
                  AI 将基于您的“创作指令”自动规划整个序列的视觉动线和镜头切分。
                </p>
                <Button 
@@ -156,11 +155,11 @@ export const CameraEditor: React.FC<CameraEditorProps> = ({
             <div className="h-[1px] bg-zinc-800/50"></div>
 
             <div className="space-y-4">
-               <h3 className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest flex items-center gap-2">
+               <h3 className="text-[10px] text-zinc-300 uppercase font-bold tracking-widest flex items-center gap-2">
                  <Info size={12} />
                  重绘提示 (REGEN)
                </h3>
-               <p className="text-[9px] text-zinc-500 font-mono leading-relaxed bg-black/40 p-3 rounded-sm border border-zinc-800/50">
+               <p className="text-[9px] text-zinc-400 font-mono leading-relaxed bg-black/40 p-3 rounded-sm border border-zinc-800/50">
                  在每个格子的右上角点击 <Wand2 size={10} className="inline mx-1" /> 可以针对该单格进行独立渲染，同时系统会参考上下文以保持角色与环境的一致性。
                </p>
             </div>
@@ -168,7 +167,7 @@ export const CameraEditor: React.FC<CameraEditorProps> = ({
             <div className="pt-4">
               <button 
                 onClick={handleClear}
-                className="text-[10px] text-zinc-700 hover:text-red-400 font-mono uppercase tracking-widest flex items-center gap-2 transition-colors w-full justify-center"
+                className="text-[10px] text-zinc-400 hover:text-red-400 font-mono uppercase tracking-widest flex items-center gap-2 transition-colors w-full justify-center"
               >
                 <Trash2 size={12} /> 清空所有配置
               </button>
@@ -184,7 +183,7 @@ export const CameraEditor: React.FC<CameraEditorProps> = ({
                   <div key={i} className={`w-1.5 h-1.5 rounded-full ${p.trim() ? 'bg-cine-accent shadow-[0_0_5px_#FF7A00]' : 'bg-zinc-800'}`}></div>
                 ))}
               </div>
-              <span className="text-[9px] text-zinc-600 font-mono uppercase tracking-widest">已配置 {panelPrompts.filter(p => p.trim()).length} / {panelCount} 个镜头</span>
+              <span className="text-[9px] text-zinc-400 font-mono uppercase tracking-widest">已配置 {panelPrompts.filter(p => p.trim()).length} / {panelCount} 个镜头</span>
            </div>
            <div className="flex gap-3">
               <Button variant="secondary" onClick={onClose} size="md" className="px-6 h-10">取消</Button>
