@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, Video, Sparkles, Check, RefreshCw, Trash2, LayoutGrid, Info } from 'lucide-react';
+import { X, Video, Sparkles, Check, RefreshCw, Trash2, LayoutGrid, Info, Wand2, Zap } from 'lucide-react';
 import { Button } from './Button';
 import { generateCameraSuggestions } from '../services/geminiService';
+import { GeneratedImage } from '../types';
 
 interface CameraEditorProps {
   isOpen: boolean;
@@ -12,6 +13,9 @@ interface CameraEditorProps {
   mainPrompt: string;
   initialPrompts: string[];
   onSave: (prompts: string[]) => void;
+  currentImage?: GeneratedImage;
+  onRegenSlice?: (index: number, prompt: string) => void;
+  isGenerating?: boolean;
 }
 
 export const CameraEditor: React.FC<CameraEditorProps> = ({
@@ -21,7 +25,10 @@ export const CameraEditor: React.FC<CameraEditorProps> = ({
   cols,
   mainPrompt,
   initialPrompts,
-  onSave
+  onSave,
+  currentImage,
+  onRegenSlice,
+  isGenerating = false
 }) => {
   const panelCount = rows * cols;
   const [panelPrompts, setPanelPrompts] = useState<string[]>([]);
@@ -62,7 +69,7 @@ export const CameraEditor: React.FC<CameraEditorProps> = ({
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/90 backdrop-blur-md p-6 animate-in fade-in duration-300">
-      <div className="bg-cine-dark border border-zinc-800 w-full max-w-5xl rounded-lg shadow-[0_0_50px_rgba(0,0,0,0.8)] flex flex-col max-h-[90vh] overflow-hidden">
+      <div className="bg-cine-dark border border-zinc-800 w-full max-w-6xl rounded-lg shadow-[0_0_50px_rgba(0,0,0,0.8)] flex flex-col max-h-[90vh] overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-zinc-800 bg-zinc-900/40">
           <div className="flex items-center gap-4">
@@ -73,7 +80,7 @@ export const CameraEditor: React.FC<CameraEditorProps> = ({
               <h2 className="text-white font-mono uppercase tracking-[0.2em] text-sm font-bold">
                 分镜镜头逻辑编辑器 (CAM-LOGIC)
               </h2>
-              <p className="text-[10px] text-zinc-500 font-mono mt-0.5">为 ${rows}x${cols} 宫格中的每一格定义专属镜头语言</p>
+              <p className="text-[10px] text-zinc-500 font-mono mt-0.5 uppercase tracking-widest">为 {rows}x{cols} 宫格中的每一格定义专属镜头语言</p>
             </div>
           </div>
           <button onClick={onClose} className="text-zinc-500 hover:text-white transition-all hover:rotate-90">
@@ -85,15 +92,33 @@ export const CameraEditor: React.FC<CameraEditorProps> = ({
           {/* Main Workspace */}
           <div className="flex-1 p-8 overflow-y-auto custom-scrollbar bg-black/20">
             <div 
-              className="grid gap-4 w-full h-full min-h-[400px]"
+              className="grid gap-4 w-full h-full min-h-[500px]"
               style={{ gridTemplateColumns: `repeat(${cols}, 1fr)`, gridTemplateRows: `repeat(${rows}, 1fr)` }}
             >
               {panelPrompts.map((val, idx) => (
-                <div key={idx} className="relative group flex flex-col">
-                  <div className="absolute -top-2 -left-2 w-6 h-6 bg-cine-accent text-black rounded-full flex items-center justify-center text-[10px] font-bold z-10 shadow-lg border-2 border-black">
+                <div key={idx} className="relative group flex flex-col space-y-2">
+                  <div className="absolute -top-2 -left-2 w-6 h-6 bg-cine-accent text-black rounded-full flex items-center justify-center text-[10px] font-bold z-20 shadow-lg border-2 border-black">
                     {idx + 1}
                   </div>
-                  <div className={`flex-1 flex flex-col bg-zinc-900/50 border rounded-md transition-all duration-300 focus-within:border-cine-accent/50 focus-within:ring-1 focus-within:ring-cine-accent/20 ${val.trim() ? 'border-zinc-700' : 'border-zinc-800/50'}`}>
+                  
+                  {/* Image Preview Overlay Button */}
+                  {currentImage?.slices?.[idx] && onRegenSlice && (
+                      <button 
+                        onClick={() => onRegenSlice(idx, val)}
+                        disabled={isGenerating}
+                        className="absolute top-2 right-2 p-1.5 bg-black/60 text-cine-accent rounded-sm border border-cine-accent/30 hover:bg-cine-accent hover:text-black transition-all z-20 opacity-0 group-hover:opacity-100 disabled:opacity-30"
+                        title="单图重绘 (Regen this slice)"
+                      >
+                        <Wand2 size={12} />
+                      </button>
+                  )}
+
+                  <div className={`flex-1 flex flex-col bg-zinc-900/50 border rounded-md transition-all duration-300 overflow-hidden focus-within:border-cine-accent/50 focus-within:ring-1 focus-within:ring-cine-accent/20 ${val.trim() ? 'border-zinc-700' : 'border-zinc-800/50'}`}>
+                    {currentImage?.slices?.[idx] && (
+                        <div className="h-32 w-full bg-black relative border-b border-zinc-800">
+                             <img src={currentImage.slices[idx]} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" alt={`Panel ${idx+1}`} />
+                        </div>
+                    )}
                     <textarea 
                       value={val}
                       onChange={(e) => handleUpdatePanel(idx, e.target.value)}
@@ -133,13 +158,11 @@ export const CameraEditor: React.FC<CameraEditorProps> = ({
             <div className="space-y-4">
                <h3 className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest flex items-center gap-2">
                  <Info size={12} />
-                 使用提示
+                 重绘提示 (REGEN)
                </h3>
-               <ul className="text-[9px] text-zinc-600 font-mono space-y-2 list-disc pl-4">
-                 <li>可以描述特写 (Close-up)、广角 (Wide)、俯拍 (High-angle) 等。</li>
-                 <li>即使只填入几个格子，其他格子也会由 AI 自动填充。</li>
-                 <li>确认后，后续的“执行渲染”将遵循此逻辑。</li>
-               </ul>
+               <p className="text-[9px] text-zinc-500 font-mono leading-relaxed bg-black/40 p-3 rounded-sm border border-zinc-800/50">
+                 在每个格子的右上角点击 <Wand2 size={10} className="inline mx-1" /> 可以针对该单格进行独立渲染，同时系统会参考上下文以保持角色与环境的一致性。
+               </p>
             </div>
 
             <div className="pt-4">

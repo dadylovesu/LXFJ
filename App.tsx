@@ -42,7 +42,7 @@ const App: React.FC = () => {
 
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // 关键修复：对于 N x N 宫格，容器比例必须严格匹配单格比例
+  // Sync main aspect ratio with panel selection
   useEffect(() => {
     switch (panelAspectRatio) {
       case PanelAspectRatio.P16_9: setAspectRatio(AspectRatio.WIDE); break;      // 16:9
@@ -134,6 +134,7 @@ const App: React.FC = () => {
   const handleGenerate = async () => {
     setError(null);
     setIsGenerating(true);
+    setGenerationStep("正在启动渲染引擎...");
     abortControllerRef.current = new AbortController();
 
     try {
@@ -149,7 +150,7 @@ const App: React.FC = () => {
           startX = rootNodes.length === 0 ? 100 : (rootNodes[rootNodes.length-1].position?.x || 100) + 420;
       }
 
-      setGenerationStep("正在渲染分镜...");
+      setGenerationStep("正在渲染分镜组...");
       const referenceData: ReferenceImageData[] = [];
       for (const asset of assets) {
           referenceData.push({
@@ -165,7 +166,7 @@ const App: React.FC = () => {
           referenceData, previousContextImage, panelPrompts, activeCollage || undefined
       );
       
-      setGenerationStep("正在分析动线...");
+      setGenerationStep("正在分析动线逻辑...");
       const cameraMove = await generateCameraMovement(prompt);
 
       const finalNode: GeneratedImage = {
@@ -175,7 +176,7 @@ const App: React.FC = () => {
           prompt,
           textData: prompt, 
           assetIds: assets.map(a => a.id), 
-          aspectRatio, // 这里同步的是自动适配后的容器比例
+          aspectRatio,
           panelAspectRatio,
           timestamp: Date.now(),
           nodeType: 'render',
@@ -200,13 +201,21 @@ const App: React.FC = () => {
 
   const handleEditSlice = async (imageId: string, sliceIndex: number, editPrompt: string, usePro: boolean, refImage?: string, targetImageSize: ImageSize = ImageSize.K1) => {
     setIsGenerating(true);
-    setGenerationStep("正在重绘...");
+    setGenerationStep("正在执行单格无缝重绘...");
     try {
       const image = images.find(img => img.id === imageId);
       if (!image || !image.slices) return;
       const model = usePro ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
-      // 编辑单图时也应保持单图比例
-      const newSliceUrl = await editImage(image.slices[sliceIndex], editPrompt, model, image.panelAspectRatio || image.aspectRatio, refImage, targetImageSize);
+      
+      const newSliceUrl = await editImage(
+          image.slices[sliceIndex], 
+          editPrompt, 
+          model, 
+          image.panelAspectRatio || image.aspectRatio, 
+          refImage, 
+          targetImageSize
+      );
+
       const newImages = images.map(img => {
         if (img.id === imageId) {
           const newSlices = [...(img.slices || [])];
@@ -219,25 +228,12 @@ const App: React.FC = () => {
         return img;
       });
       updateImagesWithHistory(newImages);
-    } catch (err: any) { setError(err.message || "失败"); } finally { setIsGenerating(false); }
-  };
-
-  const handleRevertSlice = (imageId: string, sliceIndex: number, historyIndex: number) => {
-    const newImages = images.map(img => {
-      if (img.id === imageId) {
-        const history = img.sliceHistory?.[sliceIndex] || [];
-        const newSlices = [...(img.slices || [])];
-        const newHistoryList = [...history];
-        const current = newSlices[sliceIndex];
-        newSlices[sliceIndex] = history[historyIndex];
-        newHistoryList[historyIndex] = current; 
-        const updatedHistory = { ...(img.sliceHistory || {}) };
-        updatedHistory[sliceIndex] = newHistoryList;
-        return { ...img, slices: newSlices, sliceHistory: updatedHistory };
-      }
-      return img;
-    });
-    updateImagesWithHistory(newImages);
+    } catch (err: any) { 
+        setError(err.message || "重绘失败"); 
+    } finally { 
+        setIsGenerating(false); 
+        setGenerationStep("");
+    }
   };
 
   const handleApplyScripts = (summary: string, scripts: string[]) => {
@@ -263,7 +259,6 @@ const App: React.FC = () => {
     try {
       const zip = new JSZip();
       
-      // 命名逻辑：根据连线关系确定组号和镜头号
       const getRootId = (nodeId: string): string => {
           const node = images.find(n => n.id === nodeId);
           if (!node || !node.parentId) return nodeId;
@@ -323,6 +318,8 @@ const App: React.FC = () => {
       setGenerationStep("");
     }
   };
+
+  const selectedImage = images.find(i => i.id === selectedImageId) || null;
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-cine-black text-zinc-400 font-sans">
@@ -406,6 +403,9 @@ const App: React.FC = () => {
           isOpen={isCameraEditorOpen} onClose={() => setIsCameraEditorOpen(false)}
           rows={gridSize} cols={gridSize} mainPrompt={prompt}
           initialPrompts={panelPrompts} onSave={(newPrompts) => setPanelPrompts(newPrompts)}
+          currentImage={selectedImage || undefined}
+          onRegenSlice={(idx, p) => handleEditSlice(selectedImageId!, idx, p, true)}
+          isGenerating={isGenerating}
         />
 
         <CollageEditor 
@@ -421,7 +421,7 @@ const App: React.FC = () => {
 
       <aside className="w-[400px] bg-cine-dark border-l border-cine-border z-20">
          <Inspector 
-            selectedImage={images.find(i => i.id === selectedImageId) || null}
+            selectedImage={selectedImage}
             selectedAsset={assets.find(a => a.id === selectedAssetId) || null}
             onClose={() => { setSelectedImageId(undefined); setSelectedAssetId(undefined); }}
             onAnalyze={async (p) => { 
@@ -432,7 +432,24 @@ const App: React.FC = () => {
             }}
             isAnalyzing={isAnalyzing}
             analysisResult={analysisResult}
-            onEditSlice={handleEditSlice} onRevertSlice={handleRevertSlice}
+            onEditSlice={handleEditSlice} 
+            onRevertSlice={(imgId, sIdx, hIdx) => {
+                const newImages = images.map(img => {
+                  if (img.id === imgId) {
+                    const history = img.sliceHistory?.[sIdx] || [];
+                    const newSlices = [...(img.slices || [])];
+                    const newHistoryList = [...history];
+                    const current = newSlices[sIdx];
+                    newSlices[sIdx] = history[hIdx];
+                    newHistoryList[hIdx] = current; 
+                    const updatedHistory = { ...(img.sliceHistory || {}) };
+                    updatedHistory[sIdx] = newHistoryList;
+                    return { ...img, slices: newSlices, sliceHistory: updatedHistory };
+                  }
+                  return img;
+                });
+                updateImagesWithHistory(newImages);
+            }}
          />
       </aside>
     </div>

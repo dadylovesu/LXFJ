@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { GeneratedImage, Asset, ImageSize } from '../types';
-import { Download, Copy, Maximize2, Wand2, X, MessageSquare, Info, Video, Fingerprint, Eye, Sparkle, LayoutGrid, ChevronLeft, ChevronRight, History, Layers, Zap, Upload, Image as ImageIcon } from 'lucide-react';
+import { Download, Copy, Maximize2, Wand2, X, MessageSquare, Info, Video, Fingerprint, Eye, Sparkle, LayoutGrid, ChevronLeft, ChevronRight, History, Layers, Zap, Upload, Image as ImageIcon, Plus, Trash2 } from 'lucide-react';
 import { Button } from './Button';
 import { fileToBase64 } from '../services/geminiService';
 
@@ -30,18 +30,22 @@ export const Inspector: React.FC<InspectorProps> = ({
   const [analysisPrompt, setAnalysisPrompt] = useState("深度分析该画面的视觉语言、构图平衡以及灯光设计。");
   const [showFullGrid, setShowFullGrid] = useState(false);
   const [currentSliceIndex, setCurrentSliceIndex] = useState(0);
+  
+  // AI Edit States
   const [editPrompt, setEditPrompt] = useState("");
-  const [useProModel, setUseProModel] = useState(false);
+  const [useProModel, setUseProModel] = useState(false); // false = nanobanana, true = nanobanana pro
   const [upscaleSize, setUpscaleSize] = useState<ImageSize>(ImageSize.K1);
-  const [editRefImage, setEditRefImage] = useState<string | null>(null);
+  const [editRefImages, setEditRefImages] = useState<string[]>([]);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  
   const editRefInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setShowFullGrid(false);
     setCurrentSliceIndex(0);
-    setEditRefImage(null);
+    setEditRefImages([]);
     setUpscaleSize(ImageSize.K1);
+    setUseProModel(false);
     if (selectedImage || selectedAsset) {
         setActiveTab('view');
     }
@@ -69,17 +73,29 @@ export const Inspector: React.FC<InspectorProps> = ({
 
   const handleEdit = () => {
     if (selectedImage && isSliceView && onEditSlice) {
-      onEditSlice(selectedImage.id, currentSliceIndex, editPrompt, useProModel, editRefImage || undefined, upscaleSize);
+      // Use the first ref image if multiple provided (Gemini edit typically uses one primary ref image + original)
+      // or we can modify the service to accept multiple. For now, we use the first selected one.
+      const primaryRef = editRefImages.length > 0 ? editRefImages[0] : undefined;
+      onEditSlice(selectedImage.id, currentSliceIndex, editPrompt, useProModel, primaryRef, upscaleSize);
       setEditPrompt("");
-      setEditRefImage(null);
+      setEditRefImages([]);
     }
   };
 
   const handleRefImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.[0]) {
-      const b64 = await fileToBase64(e.target.files[0]);
-      setEditRefImage(`data:${e.target.files[0].type};base64,${b64}`);
+    if (e.target.files) {
+      const newRefs: string[] = [];
+      for (const file of Array.from(e.target.files)) {
+          const b64 = await fileToBase64(file);
+          newRefs.push(`data:${file.type};base64,${b64}`);
+      }
+      setEditRefImages(prev => [...prev, ...newRefs]);
     }
+    e.target.value = '';
+  };
+
+  const removeRefImage = (index: number) => {
+      setEditRefImages(prev => prev.filter((_, i) => i !== index));
   };
 
   if (!hasContent) {
@@ -234,15 +250,26 @@ export const Inspector: React.FC<InspectorProps> = ({
         )}
 
         {activeTab === 'edit' && isSliceView && (
-             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500 h-full flex flex-col">
-                 <div className="space-y-4">
-                    <h3 className="text-zinc-500 text-[10px] font-bold uppercase tracking-[0.2em] flex items-center gap-2">
-                        <Zap size={12} className="text-cine-accent" />
-                        分镜局部重绘 (RE-RENDER)
-                    </h3>
-                    <p className="text-[10px] text-zinc-600 leading-relaxed font-mono bg-black/30 p-3 border-l-2 border-cine-accent/50">
-                        您可以对当前选中的单格画面进行修改。所有生成将保持无缝贴合。
-                    </p>
+             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500 h-full flex flex-col pb-10">
+                 {/* Model Selector */}
+                 <div className="space-y-3">
+                    <label className="text-zinc-500 text-[9px] font-bold uppercase tracking-[0.2em]">渲染引擎 (MODEL)</label>
+                    <div className="grid grid-cols-2 gap-2">
+                        <button 
+                            onClick={() => setUseProModel(false)}
+                            className={`flex flex-col items-center justify-center gap-1.5 p-3 border rounded-sm transition-all ${!useProModel ? 'border-cine-accent bg-cine-accent/5' : 'border-zinc-800 bg-black/40 hover:border-zinc-700'}`}
+                        >
+                            <span className={`text-[10px] font-bold font-mono tracking-widest ${!useProModel ? 'text-cine-accent' : 'text-zinc-500'}`}>NANOBANANA</span>
+                            <span className="text-[7px] text-zinc-600 uppercase font-mono tracking-tighter">Fast Edit</span>
+                        </button>
+                        <button 
+                            onClick={() => setUseProModel(true)}
+                            className={`flex flex-col items-center justify-center gap-1.5 p-3 border rounded-sm transition-all ${useProModel ? 'border-cine-accent bg-cine-accent/5 shadow-[0_0_15px_rgba(255,122,0,0.1)]' : 'border-zinc-800 bg-black/40 hover:border-zinc-700'}`}
+                        >
+                            <span className={`text-[10px] font-bold font-mono tracking-widest ${useProModel ? 'text-cine-accent' : 'text-zinc-500'}`}>PRO ENGINE</span>
+                            <span className="text-[7px] text-zinc-600 uppercase font-mono tracking-tighter">High Fidelity</span>
+                        </button>
+                    </div>
                  </div>
 
                  <div className="space-y-3">
@@ -250,12 +277,58 @@ export const Inspector: React.FC<InspectorProps> = ({
                     <textarea 
                         value={editPrompt}
                         onChange={(e) => setEditPrompt(e.target.value)}
-                        className="w-full bg-black/40 border border-zinc-800/80 rounded-sm p-4 text-[11px] text-zinc-400 focus:border-cine-accent focus:ring-0 resize-none font-mono min-h-[100px] leading-relaxed transition-all placeholder:text-zinc-800"
+                        className="w-full bg-black/40 border border-zinc-800/80 rounded-sm p-4 text-[11px] text-zinc-400 focus:border-cine-accent focus:ring-0 resize-none font-mono min-h-[80px] leading-relaxed transition-all placeholder:text-zinc-800"
                         placeholder="例如：给角色戴上墨镜，或者改变背景灯光..."
                     />
                  </div>
 
-                 <div className="space-y-4">
+                 {/* Reference Images */}
+                 <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                        <label className="text-zinc-500 text-[9px] font-bold uppercase tracking-[0.2em]">参考图库 (REFERENCES)</label>
+                        <button onClick={() => editRefInputRef.current?.click()} className="text-[8px] text-cine-accent font-bold font-mono border border-cine-accent/30 px-2 py-0.5 rounded-full hover:bg-cine-accent/10 transition-all flex items-center gap-1">
+                            <Plus size={10} /> ADD
+                        </button>
+                        <input type="file" ref={editRefInputRef} className="hidden" multiple accept="image/*" onChange={handleRefImageUpload} />
+                    </div>
+                    <div className="grid grid-cols-4 gap-2">
+                        {editRefImages.map((url, idx) => (
+                            <div key={idx} className="relative aspect-square bg-zinc-900 border border-zinc-800 rounded-sm overflow-hidden group">
+                                <img src={url} className="w-full h-full object-cover opacity-60" />
+                                <div className="absolute top-1 left-1 bg-cine-accent text-black text-[7px] font-bold px-1 rounded-[1px]">REF {idx + 1}</div>
+                                <button onClick={() => removeRefImage(idx)} className="absolute top-1 right-1 p-0.5 bg-black/50 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <X size={8} />
+                                </button>
+                            </div>
+                        ))}
+                        {editRefImages.length === 0 && (
+                            <div className="col-span-4 py-4 border border-dashed border-zinc-800/50 rounded-sm flex flex-col items-center justify-center opacity-30">
+                                <ImageIcon size={16} className="mb-1" />
+                                <span className="text-[8px] font-mono tracking-widest">NO ASSET</span>
+                            </div>
+                        )}
+                    </div>
+                 </div>
+
+                 {/* High Fidelity Upscale */}
+                 {useProModel && (
+                    <div className="space-y-3 pt-2">
+                        <label className="text-zinc-500 text-[9px] font-bold uppercase tracking-[0.2em]">高清放大 (UPSCALE)</label>
+                        <div className="flex gap-2">
+                            {[ImageSize.K1, ImageSize.K2, ImageSize.K4].map((sz) => (
+                                <button 
+                                    key={sz}
+                                    onClick={() => setUpscaleSize(sz)}
+                                    className={`flex-1 h-9 border rounded-sm text-[9px] font-mono font-bold transition-all ${upscaleSize === sz ? 'border-cine-accent text-cine-accent bg-cine-accent/5' : 'border-zinc-800 text-zinc-600 bg-black/40 hover:border-zinc-700'}`}
+                                >
+                                    {sz} 导出
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                 )}
+
+                 <div className="space-y-4 pt-4">
                     <Button 
                         variant="accent" 
                         size="md" 
