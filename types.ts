@@ -81,3 +81,11 @@ export interface SavedPrompt {
   content: string;
   timestamp: number;
 }
+
+export interface ScriptGroup {
+  id: string;
+  name: string;
+  scripts: string[];
+  summary: string;
+  timestamp: number;
+}

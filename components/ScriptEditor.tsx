@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect, useRef } from 'react';
-import { X, FileText, Send, Check, Trash2, Plus, Sparkles, Save, BookOpen, Layers, CheckCircle2, Circle, Hash, FileUp, Eraser } from 'lucide-react';
+import { X, FileText, Send, Check, Trash2, Plus, Sparkles, Save, BookOpen, Layers, CheckCircle2, Circle, Hash, FileUp, Eraser, Edit3, FolderOpen, History } from 'lucide-react';
 import { Button } from './Button';
-import { ScriptItem, SavedPrompt } from '../types';
+import { ScriptItem, SavedPrompt, ScriptGroup } from '../types';
 import { generateScriptLines, generateDirectorSummary } from '../services/geminiService';
 import { saveToStorage, loadFromStorage } from '../services/persistenceService';
 
@@ -26,12 +27,19 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [savedPrompts, setSavedPrompts] = useState<SavedPrompt[]>([]);
+  const [scriptGroups, setScriptGroups] = useState<ScriptGroup[]>([]);
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'input' | 'history'>('input');
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isOpen) {
       loadFromStorage<SavedPrompt[]>('cine_saved_prompts').then(res => {
         if (res) setSavedPrompts(res);
+      });
+      loadFromStorage<ScriptGroup[]>('cine_script_groups').then(res => {
+        if (res) setScriptGroups(res);
       });
       setPanelCount(defaultPanelCount);
     }
@@ -58,9 +66,67 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
   const handleGenerate = async () => {
     if (!instruction.trim() && !attachmentContent) return;
     setIsGenerating(true);
-    const lines = await generateScriptLines(instruction, panelCount, attachmentContent || undefined);
-    setScriptItems(lines.map(l => ({ id: crypto.randomUUID(), content: l, selected: false })));
-    setIsGenerating(false);
+    try {
+        const lines = await generateScriptLines(instruction, panelCount, attachmentContent || undefined);
+        const newItems = lines.map(l => ({ id: crypto.randomUUID(), content: l, selected: false }));
+        setScriptItems(newItems);
+        
+        // AUTO-SAVE deconstructed lines to history group immediately
+        const newGroup: ScriptGroup = {
+            id: crypto.randomUUID(),
+            name: `分镜脚本组 ${scriptGroups.length + 1}`,
+            scripts: lines,
+            summary: instruction.slice(0, 50) || "自动生成脚本",
+            timestamp: Date.now()
+        };
+        const updatedGroups = [newGroup, ...scriptGroups];
+        setScriptGroups(updatedGroups);
+        await saveToStorage('cine_script_groups', updatedGroups);
+        
+    } catch (err) {
+        console.error("Script generation failed:", err);
+    } finally {
+        setIsGenerating(false);
+    }
+  };
+
+  const handleSaveGroup = async (customScripts?: string[]) => {
+      const targetScripts = customScripts || (scriptItems.filter(s => s.selected).length > 0 
+          ? scriptItems.filter(s => s.selected).map(s => s.content)
+          : scriptItems.map(s => s.content));
+      
+      if (targetScripts.length === 0) return;
+
+      const newGroup: ScriptGroup = {
+          id: crypto.randomUUID(),
+          name: `分镜脚本组 ${scriptGroups.length + 1}`,
+          scripts: targetScripts,
+          summary: instruction.slice(0, 50) || "已保存脚本",
+          timestamp: Date.now()
+      };
+      
+      const updated = [newGroup, ...scriptGroups];
+      setScriptGroups(updated);
+      await saveToStorage('cine_script_groups', updated);
+  };
+
+  const handleRenameGroup = async (id: string, newName: string) => {
+      const updated = scriptGroups.map(g => g.id === id ? { ...g, name: newName } : g);
+      setScriptGroups(updated);
+      await saveToStorage('cine_script_groups', updated);
+      setEditingGroupId(null);
+  };
+
+  const handleDeleteGroup = async (id: string) => {
+      const updated = scriptGroups.filter(g => g.id !== id);
+      setScriptGroups(updated);
+      await saveToStorage('cine_script_groups', updated);
+  };
+
+  const handleLoadGroup = (group: ScriptGroup) => {
+      setScriptItems(group.scripts.map(s => ({ id: crypto.randomUUID(), content: s, selected: true })));
+      setInstruction(group.summary || "");
+      setActiveTab('input');
   };
 
   const handleSavePrompt = async () => {
@@ -90,6 +156,10 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
     try {
         const selectedTexts = selectedItems.map(i => i.content);
         const summary = await generateDirectorSummary(selectedTexts);
+        
+        // Manual save triggered by "Apply" to ensure the specific selected set is preserved
+        await handleSaveGroup(selectedTexts);
+        
         onApplyScripts(summary, selectedTexts);
         onClose();
     } catch (e) {
@@ -135,97 +205,165 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
         </div>
 
         <div className="flex flex-1 overflow-hidden">
-          {/* Left: Input Area */}
-          <div className="w-[380px] border-r border-zinc-800 p-6 flex flex-col gap-6 bg-zinc-900/30 overflow-y-auto custom-scrollbar">
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <label className="text-[10px] uppercase text-zinc-300 font-bold tracking-[0.2em] flex items-center gap-2">
-                  <FileText size={12} /> 文档与提示词输入
-                </label>
-                {instruction.trim() && (
-                    <button onClick={() => setInstruction("")} className="text-zinc-500 hover:text-red-500 transition-colors">
-                        <Eraser size={12} />
-                    </button>
+          {/* Left: Input & History Navigation */}
+          <div className="w-[380px] border-r border-zinc-800 flex flex-col bg-zinc-900/30">
+            <div className="flex border-b border-zinc-800">
+                <button 
+                    onClick={() => setActiveTab('input')}
+                    className={`flex-1 py-4 text-[10px] font-mono uppercase tracking-widest font-bold transition-all ${activeTab === 'input' ? 'text-cine-accent bg-cine-accent/5' : 'text-zinc-500 hover:text-zinc-300'}`}
+                >
+                    脚本生成
+                </button>
+                <button 
+                    onClick={() => setActiveTab('history')}
+                    className={`flex-1 py-4 text-[10px] font-mono uppercase tracking-widest font-bold transition-all ${activeTab === 'history' ? 'text-cine-accent bg-cine-accent/5' : 'text-zinc-500 hover:text-zinc-300'}`}
+                >
+                    脚本历史
+                </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6">
+                {activeTab === 'input' ? (
+                    <>
+                        <div className="space-y-4">
+                        <div className="flex justify-between items-center">
+                            <label className="text-[10px] uppercase text-zinc-300 font-bold tracking-[0.2em] flex items-center gap-2">
+                            <FileText size={12} /> 文档与提示词输入
+                            </label>
+                            {instruction.trim() && (
+                                <button onClick={() => setInstruction("")} className="text-zinc-500 hover:text-red-500 transition-colors">
+                                    <Eraser size={12} />
+                                </button>
+                            )}
+                        </div>
+                        <textarea 
+                            value={instruction}
+                            onChange={(e) => setInstruction(e.target.value)}
+                            placeholder="在此输入故事大纲、场景描述或点击下方上传文档..."
+                            className="w-full bg-black/40 border border-zinc-800 rounded-sm p-4 text-[12px] text-zinc-200 font-mono min-h-[160px] focus:border-cine-accent focus:ring-0 resize-none leading-relaxed placeholder:text-zinc-600"
+                        />
+                        <div className="flex gap-2">
+                            <div className="flex-1 relative">
+                                <Button 
+                                variant="primary" 
+                                size="sm" 
+                                className="w-full text-[9px] h-9 pr-10" 
+                                onClick={() => fileInputRef.current?.click()}
+                                >
+                                <FileUp size={12} className="mr-2" />
+                                {fileName ? `${fileName.slice(0, 15)}...` : '上传文档 (.txt)'}
+                                </Button>
+                                {fileName && (
+                                    <button onClick={handleClearAttachment} className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-red-500">
+                                        <X size={14} />
+                                    </button>
+                                )}
+                            </div>
+                            <input type="file" ref={fileInputRef} className="hidden" accept=".txt" onChange={handleFileUpload} />
+                            <Button variant="secondary" size="sm" className="h-9 w-9 p-0" onClick={handleSavePrompt} disabled={!instruction.trim()}>
+                            <Save size={14} />
+                            </Button>
+                        </div>
+                        </div>
+
+                        <div className="space-y-4">
+                        <label className="text-[10px] uppercase text-zinc-300 font-bold tracking-[0.2em] flex items-center gap-2">
+                            <Hash size={12} /> 拆解脚本条数
+                        </label>
+                        <div className="flex items-center gap-4 bg-black/40 border border-zinc-800 p-3 rounded-sm">
+                            <input 
+                                type="number" 
+                                min="1" 
+                                max="64" 
+                                value={panelCount} 
+                                onChange={(e) => setPanelCount(Math.min(64, Math.max(1, parseInt(e.target.value) || 1)))}
+                                className="flex-1 bg-transparent border-none text-cine-accent font-mono font-bold text-sm focus:ring-0 text-center"
+                            />
+                            <span className="text-[9px] text-zinc-500 font-mono uppercase">PANELS</span>
+                        </div>
+                        </div>
+
+                        <div className="space-y-4">
+                        <label className="text-[10px] uppercase text-zinc-300 font-bold tracking-[0.2em] flex items-center gap-2">
+                            <BookOpen size={12} /> 已保存指令库
+                        </label>
+                        <div className="space-y-2 max-h-[180px] overflow-y-auto custom-scrollbar pr-2">
+                            {savedPrompts.map(p => (
+                            <div key={p.id} className="group relative bg-black/40 border border-zinc-800/60 p-2.5 rounded-sm hover:border-zinc-600 transition-all cursor-pointer" onClick={() => setInstruction(p.content)}>
+                                <div className="text-[9px] text-zinc-300 font-mono truncate pr-6">{p.title}</div>
+                                <button 
+                                onClick={(e) => { e.stopPropagation(); handleRemoveSavedPrompt(p.id); }}
+                                className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-red-500 transition-all"
+                                >
+                                <Trash2 size={11} />
+                                </button>
+                            </div>
+                            ))}
+                            {savedPrompts.length === 0 && <p className="text-[9px] text-zinc-600 font-mono italic p-2">暂无保存指令</p>}
+                        </div>
+                        </div>
+                    </>
+                ) : (
+                    <div className="space-y-4">
+                         <div className="flex items-center justify-between">
+                            <label className="text-[10px] uppercase text-zinc-300 font-bold tracking-[0.2em] flex items-center gap-2">
+                                <History size={12} /> 历史脚本组
+                            </label>
+                            <span className="text-[8px] text-zinc-500 font-mono uppercase">{scriptGroups.length} 组</span>
+                         </div>
+                         <div className="space-y-3">
+                             {scriptGroups.map(group => (
+                                 <div key={group.id} className="group relative bg-black/40 border border-zinc-800/60 rounded-sm p-3 hover:border-cine-accent/30 transition-all">
+                                     <div className="flex items-center justify-between mb-2">
+                                         {editingGroupId === group.id ? (
+                                             <input 
+                                                autoFocus
+                                                defaultValue={group.name}
+                                                onBlur={(e) => handleRenameGroup(group.id, e.target.value)}
+                                                onKeyDown={(e) => e.key === 'Enter' && handleRenameGroup(group.id, (e.target as HTMLInputElement).value)}
+                                                className="bg-zinc-900 border border-cine-accent text-[10px] text-zinc-200 font-mono px-2 py-1 rounded w-full mr-2"
+                                             />
+                                         ) : (
+                                            <div className="flex items-center gap-2 truncate">
+                                                <FolderOpen size={12} className="text-zinc-500" />
+                                                <span className="text-[10px] text-zinc-200 font-bold font-mono tracking-wider truncate">{group.name}</span>
+                                            </div>
+                                         )}
+                                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-2">
+                                            <button onClick={() => setEditingGroupId(group.id)} className="p-1 text-zinc-500 hover:text-white"><Edit3 size={11} /></button>
+                                            <button onClick={() => handleDeleteGroup(group.id)} className="p-1 text-zinc-500 hover:text-red-500"><Trash2 size={11} /></button>
+                                         </div>
+                                     </div>
+                                     <p className="text-[8px] text-zinc-500 font-mono line-clamp-2 mb-3 leading-relaxed">{group.summary || '无梗概'}</p>
+                                     <Button 
+                                        variant="primary" 
+                                        size="sm" 
+                                        className="w-full text-[8px] h-7 bg-zinc-800/50" 
+                                        onClick={() => handleLoadGroup(group)}
+                                     >
+                                         载入此脚本组
+                                     </Button>
+                                 </div>
+                             ))}
+                             {scriptGroups.length === 0 && <p className="text-[9px] text-zinc-600 font-mono italic p-6 text-center">尚无保存的历史脚本组</p>}
+                         </div>
+                    </div>
                 )}
-              </div>
-              <textarea 
-                value={instruction}
-                onChange={(e) => setInstruction(e.target.value)}
-                placeholder="在此输入故事大纲、场景描述或点击下方上传文档..."
-                className="w-full bg-black/40 border border-zinc-800 rounded-sm p-4 text-[12px] text-zinc-200 font-mono min-h-[160px] focus:border-cine-accent focus:ring-0 resize-none leading-relaxed placeholder:text-zinc-600"
-              />
-              <div className="flex gap-2">
-                <div className="flex-1 relative">
+            </div>
+
+            {activeTab === 'input' && (
+                <div className="mt-auto p-6 border-t border-zinc-800">
                     <Button 
-                      variant="primary" 
-                      size="sm" 
-                      className="w-full text-[9px] h-9 pr-10" 
-                      onClick={() => fileInputRef.current?.click()}
+                        variant="accent" 
+                        className="w-full h-12 gap-3 shadow-lg"
+                        onClick={handleGenerate}
+                        disabled={isGenerating || (!instruction.trim() && !attachmentContent)}
                     >
-                      <FileUp size={12} className="mr-2" />
-                      {fileName ? `${fileName.slice(0, 15)}...` : '上传文档 (.txt)'}
+                        {isGenerating ? <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" /> : <Send size={16} />}
+                        {isGenerating ? '正在智能拆解...' : '执行拆解任务'}
                     </Button>
-                    {fileName && (
-                        <button onClick={handleClearAttachment} className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-red-500">
-                            <X size={14} />
-                        </button>
-                    )}
                 </div>
-                <input type="file" ref={fileInputRef} className="hidden" accept=".txt" onChange={handleFileUpload} />
-                <Button variant="secondary" size="sm" className="h-9 w-9 p-0" onClick={handleSavePrompt} disabled={!instruction.trim()}>
-                  <Save size={14} />
-                </Button>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-               <label className="text-[10px] uppercase text-zinc-300 font-bold tracking-[0.2em] flex items-center gap-2">
-                <Hash size={12} /> 拆解脚本条数 (手动输入)
-              </label>
-              <div className="flex items-center gap-4 bg-black/40 border border-zinc-800 p-3 rounded-sm">
-                <input 
-                    type="number" 
-                    min="1" 
-                    max="64" 
-                    value={panelCount} 
-                    onChange={(e) => setPanelCount(Math.min(64, Math.max(1, parseInt(e.target.value) || 1)))}
-                    className="flex-1 bg-transparent border-none text-cine-accent font-mono font-bold text-sm focus:ring-0 text-center"
-                />
-                <span className="text-[9px] text-zinc-500 font-mono uppercase">PANELS</span>
-              </div>
-            </div>
-
-            <div className="space-y-4 flex-1">
-               <label className="text-[10px] uppercase text-zinc-300 font-bold tracking-[0.2em] flex items-center gap-2">
-                <BookOpen size={12} /> 已保存指令库
-              </label>
-              <div className="space-y-2 max-h-[240px] overflow-y-auto custom-scrollbar pr-2">
-                {savedPrompts.map(p => (
-                  <div key={p.id} className="group relative bg-black/40 border border-zinc-800/60 p-2.5 rounded-sm hover:border-zinc-600 transition-all cursor-pointer" onClick={() => setInstruction(p.content)}>
-                    <div className="text-[9px] text-zinc-300 font-mono truncate pr-6">{p.title}</div>
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); handleRemoveSavedPrompt(p.id); }}
-                      className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-red-500 transition-all"
-                    >
-                      <Trash2 size={11} />
-                    </button>
-                  </div>
-                ))}
-                {savedPrompts.length === 0 && <p className="text-[9px] text-zinc-600 font-mono italic p-2">暂无保存指令</p>}
-              </div>
-            </div>
-
-            <div className="mt-auto pt-4 border-t border-zinc-800">
-              <Button 
-                variant="accent" 
-                className="w-full h-12 gap-3 shadow-lg"
-                onClick={handleGenerate}
-                disabled={isGenerating || (!instruction.trim() && !attachmentContent)}
-              >
-                {isGenerating ? <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" /> : <Send size={16} />}
-                {isGenerating ? '正在智能拆解...' : '执行拆解任务'}
-              </Button>
-            </div>
+            )}
           </div>
 
           {/* Right: Results Area */}

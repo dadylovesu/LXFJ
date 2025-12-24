@@ -56,11 +56,25 @@ const App: React.FC = () => {
     loadFromStorage<GeneratedImage[]>('cine_images').then(saved => {
         if (saved) setImages(saved);
     });
+    loadFromStorage<string>('cine_selected_id').then(id => {
+        if (id) setSelectedImageId(id);
+    });
+    loadFromStorage<CollageData>('cine_active_collage').then(collage => {
+        if (collage) setActiveCollage(collage);
+    });
   }, []);
 
   useEffect(() => {
     saveToStorage('cine_images', images);
   }, [images]);
+
+  useEffect(() => {
+    saveToStorage('cine_selected_id', selectedImageId || null);
+  }, [selectedImageId]);
+
+  useEffect(() => {
+    saveToStorage('cine_active_collage', activeCollage);
+  }, [activeCollage]);
 
   // Sync editor state when selecting a node
   useEffect(() => {
@@ -68,12 +82,13 @@ const App: React.FC = () => {
       const selected = images.find(i => i.id === selectedImageId);
       if (selected && selected.nodeType === 'render') {
         setPrompt(selected.prompt);
+        // CRITICAL: Ensure panelPrompts always loads from the node's saved property
         setPanelPrompts(selected.panelPrompts || []);
         if (selected.gridRows) setGridSize(selected.gridRows);
         if (selected.panelAspectRatio) setPanelAspectRatio(selected.panelAspectRatio as any);
       }
     }
-  }, [selectedImageId]);
+  }, [selectedImageId, images]);
 
   const updateImagesWithHistory = useCallback((newImages: GeneratedImage[]) => {
     setHistory(prev => [...prev, images].slice(-30)); 
@@ -173,7 +188,6 @@ const App: React.FC = () => {
           });
       }
 
-      // If activeCollage is present, we DISCARD text-based panelPrompts to prioritize visual recognition.
       const instructionsToSend = activeCollage ? undefined : panelPrompts;
 
       const finalResult = await generateMultiViewGrid(
@@ -199,7 +213,7 @@ const App: React.FC = () => {
           position: { x: startX, y: startY },
           cameraDescription: cameraMove,
           slices: finalResult.slices,
-          panelPrompts: [...panelPrompts], // PERSIST CURRENT PROMPTS TO NODE
+          panelPrompts: [...panelPrompts], 
           sliceHistory: {}, 
           gridRows: gridSize,
           gridCols: gridSize
@@ -239,7 +253,7 @@ const App: React.FC = () => {
           if (!newHistory[sliceIndex]) newHistory[sliceIndex] = [];
           newHistory[sliceIndex].push(image.slices![sliceIndex]);
           newSlices[sliceIndex] = newSliceUrl;
-          // Also update the local panel prompt for this slice in the node data
+          
           const newPanelPrompts = [...(img.panelPrompts || [])];
           while(newPanelPrompts.length <= sliceIndex) newPanelPrompts.push("");
           newPanelPrompts[sliceIndex] = editPrompt;
@@ -248,7 +262,7 @@ const App: React.FC = () => {
         return img;
       });
       updateImagesWithHistory(newImages);
-      // Update global panelPrompts state to match if the edited image is the selected one
+      
       if (imageId === selectedImageId) {
           setPanelPrompts(prev => {
               const next = [...prev];
@@ -282,7 +296,6 @@ const App: React.FC = () => {
           const nextSide = Math.ceil(Math.sqrt(count));
           setGridSize(nextSide);
       }
-      // If we are overriding an existing node's scripts via Apply, we update it
       if (selectedImageId) {
           setImages(prev => prev.map(img => 
               img.id === selectedImageId ? { ...img, prompt: summary, panelPrompts: scripts } : img
