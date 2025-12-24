@@ -44,6 +44,7 @@ export interface GeneratedImage {
   textData?: string; 
   cameraDescription?: string; 
   slices?: string[]; 
+  panelPrompts?: string[]; // Detailed prompts for each slice
   sliceHistory?: Record<number, string[]>; // Map slice index to array of past image URLs
   gridRows?: number;
   gridCols?: number;

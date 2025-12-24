@@ -62,6 +62,19 @@ const App: React.FC = () => {
     saveToStorage('cine_images', images);
   }, [images]);
 
+  // Sync editor state when selecting a node
+  useEffect(() => {
+    if (selectedImageId) {
+      const selected = images.find(i => i.id === selectedImageId);
+      if (selected && selected.nodeType === 'render') {
+        setPrompt(selected.prompt);
+        setPanelPrompts(selected.panelPrompts || []);
+        if (selected.gridRows) setGridSize(selected.gridRows);
+        if (selected.panelAspectRatio) setPanelAspectRatio(selected.panelAspectRatio as any);
+      }
+    }
+  }, [selectedImageId]);
+
   const updateImagesWithHistory = useCallback((newImages: GeneratedImage[]) => {
     setHistory(prev => [...prev, images].slice(-30)); 
     setImages(newImages);
@@ -186,6 +199,7 @@ const App: React.FC = () => {
           position: { x: startX, y: startY },
           cameraDescription: cameraMove,
           slices: finalResult.slices,
+          panelPrompts: [...panelPrompts], // PERSIST CURRENT PROMPTS TO NODE
           sliceHistory: {}, 
           gridRows: gridSize,
           gridCols: gridSize
@@ -225,17 +239,39 @@ const App: React.FC = () => {
           if (!newHistory[sliceIndex]) newHistory[sliceIndex] = [];
           newHistory[sliceIndex].push(image.slices![sliceIndex]);
           newSlices[sliceIndex] = newSliceUrl;
-          return { ...img, slices: newSlices, sliceHistory: newHistory };
+          // Also update the local panel prompt for this slice in the node data
+          const newPanelPrompts = [...(img.panelPrompts || [])];
+          while(newPanelPrompts.length <= sliceIndex) newPanelPrompts.push("");
+          newPanelPrompts[sliceIndex] = editPrompt;
+          return { ...img, slices: newSlices, sliceHistory: newHistory, panelPrompts: newPanelPrompts };
         }
         return img;
       });
       updateImagesWithHistory(newImages);
+      // Update global panelPrompts state to match if the edited image is the selected one
+      if (imageId === selectedImageId) {
+          setPanelPrompts(prev => {
+              const next = [...prev];
+              while(next.length <= sliceIndex) next.push("");
+              next[sliceIndex] = editPrompt;
+              return next;
+          });
+      }
     } catch (err: any) { 
         setError(err.message || "重绘失败"); 
     } finally { 
         setIsGenerating(false); 
         setGenerationStep("");
     }
+  };
+
+  const handleSaveCameraLogic = (newPrompts: string[]) => {
+      setPanelPrompts(newPrompts);
+      if (selectedImageId) {
+          setImages(prev => prev.map(img => 
+              img.id === selectedImageId ? { ...img, panelPrompts: newPrompts } : img
+          ));
+      }
   };
 
   const handleApplyScripts = (summary: string, scripts: string[]) => {
@@ -245,6 +281,12 @@ const App: React.FC = () => {
       if (count > gridSize * gridSize) {
           const nextSide = Math.ceil(Math.sqrt(count));
           setGridSize(nextSide);
+      }
+      // If we are overriding an existing node's scripts via Apply, we update it
+      if (selectedImageId) {
+          setImages(prev => prev.map(img => 
+              img.id === selectedImageId ? { ...img, prompt: summary, panelPrompts: scripts } : img
+          ));
       }
   };
 
@@ -401,8 +443,10 @@ const App: React.FC = () => {
 
         <CameraEditor 
           isOpen={isCameraEditorOpen} onClose={() => setIsCameraEditorOpen(false)}
-          rows={gridSize} cols={gridSize} mainPrompt={prompt}
-          initialPrompts={panelPrompts} onSave={(newPrompts) => setPanelPrompts(newPrompts)}
+          rows={selectedImage?.gridRows || gridSize} 
+          cols={selectedImage?.gridCols || gridSize} 
+          mainPrompt={selectedImage?.prompt || prompt}
+          initialPrompts={panelPrompts} onSave={handleSaveCameraLogic}
           currentImage={selectedImage || undefined}
           onRegenSlice={(idx, p) => handleEditSlice(selectedImageId!, idx, p, true)}
           isGenerating={isGenerating}
