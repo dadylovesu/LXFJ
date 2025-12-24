@@ -1,8 +1,9 @@
+
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { AspectRatio, ImageSize, Asset, CollageData, PanelAspectRatio } from "../types";
 
-// Helper to get a fresh client instance right before use
 const getClient = () => {
+  // 直接使用注入的环境变量 API_KEY
   return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
