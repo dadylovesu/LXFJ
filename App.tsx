@@ -7,7 +7,7 @@ import { Inspector } from './components/Inspector';
 import { CameraEditor } from './components/CameraEditor';
 import { CollageEditor } from './components/CollageEditor';
 import { ScriptEditor } from './components/ScriptEditor';
-import { Asset, GeneratedImage, AspectRatio, PanelAspectRatio, ImageSize, AssetCategory, CollageData, ScriptGroup } from './types';
+import { Asset, GeneratedImage, AspectRatio, PanelAspectRatio, ImageSize, AssetCategory, CollageData } from './types';
 import { generateMultiViewGrid, fileToBase64, enhancePrompt, analyzeAsset, ReferenceImageData, generateCameraMovement, editImage } from './services/geminiService';
 import { saveToStorage, loadFromStorage, clearStorage } from './services/persistenceService';
 import { AlertCircle, X as XIcon, Trash2, LayoutGrid } from 'lucide-react';
@@ -19,7 +19,6 @@ const App: React.FC = () => {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [images, setImages] = useState<GeneratedImage[]>([]);
   const [history, setHistory] = useState<GeneratedImage[][]>([]);
-  const [scriptGroups, setScriptGroups] = useState<ScriptGroup[]>([]);
   
   const [selectedImageId, setSelectedImageId] = useState<string | undefined>(undefined);
   const [selectedAssetId, setSelectedAssetId] = useState<string | undefined>(undefined);
@@ -54,23 +53,14 @@ const App: React.FC = () => {
   }, [panelAspectRatio]);
 
   useEffect(() => {
-    // Load persisted state
-    loadFromStorage<GeneratedImage[]>('cine_images').then(saved => saved && setImages(saved));
-    loadFromStorage<ScriptGroup[]>('cine_script_groups').then(saved => saved && setScriptGroups(saved));
-    loadFromStorage<string>('cine_prompt').then(saved => saved && setPrompt(saved));
-    loadFromStorage<string[]>('cine_panel_prompts').then(saved => saved && setPanelPrompts(saved));
-    loadFromStorage<number>('cine_grid_size').then(saved => saved && setGridSize(saved));
-    loadFromStorage<PanelAspectRatio>('cine_panel_ar').then(saved => saved && setPanelAspectRatio(saved));
-    loadFromStorage<ImageSize>('cine_image_size').then(saved => saved && setImageSize(saved));
+    loadFromStorage<GeneratedImage[]>('cine_images').then(saved => {
+        if (saved) setImages(saved);
+    });
   }, []);
 
-  useEffect(() => { saveToStorage('cine_images', images); }, [images]);
-  useEffect(() => { saveToStorage('cine_script_groups', scriptGroups); }, [scriptGroups]);
-  useEffect(() => { saveToStorage('cine_prompt', prompt); }, [prompt]);
-  useEffect(() => { saveToStorage('cine_panel_prompts', panelPrompts); }, [panelPrompts]);
-  useEffect(() => { saveToStorage('cine_grid_size', gridSize); }, [gridSize]);
-  useEffect(() => { saveToStorage('cine_panel_ar', panelAspectRatio); }, [panelAspectRatio]);
-  useEffect(() => { saveToStorage('cine_image_size', imageSize); }, [imageSize]);
+  useEffect(() => {
+    saveToStorage('cine_images', images);
+  }, [images]);
 
   const updateImagesWithHistory = useCallback((newImages: GeneratedImage[]) => {
     setHistory(prev => [...prev, images].slice(-30)); 
@@ -170,7 +160,8 @@ const App: React.FC = () => {
           });
       }
 
-      const instructionsToSend = activeCollage ? undefined : [...panelPrompts];
+      // If activeCollage is present, we DISCARD text-based panelPrompts to prioritize visual recognition.
+      const instructionsToSend = activeCollage ? undefined : panelPrompts;
 
       const finalResult = await generateMultiViewGrid(
           prompt, gridSize, panelAspectRatio, aspectRatio, imageSize, 
@@ -195,7 +186,6 @@ const App: React.FC = () => {
           position: { x: startX, y: startY },
           cameraDescription: cameraMove,
           slices: finalResult.slices,
-          panelPrompts: instructionsToSend, 
           sliceHistory: {}, 
           gridRows: gridSize,
           gridCols: gridSize
@@ -235,16 +225,7 @@ const App: React.FC = () => {
           if (!newHistory[sliceIndex]) newHistory[sliceIndex] = [];
           newHistory[sliceIndex].push(image.slices![sliceIndex]);
           newSlices[sliceIndex] = newSliceUrl;
-
-          const newPanelPrompts = img.panelPrompts ? [...img.panelPrompts] : [];
-          if (newPanelPrompts.length > sliceIndex) {
-              newPanelPrompts[sliceIndex] = editPrompt;
-          } else {
-              while (newPanelPrompts.length <= sliceIndex) newPanelPrompts.push("");
-              newPanelPrompts[sliceIndex] = editPrompt;
-          }
-
-          return { ...img, slices: newSlices, sliceHistory: newHistory, panelPrompts: newPanelPrompts };
+          return { ...img, slices: newSlices, sliceHistory: newHistory };
         }
         return img;
       });
@@ -267,17 +248,6 @@ const App: React.FC = () => {
       }
   };
 
-  const handleSaveCameraLogic = (newPrompts: string[]) => {
-      if (selectedImageId) {
-          const nextImages = images.map(img => 
-              img.id === selectedImageId ? { ...img, panelPrompts: newPrompts } : img
-          );
-          updateImagesWithHistory(nextImages);
-      } else {
-          setPanelPrompts(newPrompts);
-      }
-  };
-
   const handleDownloadZip = async () => {
     const selected = images.find(i => i.id === selectedImageId);
     if (!selected || selected.nodeType !== 'render') {
@@ -290,22 +260,27 @@ const App: React.FC = () => {
 
     try {
       const zip = new JSZip();
+      
       const getRootId = (nodeId: string): string => {
           const node = images.find(n => n.id === nodeId);
           if (!node || !node.parentId) return nodeId;
           return getRootId(node.parentId);
       };
+
       const getDepth = (nodeId: string, depth = 1): number => {
           const node = images.find(n => n.id === nodeId);
           if (!node || !node.parentId) return depth;
           return getDepth(node.parentId, depth + 1);
       };
+
       const rootNodes = images
           .filter(i => i.nodeType === 'render' && !i.parentId)
           .sort((a, b) => a.timestamp - b.timestamp);
+
       const currentRootId = getRootId(selected.id);
       const groupIdx = rootNodes.findIndex(r => r.id === currentRootId) + 1;
       const shotIdx = getDepth(selected.id);
+      
       const folderName = `组${groupIdx}-镜头${shotIdx}`;
       const folder = zip.folder(folderName);
 
@@ -398,7 +373,6 @@ const App: React.FC = () => {
                 isContinuing={!!(selectedImageId && images.find(i => i.id === selectedImageId)?.nodeType === 'render')}
                 onDeselect={() => { setSelectedImageId(undefined); setSelectedAssetId(undefined); }}
                 isCollageActive={!!activeCollage}
-                hasPanelScripts={(selectedImage?.panelPrompts && selectedImage.panelPrompts.length > 0) || panelPrompts.length > 0}
             />
         </div>
       </aside>
@@ -427,11 +401,8 @@ const App: React.FC = () => {
 
         <CameraEditor 
           isOpen={isCameraEditorOpen} onClose={() => setIsCameraEditorOpen(false)}
-          rows={selectedImage?.gridRows || gridSize} 
-          cols={selectedImage?.gridCols || gridSize} 
-          mainPrompt={selectedImage?.prompt || prompt}
-          initialPrompts={selectedImage?.panelPrompts || panelPrompts} 
-          onSave={handleSaveCameraLogic}
+          rows={gridSize} cols={gridSize} mainPrompt={prompt}
+          initialPrompts={panelPrompts} onSave={(newPrompts) => setPanelPrompts(newPrompts)}
           currentImage={selectedImage || undefined}
           onRegenSlice={(idx, p) => handleEditSlice(selectedImageId!, idx, p, true)}
           isGenerating={isGenerating}
@@ -444,12 +415,7 @@ const App: React.FC = () => {
 
         <ScriptEditor 
           isOpen={isScriptEditorOpen} onClose={() => setIsScriptEditorOpen(false)}
-          defaultPanelCount={gridSize * gridSize} 
-          onApplyScripts={handleApplyScripts}
-          savedGroups={scriptGroups}
-          onSaveGroup={(group) => setScriptGroups(prev => [group, ...prev])}
-          onDeleteGroup={(id) => setScriptGroups(prev => prev.filter(g => g.id !== id))}
-          onUpdateGroupName={(id, name) => setScriptGroups(prev => prev.map(g => g.id === id ? { ...g, name } : g))}
+          defaultPanelCount={gridSize * gridSize} onApplyScripts={handleApplyScripts}
         />
       </main>
 

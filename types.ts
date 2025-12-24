@@ -25,14 +25,6 @@ export type NodeType = 'prompt' | 'asset_group' | 'render' | 'slice';
 
 export type AssetCategory = 'role' | 'background' | 'prop';
 
-export interface ScriptGroup {
-  id: string;
-  name: string;
-  summary: string;
-  scripts: string[];
-  timestamp: number;
-}
-
 export interface GeneratedImage {
   id: string;
   url: string; 
@@ -52,8 +44,7 @@ export interface GeneratedImage {
   textData?: string; 
   cameraDescription?: string; 
   slices?: string[]; 
-  panelPrompts?: string[]; // 对应分镜组每一格的脚本
-  sliceHistory?: Record<number, string[]>; 
+  sliceHistory?: Record<number, string[]>; // Map slice index to array of past image URLs
   gridRows?: number;
   gridCols?: number;
 }
@@ -64,12 +55,12 @@ export interface Asset {
   previewUrl: string;
   type: 'image' | 'video';
   category: AssetCategory;
-  index?: number; 
+  index?: number; // For Role 1, Role 2 or Prop 1, Prop 2 labeling
   analysis?: string;
 }
 
 export interface CollageData {
-  url: string; 
+  url: string; // Stitched image base64
   rows: number;
   cols: number;
   aspectRatio: string;

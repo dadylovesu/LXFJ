@@ -23,7 +23,6 @@ interface DirectorDeckProps {
   isContinuing?: boolean;
   onDeselect?: () => void;
   isCollageActive?: boolean;
-  hasPanelScripts?: boolean;
 }
 
 export const DirectorDeck: React.FC<DirectorDeckProps> = ({
@@ -44,8 +43,7 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
   onOpenScriptDeconstruct,
   isContinuing = false,
   onDeselect,
-  isCollageActive = false,
-  hasPanelScripts = false
+  isCollageActive = false
 }) => {
   
   const getQualityLabel = () => {
@@ -56,8 +54,6 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
           default: return "4K Master";
       }
   };
-
-  const isCameraLogicEnabled = !isGenerating && !isCollageActive && (prompt.trim().length > 0 || isContinuing || hasPanelScripts);
 
   return (
     <div className="flex flex-col h-full space-y-6 select-none">
@@ -74,6 +70,7 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
          )}
       </div>
 
+      {/* Composition Group */}
       <div className="space-y-4">
         <label className="text-[9px] text-zinc-400 font-mono uppercase tracking-[0.15em] flex items-center gap-2.5">
             <span className="w-1 h-3 bg-zinc-700 rounded-full"></span>
@@ -81,6 +78,7 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
         </label>
         
         <div className="space-y-5 p-4 bg-zinc-900/40 border border-zinc-800/40 rounded-sm backdrop-blur-md">
+            {/* NxN Grid Size */}
             <div className="space-y-3">
                 <div className="flex justify-between items-center">
                    <span className="text-[8px] text-zinc-400 font-mono uppercase tracking-widest">宫格规模 (GRID SIZE)</span>
@@ -93,6 +91,7 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
                 </div>
             </div>
 
+            {/* Single Panel Aspect Ratio */}
             <div className="space-y-3 pt-3 border-t border-zinc-800/50">
                 <div className="flex justify-between items-center">
                    <span className="text-[8px] text-zinc-400 font-mono uppercase tracking-widest">单分镜构图比例 (PANEL AR)</span>
@@ -113,6 +112,7 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
                 </div>
             </div>
 
+            {/* Auto Container Aspect Ratio Info */}
             <div className="flex items-center justify-between pt-3 border-t border-zinc-800/50">
                <span className="text-[8px] text-zinc-400 font-mono uppercase tracking-widest">输出画面比例 (AUTO)</span>
                <div className="px-2 py-0.5 bg-zinc-800 rounded-[1px] text-[9px] font-mono text-zinc-300 border border-zinc-700">
@@ -122,6 +122,7 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
         </div>
       </div>
 
+      {/* Quality Group */}
       <div className="space-y-2.5">
         <label className="text-[9px] text-zinc-400 font-mono uppercase tracking-[0.15em] flex items-center gap-2.5">
             <span className="w-1 h-3 bg-zinc-700 rounded-full"></span>
@@ -148,6 +149,7 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
         </div>
       </div>
 
+      {/* Prompt Area */}
       <div className="space-y-2.5 flex-1 flex flex-col min-h-[160px]">
         <div className="flex justify-between items-end">
             <label className="text-[9px] text-zinc-400 font-mono uppercase tracking-[0.15em] flex items-center gap-2.5">
@@ -180,6 +182,7 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
         </div>
       </div>
 
+      {/* Tools Row */}
       <div className="grid grid-cols-2 gap-2 relative">
           <Button 
             variant="primary" 
@@ -196,10 +199,10 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
                 variant="primary" 
                 size="sm" 
                 onClick={onGenerateCamera} 
-                disabled={!isCameraLogicEnabled} 
-                className={`w-full text-[9px] h-10 border-dashed border-zinc-800 group ${isCollageActive ? 'opacity-40 grayscale cursor-not-allowed' : ''} ${hasPanelScripts ? 'border-cine-accent/30 bg-cine-accent/5' : ''}`}
+                disabled={isGenerating || !prompt.trim() || isCollageActive} 
+                className={`w-full text-[9px] h-10 border-dashed border-zinc-800 group ${isCollageActive ? 'opacity-40 grayscale cursor-not-allowed' : ''}`}
             >
-                <Video size={12} className={`mr-2 transition-colors ${hasPanelScripts ? 'text-cine-accent' : 'text-zinc-400 group-hover:text-cine-accent'}`} /> 
+                <Video size={12} className="mr-2 text-zinc-400 group-hover:text-cine-accent transition-colors" /> 
                 分镜镜头逻辑
             </Button>
             {isCollageActive && (
@@ -210,6 +213,7 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
           </div>
       </div>
 
+      {/* Action Button Group */}
       <div className="flex gap-2">
         {isGenerating && onStop ? (
             <Button variant="primary" className="flex-1 tracking-[0.25em] h-12 border-red-900/30 text-red-500 hover:bg-red-500/10" onClick={onStop}>
