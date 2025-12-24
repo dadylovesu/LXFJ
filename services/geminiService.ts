@@ -339,13 +339,22 @@ export const generateDirectorSummary = async (scripts: string[]): Promise<string
                 model: 'gemini-3-flash-preview',
                 contents: { 
                   parts: [
-                    { text: `根据这些分镜描述生成一个总体的剧情梗概：
-                    ${scripts.join('\n')}` }
+                    { text: `请根据以下选中的分镜描述，总结成一段极其简洁（1-2句话）的故事梗概。
+要求：
+- 只描述核心人物、地点和核心事件。
+- 语言平实直白，不要任何文学渲染、气氛描述或术语。
+- 严禁分条列项。
+
+示例1：角色1大橙和角色2小青桔在海边沙滩上晒太阳。
+示例2：角色在办公室工作，天花板出现黑洞吸走周围物品，角色站在原地发呆。
+
+分镜描述内容：
+${scripts.join('\n')}` }
                   ] 
                 }
             });
         });
-        return response.text?.trim() || "生成的梗概。";
+        return response.text?.trim() || "选中的分镜场景。";
     } catch {
         return "无法生成梗概。";
     }
