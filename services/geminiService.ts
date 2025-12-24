@@ -3,10 +3,8 @@ import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { AspectRatio, ImageSize, Asset, CollageData, PanelAspectRatio } from "../types";
 
 const getClient = () => {
-  // 适配 Vercel 部署环境：优先使用 VITE_API_KEY
-  // @ts-ignore
-  const apiKey = import.meta.env.VITE_API_KEY || process.env.API_KEY;
-  return new GoogleGenAI({ apiKey: apiKey || "" });
+  // 直接使用注入的环境变量 API_KEY
+  return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
 async function withRetry<T>(operation: () => Promise<T>, maxRetries = 3): Promise<T> {
