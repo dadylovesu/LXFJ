@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect } from 'react';
-import { X, Video, Sparkles, Check, RefreshCw, Trash2, LayoutGrid, Info, Wand2, Zap } from 'lucide-react';
+import { X, Video, Sparkles, Check, RefreshCw, Trash2, LayoutGrid, Info, Wand2, Zap, FileJson } from 'lucide-react';
 import { Button } from './Button';
 import { generateCameraSuggestions } from '../services/geminiService';
 import { GeneratedImage } from '../types';
@@ -76,9 +77,16 @@ export const CameraEditor: React.FC<CameraEditorProps> = ({
               <Video className="text-cine-accent" size={20} />
             </div>
             <div>
-              <h2 className="text-white font-mono uppercase tracking-[0.2em] text-sm font-bold">
-                分镜镜头逻辑编辑器 (CAM-LOGIC)
-              </h2>
+              <div className="flex items-center gap-3">
+                <h2 className="text-white font-mono uppercase tracking-[0.2em] text-sm font-bold">
+                  分镜镜头逻辑编辑器 (CAM-LOGIC)
+                </h2>
+                {currentImage && (
+                  <span className="bg-cine-accent/10 text-cine-accent border border-cine-accent/30 px-2 py-0.5 rounded-sm text-[9px] font-bold font-mono tracking-widest flex items-center gap-1.5 animate-pulse">
+                    <FileJson size={10} /> 已锁定分镜节点: {currentImage.id.slice(0, 8)}
+                  </span>
+                )}
+              </div>
               <p className="text-[10px] text-zinc-300 font-mono mt-0.5 uppercase tracking-widest">为 {rows}x{cols} 宫格中的每一格定义专属镜头语言</p>
             </div>
           </div>
@@ -88,7 +96,6 @@ export const CameraEditor: React.FC<CameraEditorProps> = ({
         </div>
 
         <div className="flex flex-1 overflow-hidden">
-          {/* Main Workspace */}
           <div className="flex-1 p-8 overflow-y-auto custom-scrollbar bg-black/20">
             <div 
               className="grid gap-4 w-full h-full min-h-[500px]"
@@ -100,7 +107,6 @@ export const CameraEditor: React.FC<CameraEditorProps> = ({
                     {idx + 1}
                   </div>
                   
-                  {/* Image Preview Overlay Button */}
                   {currentImage?.slices?.[idx] && onRegenSlice && (
                       <button 
                         onClick={() => onRegenSlice(idx, val)}
@@ -130,7 +136,6 @@ export const CameraEditor: React.FC<CameraEditorProps> = ({
             </div>
           </div>
 
-          {/* Right Sidebar - Tools */}
           <div className="w-72 border-l border-zinc-800 p-6 space-y-8 bg-zinc-900/20">
             <div className="space-y-4">
                <h3 className="text-[10px] text-zinc-300 uppercase font-bold tracking-widest flex items-center gap-2">
@@ -175,7 +180,6 @@ export const CameraEditor: React.FC<CameraEditorProps> = ({
           </div>
         </div>
 
-        {/* Footer */}
         <div className="p-5 border-t border-zinc-800 bg-zinc-900/60 flex items-center justify-between">
            <div className="flex items-center gap-3">
               <div className="flex gap-1">

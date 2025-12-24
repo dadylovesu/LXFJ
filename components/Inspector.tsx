@@ -82,7 +82,8 @@ export const Inspector: React.FC<InspectorProps> = ({
   const handleRefImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const newRefs: string[] = [];
-      for (const file of Array.from(e.target.files)) {
+      // Fix: Explicitly cast Array.from(e.target.files) to File[] to avoid unknown type errors
+      for (const file of Array.from(e.target.files) as File[]) {
           const b64 = await fileToBase64(file);
           newRefs.push(`data:${file.type};base64,${b64}`);
       }

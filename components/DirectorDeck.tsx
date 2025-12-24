@@ -23,6 +23,7 @@ interface DirectorDeckProps {
   isContinuing?: boolean;
   onDeselect?: () => void;
   isCollageActive?: boolean;
+  hasPanelScripts?: boolean;
 }
 
 export const DirectorDeck: React.FC<DirectorDeckProps> = ({
@@ -43,7 +44,8 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
   onOpenScriptDeconstruct,
   isContinuing = false,
   onDeselect,
-  isCollageActive = false
+  isCollageActive = false,
+  hasPanelScripts = false
 }) => {
   
   const getQualityLabel = () => {
@@ -54,6 +56,8 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
           default: return "4K Master";
       }
   };
+
+  const isCameraLogicEnabled = !isGenerating && !isCollageActive && (prompt.trim().length > 0 || isContinuing || hasPanelScripts);
 
   return (
     <div className="flex flex-col h-full space-y-6 select-none">
@@ -152,7 +156,7 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
             </label>
             
             {isContinuing ? (
-                <button onClick={onDeselect} className="flex items-center gap-1.5 bg-cine-accent/5 text-cine-accent px-2.5 py-1 rounded-full border border-cine-accent/40 shadow-[0_0_10px_rgba(255,122,0,0.1)] hover:bg-cine-accent/20 transition-all group">
+                <button onClick={onDeselect} className="flex items-center gap-1.5 bg-cine-accent/5 text-cine-accent px-2.5 py-1 rounded-full border border-cine-accent/40 animate-in fade-in duration-500 shadow-[0_0_10px_rgba(255,122,0,0.1)] hover:bg-cine-accent/20 transition-all group">
                     <GitMerge size={10} />
                     <span className="text-[8px] font-mono tracking-widest font-bold">续写模式</span>
                     <XCircle size={10} className="opacity-60" />
@@ -165,12 +169,12 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
             )}
         </div>
         
-        <div className={`relative flex-1 group overflow-hidden rounded-sm ${isContinuing ? 'ring-1 ring-cine-accent/20 border border-cine-accent/30' : 'ring-1 ring-zinc-800/50 focus-within:ring-cine-accent/30 border border-transparent'}`}>
+        <div className={`relative flex-1 group transition-all duration-500 overflow-hidden rounded-sm ${isContinuing ? 'ring-1 ring-cine-accent/20 border border-cine-accent/30' : 'ring-1 ring-zinc-800/50 focus-within:ring-cine-accent/30 border border-transparent'}`}>
             <textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder={isContinuing ? "// 继续扩展该分镜的世界观..." : "// 描述一个电影级画面..."}
-                className="w-full h-full absolute inset-0 bg-black/60 backdrop-blur-sm border-none p-4 text-[13px] text-zinc-200 focus:ring-0 resize-none font-mono leading-relaxed placeholder:text-zinc-600 custom-scrollbar transition-all"
+                className="w-full h-full absolute inset-0 bg-black/60 backdrop-blur-sm border-none p-4 text-[13px] text-zinc-200 focus:ring-0 resize-none font-mono leading-relaxed placeholder:text-zinc-600 custom-scrollbar transition-all duration-500 focus:bg-zinc-900/20"
                 spellCheck={false}
             />
         </div>
@@ -187,16 +191,23 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
               <Wand2 size={12} className="mr-2 text-zinc-400 group-hover:text-cine-accent transition-colors" /> 
               智能脚本拆解
           </Button>
-          <Button 
-              variant="primary" 
-              size="sm" 
-              onClick={onGenerateCamera} 
-              disabled={isGenerating || !prompt.trim()} 
-              className="w-full text-[9px] h-10 border-dashed border-zinc-800 group"
-          >
-              <Video size={12} className="mr-2 text-zinc-400 group-hover:text-cine-accent transition-colors" /> 
-              分镜镜头逻辑
-          </Button>
+          <div className="relative group/tool">
+            <Button 
+                variant="primary" 
+                size="sm" 
+                onClick={onGenerateCamera} 
+                disabled={!isCameraLogicEnabled} 
+                className={`w-full text-[9px] h-10 border-dashed border-zinc-800 group ${isCollageActive ? 'opacity-40 grayscale cursor-not-allowed' : ''} ${hasPanelScripts ? 'border-cine-accent/30 bg-cine-accent/5' : ''}`}
+            >
+                <Video size={12} className={`mr-2 transition-colors ${hasPanelScripts ? 'text-cine-accent' : 'text-zinc-400 group-hover:text-cine-accent'}`} /> 
+                分镜镜头逻辑
+            </Button>
+            {isCollageActive && (
+                <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-48 bg-black/90 text-cine-accent text-[8px] p-2 border border-cine-accent/30 rounded-sm opacity-0 group-hover/tool:opacity-100 transition-opacity pointer-events-none z-50 font-mono uppercase tracking-tighter text-center">
+                    <Info size={10} className="inline mr-1" /> 已激活镜头组参考，文本逻辑已禁用
+                </div>
+            )}
+          </div>
       </div>
 
       <div className="flex gap-2">

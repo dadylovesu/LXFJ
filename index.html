@@ -14,8 +14,8 @@
               'cine-dark': '#0d0d0d',
               'cine-panel': '#121212',
               'cine-border': '#222222',
-              'cine-accent': '#FF7A00',
-              'cine-text-muted': '#A1A1AA',
+              'cine-accent': '#FF7A00', // Changed to vibrant orange
+              'cine-text-muted': '#A1A1AA', // Brightened from #666666 to zinc-400
               'cine-gold': '#d4af37',
             },
             fontFamily: {
@@ -33,10 +33,6 @@
         color: #e5e5e5;
         font-family: 'Inter', sans-serif;
         -webkit-font-smoothing: antialiased;
-        margin: 0;
-        overflow: hidden;
-        width: 100vw;
-        height: 100vh;
       }
       /* Custom Scrollbar */
       ::-webkit-scrollbar {
@@ -67,14 +63,6 @@
       .animate-subtle-pulse {
         animation: subtle-pulse 2s infinite ease-in-out;
       }
-
-      @keyframes flow {
-        from { stroke-dashoffset: 20; }
-        to { stroke-dashoffset: 0; }
-      }
-      .animate-flow {
-        animation: flow 1s linear infinite;
-      }
     </style>
   <script type="importmap">
 {
@@ -91,16 +79,5 @@
 </head>
   <body>
     <div id="root"></div>
-    <script>
-      /**
-       * Shim for process.env
-       * In a production environment like Vercel, the global 'process' object 
-       * might not be available in the browser context. This shim prevents 
-       * scripts from crashing when trying to access process.env.API_KEY.
-       */
-      window.process = window.process || { env: { API_KEY: "" } };
-    </script>
-    <!-- Entry point for the React application -->
-    <script type="module" src="index.tsx"></script>
   </body>
 </html>
