@@ -7,10 +7,11 @@ import { Inspector } from './components/Inspector';
 import { CameraEditor } from './components/CameraEditor';
 import { CollageEditor } from './components/CollageEditor';
 import { ScriptEditor } from './components/ScriptEditor';
+import { FeatureGuide } from './components/FeatureGuide'; // 新增导入
 import { Asset, GeneratedImage, AspectRatio, PanelAspectRatio, ImageSize, AssetCategory, CollageData } from './types';
 import { generateMultiViewGrid, fileToBase64, enhancePrompt, analyzeAsset, ReferenceImageData, generateCameraMovement, editImage } from './services/geminiService';
 import { saveToStorage, loadFromStorage, clearStorage } from './services/persistenceService';
-import { AlertCircle, X as XIcon, Trash2, LayoutGrid } from 'lucide-react';
+import { AlertCircle, X as XIcon, Trash2, LayoutGrid, HelpCircle } from 'lucide-react'; // 新增 HelpCircle
 import { Button } from './components/Button';
 // @ts-ignore
 import JSZip from 'jszip';
@@ -28,11 +29,12 @@ const App: React.FC = () => {
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>(AspectRatio.WIDE);
   const [imageSize, setImageSize] = useState<ImageSize>(ImageSize.K4);
   const [prompt, setPrompt] = useState<string>('');
-  const [stylePrompt, setStylePrompt] = useState<string>(''); // 新增画风状态
+  const [stylePrompt, setStylePrompt] = useState<string>(''); 
   const [panelPrompts, setPanelPrompts] = useState<string[]>([]);
   const [isCameraEditorOpen, setIsCameraEditorOpen] = useState(false);
   const [isCollageEditorOpen, setIsCollageEditorOpen] = useState(false);
   const [isScriptEditorOpen, setIsScriptEditorOpen] = useState(false);
+  const [isFeatureGuideOpen, setIsFeatureGuideOpen] = useState(false); // 新增状态
   const [activeCollage, setActiveCollage] = useState<CollageData | null>(null);
   
   const [isGenerating, setIsGenerating] = useState(false);
@@ -77,14 +79,12 @@ const App: React.FC = () => {
     saveToStorage('cine_active_collage', activeCollage);
   }, [activeCollage]);
 
-  // Sync editor state when selecting a node
   useEffect(() => {
     if (selectedImageId) {
       const selected = images.find(i => i.id === selectedImageId);
       if (selected && selected.nodeType === 'render') {
         setPrompt(selected.prompt);
-        setStylePrompt(selected.stylePrompt || ''); // 同步画风设定
-        // CRITICAL: Ensure panelPrompts always loads from the node's saved property
+        setStylePrompt(selected.stylePrompt || ''); 
         setPanelPrompts(selected.panelPrompts || []);
         if (selected.gridRows) setGridSize(selected.gridRows);
         if (selected.panelAspectRatio) setPanelAspectRatio(selected.panelAspectRatio as any);
@@ -195,7 +195,7 @@ const App: React.FC = () => {
       const finalResult = await generateMultiViewGrid(
           prompt, gridSize, panelAspectRatio, aspectRatio, imageSize, 
           referenceData, previousContextImage, instructionsToSend, activeCollage || undefined,
-          stylePrompt // 传入画风参数
+          stylePrompt 
       );
       
       setGenerationStep("正在分析动线逻辑...");
@@ -206,7 +206,7 @@ const App: React.FC = () => {
           url: finalResult.fullImage,
           fullGridUrl: finalResult.fullImage,
           prompt,
-          stylePrompt, // 保存画风设定
+          stylePrompt, 
           textData: prompt, 
           assetIds: assets.map(a => a.id), 
           aspectRatio,
@@ -248,7 +248,7 @@ const App: React.FC = () => {
           image.panelAspectRatio || image.aspectRatio, 
           refImage, 
           targetImageSize,
-          stylePrompt // 重绘时也保持画风一致
+          stylePrompt 
       );
 
       const newImages = images.map(img => {
@@ -391,6 +391,13 @@ const App: React.FC = () => {
                 <span className="w-2.5 h-2.5 bg-cine-accent rounded-[1px]"></span>
                 橙意机构 - 连续分镜
             </h1>
+            <button 
+                onClick={() => setIsFeatureGuideOpen(true)}
+                className="p-1.5 text-zinc-500 hover:text-cine-accent transition-all hover:bg-zinc-800 rounded-md"
+                title="查看功能指南"
+            >
+                <HelpCircle size={18} />
+            </button>
         </div>
 
         <div className="flex-1 flex flex-col p-4 gap-7 overflow-y-auto custom-scrollbar">
@@ -424,7 +431,7 @@ const App: React.FC = () => {
                 panelAspectRatio={panelAspectRatio} setPanelAspectRatio={setPanelAspectRatio}
                 imageSize={imageSize} setImageSize={setImageSize}
                 prompt={prompt} setPrompt={setPrompt}
-                stylePrompt={stylePrompt} setStylePrompt={setStylePrompt} // 传入状态控制
+                stylePrompt={stylePrompt} setStylePrompt={setStylePrompt} 
                 onGenerate={handleGenerate}
                 onStop={() => setIsGenerating(false)}
                 isGenerating={isGenerating}
@@ -479,6 +486,11 @@ const App: React.FC = () => {
         <ScriptEditor 
           isOpen={isScriptEditorOpen} onClose={() => setIsScriptEditorOpen(false)}
           defaultPanelCount={gridSize * gridSize} onApplyScripts={handleApplyScripts}
+        />
+
+        <FeatureGuide 
+          isOpen={isFeatureGuideOpen} 
+          onClose={() => setIsFeatureGuideOpen(false)} 
         />
       </main>
 

@@ -1,8 +1,7 @@
-
 import React from 'react';
 import { Button } from './Button';
 import { AspectRatio, ImageSize, PanelAspectRatio } from '../types';
-import { Settings2, GitMerge, Video, Layers, Zap, LayoutGrid, ChevronRight, ChevronLeft, XCircle, PlusCircle, Square, Wand2, Info, Palette } from 'lucide-react';
+import { Settings2, GitMerge, Video, Layers, Zap, LayoutGrid, ChevronRight, ChevronLeft, XCircle, PlusCircle, Square, Wand2, Info, Palette, Cpu } from 'lucide-react';
 
 interface DirectorDeckProps {
   gridSize: number;
@@ -126,7 +125,37 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
         </div>
       </div>
 
-      {/* Style Preset Group (NEW) */}
+      {/* Engine Group (Resolution Selection) - NEW SECTION ADDED AS REQUESTED */}
+      <div className="space-y-4">
+        <label className="text-[9px] text-zinc-400 font-mono uppercase tracking-[0.15em] flex items-center gap-2.5">
+            <span className="w-1 h-3 bg-zinc-700 rounded-full"></span>
+            输出引擎 (ENGINE)
+        </label>
+        
+        <div className="space-y-4 p-4 bg-zinc-900/40 border border-zinc-800/40 rounded-sm backdrop-blur-md">
+            <div className="flex justify-between items-center">
+               <span className="text-[9px] text-zinc-500 font-mono font-bold uppercase tracking-widest">GEN 3 PRO ENGINE</span>
+               <span className="text-[9px] text-cine-accent font-mono font-bold uppercase tracking-widest">{getQualityLabel()}</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+                {[ImageSize.K1, ImageSize.K2, ImageSize.K4].map((size) => (
+                    <button
+                        key={size}
+                        onClick={() => setImageSize(size)}
+                        className={`h-10 border rounded-[1px] font-mono text-[10px] font-bold transition-all duration-300 flex items-center justify-center ${
+                            imageSize === size 
+                            ? 'border-cine-accent text-cine-accent bg-cine-accent/5 shadow-[0_0_15px_rgba(255,122,0,0.1)]' 
+                            : 'border-zinc-800/80 text-zinc-600 hover:border-zinc-700 hover:text-zinc-400 bg-black/20'
+                        }`}
+                    >
+                        {size}
+                    </button>
+                ))}
+            </div>
+        </div>
+      </div>
+
+      {/* Style Preset Group */}
       <div className="space-y-2.5">
         <label className="text-[9px] text-zinc-400 font-mono uppercase tracking-[0.15em] flex items-center gap-2.5">
             <span className="w-1 h-3 bg-zinc-700 rounded-full"></span>
