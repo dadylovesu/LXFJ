@@ -28,6 +28,7 @@ const App: React.FC = () => {
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>(AspectRatio.WIDE);
   const [imageSize, setImageSize] = useState<ImageSize>(ImageSize.K4);
   const [prompt, setPrompt] = useState<string>('');
+  const [stylePrompt, setStylePrompt] = useState<string>(''); // 新增画风状态
   const [panelPrompts, setPanelPrompts] = useState<string[]>([]);
   const [isCameraEditorOpen, setIsCameraEditorOpen] = useState(false);
   const [isCollageEditorOpen, setIsCollageEditorOpen] = useState(false);
@@ -82,6 +83,7 @@ const App: React.FC = () => {
       const selected = images.find(i => i.id === selectedImageId);
       if (selected && selected.nodeType === 'render') {
         setPrompt(selected.prompt);
+        setStylePrompt(selected.stylePrompt || ''); // 同步画风设定
         // CRITICAL: Ensure panelPrompts always loads from the node's saved property
         setPanelPrompts(selected.panelPrompts || []);
         if (selected.gridRows) setGridSize(selected.gridRows);
@@ -192,7 +194,8 @@ const App: React.FC = () => {
 
       const finalResult = await generateMultiViewGrid(
           prompt, gridSize, panelAspectRatio, aspectRatio, imageSize, 
-          referenceData, previousContextImage, instructionsToSend, activeCollage || undefined
+          referenceData, previousContextImage, instructionsToSend, activeCollage || undefined,
+          stylePrompt // 传入画风参数
       );
       
       setGenerationStep("正在分析动线逻辑...");
@@ -203,6 +206,7 @@ const App: React.FC = () => {
           url: finalResult.fullImage,
           fullGridUrl: finalResult.fullImage,
           prompt,
+          stylePrompt, // 保存画风设定
           textData: prompt, 
           assetIds: assets.map(a => a.id), 
           aspectRatio,
@@ -243,7 +247,8 @@ const App: React.FC = () => {
           model, 
           image.panelAspectRatio || image.aspectRatio, 
           refImage, 
-          targetImageSize
+          targetImageSize,
+          stylePrompt // 重绘时也保持画风一致
       );
 
       const newImages = images.map(img => {
@@ -419,6 +424,7 @@ const App: React.FC = () => {
                 panelAspectRatio={panelAspectRatio} setPanelAspectRatio={setPanelAspectRatio}
                 imageSize={imageSize} setImageSize={setImageSize}
                 prompt={prompt} setPrompt={setPrompt}
+                stylePrompt={stylePrompt} setStylePrompt={setStylePrompt} // 传入状态控制
                 onGenerate={handleGenerate}
                 onStop={() => setIsGenerating(false)}
                 isGenerating={isGenerating}

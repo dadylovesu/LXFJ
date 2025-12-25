@@ -30,6 +30,7 @@ export interface GeneratedImage {
   url: string; 
   fullGridUrl?: string;
   prompt: string;
+  stylePrompt?: string; // 新增画风设定字段
   aspectRatio: string;
   panelAspectRatio?: string;
   timestamp: number;
@@ -56,12 +57,12 @@ export interface Asset {
   previewUrl: string;
   type: 'image' | 'video';
   category: AssetCategory;
-  index?: number; // For Role 1, Role 2 or Prop 1, Prop 2 labeling
+  index?: number; 
   analysis?: string;
 }
 
 export interface CollageData {
-  url: string; // Stitched image base64
+  url: string; 
   rows: number;
   cols: number;
   aspectRatio: string;

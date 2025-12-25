@@ -85,7 +85,8 @@ export const generateMultiViewGrid = async (
   categorizedRefs: ReferenceImageData[] = [],
   contextImage?: string,
   panelInstructions?: string[],
-  collageRef?: CollageData 
+  collageRef?: CollageData,
+  stylePrompt?: string // 新增画风参数
 ): Promise<{ fullImage: string, slices: string[] }> => {
   await ensureApiKey();
   
@@ -114,6 +115,10 @@ export const generateMultiViewGrid = async (
   const bgs = categorizedRefs.filter(r => r.category === 'background');
   const props = categorizedRefs.filter(r => r.category === 'prop');
 
+  let styleInstruction = stylePrompt && stylePrompt.trim() 
+    ? `[MANDATORY STYLE CONSTRAINT]: The entire image MUST strictly follow this artistic style: "${stylePrompt}". This overrides any default cinematic look. Every panel must have perfect stylistic consistency.`
+    : `[STYLE]: Hyper-realistic cinematic film, 35mm photography style but ADAPTED TO ${containerAspectRatio} FORMAT. Consistent lighting and grading. Use reference assets for visual guidance.`;
+
   let systemPrompt = `[CORE TASK]: GENERATE A SEAMLESS ${gridType} STORYBOARD GRID.
 
 [STRICT LAYOUT & FORMAT RULE]:
@@ -122,6 +127,8 @@ export const generateMultiViewGrid = async (
 - PANEL LAYOUT: Exactly ${gridSize} rows and ${gridSize} columns.
 - PANEL RATIO: Every individual panel MUST BE ${panelAspectRatio}.
 - ${compositionInstruction}
+
+${styleInstruction}
 
 ${collageRef ? `
 [SHOT GROUP REFERENCE - HIGHEST PRIORITY]:
@@ -148,9 +155,7 @@ ${collageRef ? `
 
 [SCENE]: "${prompt}"
 
-${!collageRef && panelInstructions && panelInstructions.length > 0 ? `\n[PANEL DETAILS (TEXT LOGIC)]:\n${panelInstructions.map((instr, idx) => `Panel ${idx + 1}: ${instr}`).join('\n')}` : ''}
-
-[STYLE]: Hyper-realistic cinematic film, 35mm photography style but ADAPTED TO ${containerAspectRatio} FORMAT. Consistent lighting and grading.`;
+${!collageRef && panelInstructions && panelInstructions.length > 0 ? `\n[PANEL DETAILS (TEXT LOGIC)]:\n${panelInstructions.map((instr, idx) => `Panel ${idx + 1}: ${instr}`).join('\n')}` : ''}`;
 
   const parts: any[] = [];
   roles.forEach(r => parts.push({ inlineData: { mimeType: r.mimeType, data: r.data } }));
@@ -196,7 +201,8 @@ export const editImage = async (
   modelName: 'gemini-2.5-flash-image' | 'gemini-3-pro-image-preview',
   aspectRatio: string = '1:1',
   refImageBase64?: string,
-  imageSize: ImageSize = ImageSize.K1
+  imageSize: ImageSize = ImageSize.K1,
+  stylePrompt?: string // 新增画风参数
 ): Promise<string> => {
   await ensureApiKey();
   const cleanBase64 = base64Image.includes(',') ? base64Image.split(',')[1] : base64Image;
@@ -206,12 +212,17 @@ export const editImage = async (
   const isVertical = aspectRatio === '9:16' || aspectRatio === '3:4';
   const formatTag = isVertical ? "VERTICAL PORTRAIT" : "LANDSCAPE";
 
+  const styleConstraint = stylePrompt && stylePrompt.trim() 
+    ? `MANDATORY STYLE: Strictly follow the artistic style: "${stylePrompt}".`
+    : "Maintain cinematic 35mm photography consistency.";
+
   parts.push({ text: `EDIT TASK: Modify this ${aspectRatio} (${formatTag}) cinematic shot.
 REQUEST: "${editPrompt}"
 [STRICT ANATOMY RULE]: ABSOLUTELY PRESERVE the original morphology and anatomical structure of the character in the image. 
 - DO NOT add limbs (legs, feet, arms, hands) if they are not part of the character's original design. 
 - If the character is a simple shape or blob, keep it as a simple shape or blob. 
 - DO NOT humanoid-ize the character.
+${styleConstraint}
 RULE: ABSOLUTELY NO BLACK/WHITE BORDERS. Maintain full-bleed ${aspectRatio} framing. Ensure the output strictly matches the ${aspectRatio} ratio.` });
 
   try {

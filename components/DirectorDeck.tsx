@@ -2,7 +2,7 @@
 import React from 'react';
 import { Button } from './Button';
 import { AspectRatio, ImageSize, PanelAspectRatio } from '../types';
-import { Settings2, GitMerge, Video, Layers, Zap, LayoutGrid, ChevronRight, ChevronLeft, XCircle, PlusCircle, Square, Wand2, Info } from 'lucide-react';
+import { Settings2, GitMerge, Video, Layers, Zap, LayoutGrid, ChevronRight, ChevronLeft, XCircle, PlusCircle, Square, Wand2, Info, Palette } from 'lucide-react';
 
 interface DirectorDeckProps {
   gridSize: number;
@@ -14,6 +14,8 @@ interface DirectorDeckProps {
   setImageSize: (size: ImageSize) => void;
   prompt: string;
   setPrompt: (text: string) => void;
+  stylePrompt: string; // 新增属性
+  setStylePrompt: (text: string) => void; // 新增属性
   onGenerate: () => void;
   onStop?: () => void;
   isGenerating: boolean;
@@ -35,6 +37,8 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
   setImageSize,
   prompt,
   setPrompt,
+  stylePrompt,
+  setStylePrompt,
   onGenerate,
   onStop,
   isGenerating,
@@ -56,8 +60,8 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full space-y-6 select-none">
-      <div className="flex items-center justify-between border-t border-zinc-800/80 pt-6 mt-2">
+    <div className="flex flex-col h-full space-y-5 select-none">
+      <div className="flex items-center justify-between border-t border-zinc-800/80 pt-5 mt-2">
          <span className="text-zinc-300 text-[10px] uppercase tracking-[0.25em] font-mono font-bold flex items-center gap-2">
             <Settings2 size={10} className="text-cine-accent opacity-50" />
             02. 导演控制台 (CONTROL)
@@ -122,30 +126,22 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
         </div>
       </div>
 
-      {/* Quality Group */}
+      {/* Style Preset Group (NEW) */}
       <div className="space-y-2.5">
         <label className="text-[9px] text-zinc-400 font-mono uppercase tracking-[0.15em] flex items-center gap-2.5">
             <span className="w-1 h-3 bg-zinc-700 rounded-full"></span>
-            输出引擎 (ENGINE)
+            视觉风格 (STYLE PRESET)
         </label>
-        <div className="p-3 bg-black/40 border border-zinc-800/60 rounded-sm space-y-3">
-            <div className="flex items-center justify-between">
-                <span className="text-[9px] text-zinc-400 font-mono uppercase tracking-widest">GEN 3 PRO ENGINE</span>
-                <span className="text-[9px] text-cine-accent font-bold font-mono">{getQualityLabel()}</span>
-            </div>
-            <div className="grid grid-cols-3 gap-1.5">
-                {[ImageSize.K1, ImageSize.K2, ImageSize.K4].map((sz) => (
-                    <button
-                        key={sz}
-                        onClick={() => setImageSize(sz)}
-                        className={`text-[9px] h-7 border rounded-[1px] font-mono transition-all duration-300 ${
-                            imageSize === sz ? 'border-cine-accent/50 text-cine-accent bg-cine-accent/5' : 'border-zinc-800/60 text-zinc-500 hover:border-zinc-700 hover:text-zinc-300 bg-transparent'
-                        }`}
-                    >
-                        {sz}
-                    </button>
-                ))}
-            </div>
+        <div className="relative group/style">
+            <input 
+                type="text"
+                value={stylePrompt}
+                onChange={(e) => setStylePrompt(e.target.value)}
+                placeholder="默认：参考图风格 (Default: Asset Style)"
+                className="w-full bg-black/60 border border-zinc-800/80 rounded-sm px-4 py-3 text-[11px] text-cine-accent font-mono focus:border-cine-accent focus:ring-1 focus:ring-cine-accent/20 placeholder:text-zinc-700 transition-all"
+                spellCheck={false}
+            />
+            <Palette size={12} className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within/style:text-cine-accent transition-colors" />
         </div>
       </div>
 
