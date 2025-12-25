@@ -92,16 +92,22 @@ export const generateMultiViewGrid = async (
   const totalViews = gridSize * gridSize;
   const gridType = `${gridSize}x${gridSize}`;
 
-  const isVertical = panelAspectRatio.includes('3:4') || panelAspectRatio.includes('9:16');
-  const isSquare = panelAspectRatio === '1:1';
+  const isVertical = panelAspectRatio === PanelAspectRatio.P9_16 || panelAspectRatio === PanelAspectRatio.P3_4;
+  const isWidescreen = panelAspectRatio === PanelAspectRatio.P16_9 || panelAspectRatio === PanelAspectRatio.P4_3;
+  const isSquare = panelAspectRatio === PanelAspectRatio.P1_1;
   
   let compositionInstruction = "";
+  let formatKeywords = "";
+
   if (isVertical) {
-    compositionInstruction = `MANDATORY: Use EDGE-TO-EDGE VERTICAL COMPOSITION. NO BLACK BARS. NO MARGINS. The scene must bleed to the very edge of each ${panelAspectRatio} frame.`;
+    formatKeywords = "VERTICAL PORTRAIT ORIENTATION, MOBILE FORMAT, TALL FRAME";
+    compositionInstruction = `MANDATORY: Use EDGE-TO-EDGE VERTICAL COMPOSITION. The ENTIRE CANVAS must be a single vertical ${containerAspectRatio} block. NO BLACK BARS on left or right. NO HORIZONTAL LETTERBOXING. Each of the ${totalViews} panels must be a vertical ${panelAspectRatio} rectangle.`;
   } else if (isSquare) {
-    compositionInstruction = `MANDATORY: Use FULL-BLEED SQUARE COMPOSITION. ZERO GUTTERS. Each of the ${totalViews} panels must be perfectly contiguous.`;
-  } else {
-    compositionInstruction = `MANDATORY: Use CINEMATIC WIDESCREEN with ZERO LETTERBOXING. Ensure the content fills the entire ${panelAspectRatio} area of each panel completely.`;
+    formatKeywords = "SQUARE COMPOSITION, 1:1 FORMAT";
+    compositionInstruction = `MANDATORY: Use FULL-BLEED SQUARE COMPOSITION. ZERO GUTTERS. The ENTIRE CANVAS must be a perfect 1:1 square. Each panel must be perfectly contiguous.`;
+  } else if (isWidescreen) {
+    formatKeywords = "WIDESCREEN LANDSCAPE, CINEMATIC HORIZONTAL";
+    compositionInstruction = `MANDATORY: Use CINEMATIC WIDESCREEN with ZERO LETTERBOXING. The ENTIRE CANVAS must be a horizontal ${containerAspectRatio} block. Ensure the content fills the entire area completely.`;
   }
 
   const roles = categorizedRefs.filter(r => r.category === 'role');
@@ -110,10 +116,12 @@ export const generateMultiViewGrid = async (
 
   let systemPrompt = `[CORE TASK]: GENERATE A SEAMLESS ${gridType} STORYBOARD GRID.
 
-[STRICT LAYOUT RULE]:
-- Exactly ${gridSize} rows and ${gridSize} columns.
-- FULL IMAGE ASPECT RATIO: ${containerAspectRatio}.
-- INDIVIDUAL PANEL ASPECT RATIO: ${panelAspectRatio}.
+[STRICT LAYOUT & FORMAT RULE]:
+- FORMAT: ${formatKeywords}.
+- CANVAS RATIO: The WHOLE generated image MUST BE ${containerAspectRatio}.
+- PANEL LAYOUT: Exactly ${gridSize} rows and ${gridSize} columns.
+- PANEL RATIO: Every individual panel MUST BE ${panelAspectRatio}.
+- ${compositionInstruction}
 
 ${collageRef ? `
 [SHOT GROUP REFERENCE - HIGHEST PRIORITY]:
@@ -134,7 +142,7 @@ ${collageRef ? `
 - CONSISTENCY: Maintain the exact proportions, eye placement, and lack of limbs across all ${totalViews} panels.
 
 [NEGATIVE CONSTRAINTS]:
-- NO WHITE BARS, NO BLACK BARS, NO LETTERBOXING.
+- NO WHITE BARS, NO BLACK BARS, NO LETTERBOXING, NO PILLARBOXING.
 - NO PADDING OR MARGINS BETWEEN PANELS. NO INTERNAL GRID LINES.
 - NO HUMAN LUNGS, NO HUMAN TORSO, NO ARMS, NO LEGS (unless in reference).
 
@@ -142,7 +150,7 @@ ${collageRef ? `
 
 ${!collageRef && panelInstructions && panelInstructions.length > 0 ? `\n[PANEL DETAILS (TEXT LOGIC)]:\n${panelInstructions.map((instr, idx) => `Panel ${idx + 1}: ${instr}`).join('\n')}` : ''}
 
-[STYLE]: Hyper-realistic cinematic film, 35mm photography. Consistent lighting and grading.`;
+[STYLE]: Hyper-realistic cinematic film, 35mm photography style but ADAPTED TO ${containerAspectRatio} FORMAT. Consistent lighting and grading.`;
 
   const parts: any[] = [];
   roles.forEach(r => parts.push({ inlineData: { mimeType: r.mimeType, data: r.data } }));
@@ -195,13 +203,16 @@ export const editImage = async (
   const parts: any[] = [{ inlineData: { mimeType: 'image/png', data: cleanBase64 } }];
   if (refImageBase64) parts.push({ inlineData: { mimeType: 'image/png', data: refImageBase64.split(',')[1] } });
   
-  parts.push({ text: `EDIT TASK: Modify this ${aspectRatio} cinematic shot.
+  const isVertical = aspectRatio === '9:16' || aspectRatio === '3:4';
+  const formatTag = isVertical ? "VERTICAL PORTRAIT" : "LANDSCAPE";
+
+  parts.push({ text: `EDIT TASK: Modify this ${aspectRatio} (${formatTag}) cinematic shot.
 REQUEST: "${editPrompt}"
 [STRICT ANATOMY RULE]: ABSOLUTELY PRESERVE the original morphology and anatomical structure of the character in the image. 
 - DO NOT add limbs (legs, feet, arms, hands) if they are not part of the character's original design. 
 - If the character is a simple shape or blob, keep it as a simple shape or blob. 
 - DO NOT humanoid-ize the character.
-RULE: ABSOLUTELY NO BLACK/WHITE BORDERS. Maintain full-bleed framing.` });
+RULE: ABSOLUTELY NO BLACK/WHITE BORDERS. Maintain full-bleed ${aspectRatio} framing. Ensure the output strictly matches the ${aspectRatio} ratio.` });
 
   try {
     const response = await withRetry<GenerateContentResponse>(() => {
