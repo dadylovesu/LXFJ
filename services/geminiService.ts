@@ -126,14 +126,17 @@ ${collageRef ? `
 - IMPORTANT: Only replicate the SHOT ATTRIBUTES. DO NOT copy the specific people or objects from the collage. Replace them with the current character and scene content described in the prompt.
 ` : ''}
 
-[CHARACTER ANATOMY PRESERVATION]:
+[STRICT CHARACTER ANATOMY & MORPHOLOGY PRESERVATION]:
 - The provided 'role' reference images define the ABSOLUTE morphology of the character.
-- STRICTLY adhere to the anatomical structure of the role. If the character is a simple blob, creature, or object without legs/arms/human body, IT MUST REMAIN IN THAT FORM.
-- DO NOT spontaneously generate legs, feet, bodies, or human-like limbs if they are not explicitly shown in the role reference.
+- CRITICAL RULE: Observe the character's physical structure. If the character is a simple shape, blob, creature, or object WITHOUT humanoid features (like the provided reference), IT MUST REMAIN IN THAT EXACT FORM.
+- FORBIDDEN: DO NOT spontaneously generate, add, or suggest legs, feet, arms, humanoid hands, shoulders, or human-like skeletal structures if they are not explicitly present in the 'role' reference.
+- NO EVOLUTION: Non-humanoid characters must NOT "grow" limbs or bodies to perform actions. They should roll, float, or hop as their natural shape dictates.
+- CONSISTENCY: Maintain the exact proportions, eye placement, and lack of limbs across all ${totalViews} panels.
 
 [NEGATIVE CONSTRAINTS]:
 - NO WHITE BARS, NO BLACK BARS, NO LETTERBOXING.
 - NO PADDING OR MARGINS BETWEEN PANELS. NO INTERNAL GRID LINES.
+- NO HUMAN LUNGS, NO HUMAN TORSO, NO ARMS, NO LEGS (unless in reference).
 
 [SCENE]: "${prompt}"
 
@@ -194,7 +197,10 @@ export const editImage = async (
   
   parts.push({ text: `EDIT TASK: Modify this ${aspectRatio} cinematic shot.
 REQUEST: "${editPrompt}"
-ANATOMY RULE: Preserve the original morphology and anatomical structure of the character in the image. DO NOT add limbs (legs/arms) if they are not part of the character's design.
+[STRICT ANATOMY RULE]: ABSOLUTELY PRESERVE the original morphology and anatomical structure of the character in the image. 
+- DO NOT add limbs (legs, feet, arms, hands) if they are not part of the character's original design. 
+- If the character is a simple shape or blob, keep it as a simple shape or blob. 
+- DO NOT humanoid-ize the character.
 RULE: ABSOLUTELY NO BLACK/WHITE BORDERS. Maintain full-bleed framing.` });
 
   try {
@@ -341,7 +347,7 @@ export const generateDirectorSummary = async (scripts: string[]): Promise<string
                   parts: [
                     { text: `请根据以下选中的分镜描述，总结成一段极其简洁（1-2句话）的故事梗概。
 要求：
-- 只描述核心人物、地点和核心事件。
+- 只描述核心人物、地点 and 核心事件。
 - 语言平实直白，不要任何文学渲染、气氛描述或术语。
 - 严禁分条列项。
 
