@@ -90,6 +90,39 @@ const App: React.FC = () => {
     setSelectedImageId(undefined);
   }, [images, updateImagesWithHistory]);
 
+  const handleUndo = useCallback(() => {
+    if (history.length === 0) return;
+    const previousState = history[history.length - 1];
+    const newHistory = history.slice(0, -1);
+    setHistory(newHistory);
+    setImages(previousState);
+  }, [history]);
+
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Ignore shortcuts if the user is currently typing in an input field or textarea
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return;
+      }
+
+      // Ctrl+Z or Cmd+Z for Undo
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        handleUndo();
+      }
+
+      // Delete or Backspace for removing selected node
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedImageId) {
+        // Only trigger delete if something is actually selected
+        handleDeleteNode(selectedImageId);
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [selectedImageId, handleDeleteNode, handleUndo]);
+
   const handleUpdateNodePosition = useCallback((id: string, x: number, y: number) => {
     setImages(prev => prev.map(img => img.id === id ? { ...img, position: { x, y } } : img));
   }, []);
