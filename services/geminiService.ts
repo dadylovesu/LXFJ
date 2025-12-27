@@ -82,22 +82,54 @@ export const generateOmniViewGrid = async (
   const totalViews = gridSize * gridSize;
   const gridType = `${gridSize}x${gridSize}`;
 
-  // Mapping numeric params to cinematic descriptions
+  // Mapping numeric params to advanced cinematic descriptions to force better perspective
   const getParamDesc = (p: CameraParams) => {
-    let focal = p.focalLength < 35 ? `shot on ${p.focalLength}mm ultra-wide lens, exaggerated perspective` : 
-                p.focalLength > 85 ? `shot on ${p.focalLength}mm telephoto lens, compressed background, shallow depth of field` : 
-                `shot on ${p.focalLength}mm standard cinematic lens`;
+    // 1. Focal Length Enhancements
+    let focal = "";
+    if (p.focalLength < 24) {
+      focal = `shot on ultra-wide ${p.focalLength}mm lens, dramatic perspective distortion, vast cinematic field of view`;
+    } else if (p.focalLength < 40) {
+      focal = `shot on wide ${p.focalLength}mm lens, immersive environmental framing`;
+    } else if (p.focalLength < 85) {
+      focal = `shot on standard ${p.focalLength}mm lens, human-eye perspective, balanced composition`;
+    } else {
+      focal = `shot on ${p.focalLength}mm telephoto lens, background compression, creamy bokeh, intimate subject focus`;
+    }
     
-    let pitch = p.pitch > 45 ? "extreme bird's eye view, looking straight down" :
-                p.pitch > 15 ? "high angle shot" :
-                p.pitch < -45 ? "extreme worm's eye view, looking straight up" :
-                p.pitch < -15 ? "low angle shot" : "eye-level shot";
+    // 2. Pitch (Vertical Tilt) Enhancements - CRITICAL PER USER REQUEST
+    let pitch = "";
+    if (p.pitch > 60) {
+      pitch = `Extreme top-down view, directly above the subject, steep 90-degree downward pitch, God's eye view, flat lay composition, no horizon line visible, heavy emphasis on top surfaces and geometric ground layout`;
+    } else if (p.pitch > 25) {
+      pitch = `Steep high angle shot looking down, dramatic camera tilt, elevated viewpoint, horizon line is placed near the top frame edge, visible top surfaces of objects, looking down onto ground texture`;
+    } else if (p.pitch > 10) {
+      pitch = `Cinematic high angle shot, looking down slightly, slightly elevated viewpoint`;
+    } else if (p.pitch < -60) {
+      pitch = `Extreme low angle shot looking vertically up, steep upward tilt, worm's-eye view, vanishing points converging high in the sky, subject towers powerfully over camera with dramatic height distortion, visible undersides and bottom planes`;
+    } else if (p.pitch < -25) {
+      pitch = `Steep low angle shot looking up, dramatic camera tilt, camera placed near ground surface, horizon line is near the bottom frame edge, subject dominates against the sky, visible underside and chin area`;
+    } else if (p.pitch < -10) {
+      pitch = `Cinematic low angle shot, looking up from below eye-level`;
+    } else {
+      pitch = `Eye-level shot, stable horizontal camera, balanced horizon line, straight-on naturalistic view`;
+    }
 
-    let yaw = Math.abs(p.yaw) > 135 ? "back view" :
-              Math.abs(p.yaw) > 45 ? (p.yaw > 0 ? "3/4 profile from right" : "3/4 profile from left") :
-              "front view";
+    // 3. Yaw (Horizontal Rotation) Enhancements
+    let yaw = "";
+    const absYaw = Math.abs(p.yaw);
+    if (absYaw < 20) {
+      yaw = "Frontal view, camera facing the subject directly";
+    } else if (absYaw < 70) {
+      yaw = p.yaw > 0 ? "3/4 profile from the right side" : "3/4 profile from the left side";
+    } else if (absYaw < 110) {
+      yaw = p.yaw > 0 ? "Full side profile from the right" : "Full side profile from the left";
+    } else if (absYaw < 160) {
+      yaw = p.yaw > 0 ? "Rear 3/4 view from the right" : "Rear 3/4 view from the left";
+    } else {
+      yaw = "Full back view, subject facing away from camera";
+    }
 
-    return `${focal}, ${pitch}, ${yaw}`;
+    return `${focal}. ${pitch}. ${yaw}.`;
   };
 
   const panelInstructions = shotParams.map((p, idx) => `Panel ${idx + 1}: ${getParamDesc(p)}`);
@@ -116,7 +148,14 @@ export const generateOmniViewGrid = async (
 [CAMERA PARAMETERS]:
 ${panelInstructions.join('\n')}
 
-[STYLE]: Maintain the exact cinematic 35mm photography style of the anchor image.`;
+[CINEMATIC EXECUTION]:
+- Maintain the exact cinematic style, 35mm film stock quality, and lighting of the anchor image.
+- For high-angle/low-angle panels, ensure a STEEP and DRAMATIC perspective shift. 
+- Manipulate the HORIZON LINE height to accurately reflect the pitch angles.
+
+[NEGATIVE CONSTRAINTS]:
+- AVOID eye-level shots, straight-on views, flat perspective, or horizontal camera placement when a specific pitch is requested.
+- DO NOT generate 2D rotations; only generate true 3D camera shifts.`;
 
   try {
     const response = await withRetry<GenerateContentResponse>(() => {
@@ -457,7 +496,7 @@ export const generateDirectorSummary = async (scripts: string[]): Promise<string
 - 严禁分条列项。
 
 示例1：角色1大橙和角色2小青桔在海边沙滩上晒太阳。
-示例2：角色在办公室工作，天花板出现黑洞吸走周围物品，角色站在原地发呆。
+示例2：角色在办公室 work，天花板出现黑洞吸走周围物品，角色站在原地发呆。
 
 分镜描述内容：
 ${scripts.join('\n')}` }
