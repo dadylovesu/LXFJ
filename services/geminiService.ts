@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
-import { AspectRatio, ImageSize, Asset, CollageData, PanelAspectRatio } from "../types";
+import { AspectRatio, ImageSize, Asset, CollageData, PanelAspectRatio, LensLabParams } from "../types";
 
 export const ensureApiKey = async () => {
   // @ts-ignore
@@ -76,6 +76,92 @@ export interface ReferenceImageData {
   roleIndex?: number;
 }
 
+export const generateLensLabSequence = async (
+  anchorImageBase64: string,
+  gridSize: number,
+  params: LensLabParams[],
+  panelAspectRatio: PanelAspectRatio,
+  containerAspectRatio: AspectRatio,
+  imageSize: ImageSize
+): Promise<{ fullImage: string, slices: string[] }> => {
+  await ensureApiKey();
+  
+  const totalViews = gridSize * gridSize;
+  
+  const panelDescriptions = params.map((p, i) => {
+    let pitchDesc = "";
+    if (p.pitch > 45) {
+      pitchDesc = "Extreme top-down high angle shot, God's eye view, steep downward camera tilt, looking directly down at the subject, horizon line is near the very top of the frame.";
+    } else if (p.pitch < -45) {
+      pitchDesc = "Extreme low-angle shot looking up, steep upward camera tilt, worm's-eye view, camera placed near ground level, looking up at the subject against the sky, horizon line is near the very bottom of the frame.";
+    } else {
+      pitchDesc = `Eye-level shot with a slight ${p.pitch}° tilt.`;
+    }
+
+    let focalDesc = "";
+    if (p.focalLength < 24) {
+      focalDesc = `Shot on ${p.focalLength}mm ultra-wide lens, dramatic perspective distortion, wide field of view.`;
+    } else if (p.focalLength > 85) {
+      focalDesc = `Shot on ${p.focalLength}mm telephoto lens, background compression, shallow depth of field, focused on subject details.`;
+    } else {
+      focalDesc = `Shot on ${p.focalLength}mm lens.`;
+    }
+
+    let yawDesc = "";
+    if (Math.abs(p.yaw) > 135) yawDesc = "Camera positioned at the back, viewing the subject from behind.";
+    else if (Math.abs(p.yaw) > 45) yawDesc = `Camera orbiting the subject at a ${p.yaw}° side angle view.`;
+    else yawDesc = "Frontal view of the subject.";
+
+    return `Panel ${i + 1}: ${focalDesc} ${pitchDesc} ${yawDesc} MANDATORY: Maintain 100% visual consistency with the provided Anchor Image. Same character, same lighting, same environment geometry.`;
+  }).join("\n");
+
+  const systemPrompt = `[CORE TASK]: 3D CONSISTENCY MULTI-ANGLE RE-RENDERING.
+[ANCHOR IMAGE]: You are provided with a reference image. This is the 'Anchor'.
+[STRICT CONSISTENCY]: Freeze all IDs, character features, environmental textures, and lighting.
+[CAMERA PARAMETERS]: Change ONLY the camera extrinsic and intrinsic parameters for each panel as described below.
+
+[NEGATIVE CONSTRAINTS]: No eye-level flat perspective if steep angles are requested. No 2D rotation of the image. Simulate actual 3D camera movement around the spherical center of the subject. No margins between panels.
+
+[LAYOUT]: ${gridSize}x${gridSize} grid.
+[ASPECT RATIO]: Container ${containerAspectRatio}, Panels ${panelAspectRatio}.
+
+[PANEL INSTRUCTIONS]:
+${panelDescriptions}`;
+
+  const parts = [
+    { inlineData: { mimeType: 'image/png', data: anchorImageBase64 } },
+    { text: systemPrompt }
+  ];
+
+  try {
+    const response = await withRetry<GenerateContentResponse>(() => {
+        const ai = getClient();
+        return ai.models.generateContent({
+          model: 'gemini-3-pro-image-preview',
+          contents: { parts },
+          config: {
+            imageConfig: {
+              aspectRatio: containerAspectRatio as any,
+              imageSize: imageSize as any 
+            }
+          }
+        });
+    });
+
+    let fullImageBase64 = '';
+    for (const part of response.candidates?.[0]?.content?.parts || []) {
+      if (part.inlineData) fullImageBase64 = `data:image/png;base64,${part.inlineData.data}`;
+    }
+
+    if (!fullImageBase64) throw new Error("No image generated.");
+    const panels = await sliceImageGrid(fullImageBase64, gridSize, gridSize);
+    return { fullImage: fullImageBase64, slices: panels };
+  } catch (error: any) {
+    console.error("Lens Lab gen error:", error);
+    throw error;
+  }
+};
+
 export const generateMultiViewGrid = async (
   prompt: string,
   gridSize: number, 
@@ -86,7 +172,7 @@ export const generateMultiViewGrid = async (
   contextImage?: string,
   panelInstructions?: string[],
   collageRef?: CollageData,
-  stylePrompt?: string // 新增画风参数
+  stylePrompt?: string 
 ): Promise<{ fullImage: string, slices: string[] }> => {
   await ensureApiKey();
   
@@ -202,7 +288,7 @@ export const editImage = async (
   aspectRatio: string = '1:1',
   refImageBase64?: string,
   imageSize: ImageSize = ImageSize.K1,
-  stylePrompt?: string // 新增画风参数
+  stylePrompt?: string 
 ): Promise<string> => {
   await ensureApiKey();
   const cleanBase64 = base64Image.includes(',') ? base64Image.split(',')[1] : base64Image;
@@ -321,21 +407,13 @@ export const generateScriptLines = async (instruction: string, count: number, at
 
 逻辑规则（核心）：
 - 严禁在一个分镜中写完整个动作过程。必须将故事根据逻辑拆分为多个连续的瞬间。
-- 例如：若指令是“角色坐在办公室，黑洞冒出来吸走颜色”，应拆解为：1. 角色正常办公 -> 2. 黑洞从天花板突然冒出 -> 3. 黑洞开始吞噬色彩（画面半黑白半彩色） -> 4. 色彩完全消失。
 - 每个分镜只描述一个核心视觉 beat。
 
 每个分镜指令必须包含以下详尽要素，使用专业术语描述：
-1. [环境基调]：具体的时间、天气及灯光氛围（如：冷调荧光灯、黄昏侧光）。
-2. [镜头语言]：
-   - 景别：特写(CU)、中景(MS)、全景(LS)等。
-   - 构图：黄金分割、对称、框架式构图、对角线构图等。
-   - 镜头角度与焦段：仰拍/俯拍/平视，明确具体的焦段感（如：35mm、50mm、85mm人像、远距离长焦等）。
-3. [动态状态]：明确是静态镜头，还是带有“动态模糊”效果的横移、推拉、摇移或快速跟拍。
-4. [角色呈现]：
-   - 角色序号+名称（如：角色1大橙、角色2小青桔）。
-   - 角色朝向：侧身朝左、背对镜头、3/4视角等。
-   - 画面位置与占比：在画面中的具体坐标（如：左下角1/3处）、占据画面的百分比。
-   - 具体的动作姿态：如“正在敲击键盘”、“惊恐地抬头仰望”、“身体微微前倾准备滑行”。
+1. [环境基调]：具体的时间、天气及灯光氛围。
+2. [镜头语言]：景别、构图、镜头角度与焦段。
+3. [动态状态]：明确是静态还是动态模糊推拉摇移。
+4. [角色呈现]：动作姿态、朝向、位置占比。
 
 输入内容：
 ${attachmentText || ''}
@@ -344,16 +422,13 @@ ${attachmentText || ''}
 ${instruction}
 
 输出要求：
-- 请输出恰好 ${count} 行纯文本描述，每行代表一个分镜。
-- 禁止输出序号（如 1. 2. 3.）、禁止引言或结束语。
-- 每一行描述必须足够丰富、详细、实用，能够指导后续的AI生图引擎生成高度一致的画面。` }
+- 请输出恰好 ${count} 行纯文本描述，每行代表一个分镜。` }
                   ] 
                 }
             });
         });
         return (response.text || "").split('\n').filter(l => l.trim()).slice(0, count);
     } catch (e) {
-        console.error(e);
         return new Array(count).fill("时间，全景，平视，角色1，正在待命");
     }
 };
@@ -368,14 +443,6 @@ export const generateDirectorSummary = async (scripts: string[]): Promise<string
                 contents: { 
                   parts: [
                     { text: `请根据以下选中的分镜描述，总结成一段极其简洁（1-2句话）的故事梗概。
-要求：
-- 只描述核心人物、地点 and 核心事件。
-- 语言平实直白，不要任何文学渲染、气氛描述或术语。
-- 严禁分条列项。
-
-示例1：角色1大橙和角色2小青桔在海边沙滩上晒太阳。
-示例2：角色在办公室工作，天花板出现黑洞吸走周围物品，角色站在原地发呆。
-
 分镜描述内容：
 ${scripts.join('\n')}` }
                   ] 

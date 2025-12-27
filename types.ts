@@ -21,16 +21,22 @@ export enum ImageSize {
   K4 = '4K'
 }
 
-export type NodeType = 'prompt' | 'asset_group' | 'render' | 'slice';
+export type NodeType = 'prompt' | 'asset_group' | 'render' | 'slice' | 'lens_lab';
 
 export type AssetCategory = 'role' | 'background' | 'prop';
+
+export interface LensLabParams {
+  focalLength: number;
+  pitch: number;
+  yaw: number;
+}
 
 export interface GeneratedImage {
   id: string;
   url: string; 
   fullGridUrl?: string;
   prompt: string;
-  stylePrompt?: string; // 新增画风设定字段
+  stylePrompt?: string;
   aspectRatio: string;
   panelAspectRatio?: string;
   timestamp: number;
@@ -45,8 +51,8 @@ export interface GeneratedImage {
   textData?: string; 
   cameraDescription?: string; 
   slices?: string[]; 
-  panelPrompts?: string[]; // Detailed prompts for each slice
-  sliceHistory?: Record<number, string[]>; // Map slice index to array of past image URLs
+  panelPrompts?: string[]; 
+  sliceHistory?: Record<number, string[]>; 
   gridRows?: number;
   gridCols?: number;
 }

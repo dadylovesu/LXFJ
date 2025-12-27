@@ -2,16 +2,17 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AssetBay } from './components/AssetBay';
 import { DirectorDeck } from './components/DirectorDeck';
+import { OmniViewLensLab } from './components/OmniViewLensLab';
 import { Canvas } from './components/Canvas';
 import { Inspector } from './components/Inspector';
 import { CameraEditor } from './components/CameraEditor';
 import { CollageEditor } from './components/CollageEditor';
 import { ScriptEditor } from './components/ScriptEditor';
-import { FeatureGuide } from './components/FeatureGuide'; // 新增导入
-import { Asset, GeneratedImage, AspectRatio, PanelAspectRatio, ImageSize, AssetCategory, CollageData } from './types';
-import { generateMultiViewGrid, fileToBase64, enhancePrompt, analyzeAsset, ReferenceImageData, generateCameraMovement, editImage } from './services/geminiService';
+import { FeatureGuide } from './components/FeatureGuide'; 
+import { Asset, GeneratedImage, AspectRatio, PanelAspectRatio, ImageSize, AssetCategory, CollageData, LensLabParams } from './types';
+import { generateMultiViewGrid, fileToBase64, enhancePrompt, analyzeAsset, ReferenceImageData, generateCameraMovement, editImage, generateLensLabSequence } from './services/geminiService';
 import { saveToStorage, loadFromStorage, clearStorage } from './services/persistenceService';
-import { AlertCircle, X as XIcon, Trash2, LayoutGrid, HelpCircle } from 'lucide-react'; // 新增 HelpCircle
+import { AlertCircle, X as XIcon, Trash2, LayoutGrid, HelpCircle } from 'lucide-react'; 
 import { Button } from './components/Button';
 // @ts-ignore
 import JSZip from 'jszip';
@@ -34,7 +35,7 @@ const App: React.FC = () => {
   const [isCameraEditorOpen, setIsCameraEditorOpen] = useState(false);
   const [isCollageEditorOpen, setIsCollageEditorOpen] = useState(false);
   const [isScriptEditorOpen, setIsScriptEditorOpen] = useState(false);
-  const [isFeatureGuideOpen, setIsFeatureGuideOpen] = useState(false); // 新增状态
+  const [isFeatureGuideOpen, setIsFeatureGuideOpen] = useState(false); 
   const [activeCollage, setActiveCollage] = useState<CollageData | null>(null);
   
   const [isGenerating, setIsGenerating] = useState(false);
@@ -233,6 +234,51 @@ const App: React.FC = () => {
     }
   };
 
+  const handleLensLabRender = async (anchorImage: string, queue: LensLabParams[]) => {
+      setError(null);
+      setIsGenerating(true);
+      setGenerationStep("Lens Lab: 正在执行3D多角度一致性模拟...");
+      
+      try {
+        const rootNodes = images.filter(i => !i.parentId);
+        const startX = rootNodes.length === 0 ? 100 : (rootNodes[rootNodes.length-1].position?.x || 100) + 420;
+
+        const result = await generateLensLabSequence(
+            anchorImage.split(',')[1],
+            gridSize,
+            queue,
+            panelAspectRatio,
+            aspectRatio,
+            imageSize
+        );
+
+        const node: GeneratedImage = {
+            id: crypto.randomUUID(),
+            url: result.fullImage,
+            fullGridUrl: result.fullImage,
+            prompt: "Lens Lab Sequence Render",
+            textData: "Lens Lab Consistency Render",
+            aspectRatio,
+            panelAspectRatio,
+            timestamp: Date.now(),
+            nodeType: 'lens_lab',
+            position: { x: startX, y: 100 },
+            cameraDescription: "Multi-angle spherical orbit sequence.",
+            slices: result.slices,
+            gridRows: gridSize,
+            gridCols: gridSize
+        };
+
+        updateImagesWithHistory([...images, node]);
+        setSelectedImageId(node.id);
+      } catch (err: any) {
+          setError(err.message || "Lens Lab 渲染失败");
+      } finally {
+          setIsGenerating(false);
+          setGenerationStep("");
+      }
+  };
+
   const handleEditSlice = async (imageId: string, sliceIndex: number, editPrompt: string, usePro: boolean, refImage?: string, targetImageSize: ImageSize = ImageSize.K1) => {
     setIsGenerating(true);
     setGenerationStep("正在执行单格无缝重绘...");
@@ -310,7 +356,7 @@ const App: React.FC = () => {
 
   const handleDownloadZip = async () => {
     const selected = images.find(i => i.id === selectedImageId);
-    if (!selected || selected.nodeType !== 'render') {
+    if (!selected) {
       alert("请先在画布上选择一个分镜组。");
       return;
     }
@@ -334,7 +380,7 @@ const App: React.FC = () => {
       };
 
       const rootNodes = images
-          .filter(i => i.nodeType === 'render' && !i.parentId)
+          .filter(i => (i.nodeType === 'render' || i.nodeType === 'lens_lab') && !i.parentId)
           .sort((a, b) => a.timestamp - b.timestamp);
 
       const currentRootId = getRootId(selected.id);
@@ -425,23 +471,34 @@ const App: React.FC = () => {
                 )}
             </div>
 
-            <DirectorDeck 
-                gridSize={gridSize} setGridSize={setGridSize}
-                aspectRatio={aspectRatio} 
-                panelAspectRatio={panelAspectRatio} setPanelAspectRatio={setPanelAspectRatio}
-                imageSize={imageSize} setImageSize={setImageSize}
-                prompt={prompt} setPrompt={setPrompt}
-                stylePrompt={stylePrompt} setStylePrompt={setStylePrompt} 
-                onGenerate={handleGenerate}
-                onStop={() => setIsGenerating(false)}
-                isGenerating={isGenerating}
-                onEnhancePrompt={async () => setPrompt(await enhancePrompt(prompt))}
-                onGenerateCamera={() => setIsCameraEditorOpen(true)}
-                onOpenScriptDeconstruct={() => setIsScriptEditorOpen(true)}
-                isContinuing={!!(selectedImageId && images.find(i => i.id === selectedImageId)?.nodeType === 'render')}
-                onDeselect={() => { setSelectedImageId(undefined); setSelectedAssetId(undefined); }}
-                isCollageActive={!!activeCollage}
-            />
+            <div className="px-1 space-y-6">
+                <OmniViewLensLab 
+                  gridSize={gridSize}
+                  imageSize={imageSize}
+                  panelAspectRatio={panelAspectRatio}
+                  containerAspectRatio={aspectRatio}
+                  onRenderSequence={handleLensLabRender}
+                  isGenerating={isGenerating}
+                />
+
+                <DirectorDeck 
+                    gridSize={gridSize} setGridSize={setGridSize}
+                    aspectRatio={aspectRatio} 
+                    panelAspectRatio={panelAspectRatio} setPanelAspectRatio={setPanelAspectRatio}
+                    imageSize={imageSize} setImageSize={setImageSize}
+                    prompt={prompt} setPrompt={setPrompt}
+                    stylePrompt={stylePrompt} setStylePrompt={setStylePrompt} 
+                    onGenerate={handleGenerate}
+                    onStop={() => setIsGenerating(false)}
+                    isGenerating={isGenerating}
+                    onEnhancePrompt={async () => setPrompt(await enhancePrompt(prompt))}
+                    onGenerateCamera={() => setIsCameraEditorOpen(true)}
+                    onOpenScriptDeconstruct={() => setIsScriptEditorOpen(true)}
+                    isContinuing={!!(selectedImageId && images.find(i => i.id === selectedImageId)?.nodeType === 'render')}
+                    onDeselect={() => { setSelectedImageId(undefined); setSelectedAssetId(undefined); }}
+                    isCollageActive={!!activeCollage}
+                />
+            </div>
         </div>
       </aside>
 

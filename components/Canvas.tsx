@@ -1,6 +1,7 @@
+
 import React, { useState, useRef, useLayoutEffect, useCallback, memo, useMemo } from 'react';
 import { GeneratedImage, Asset } from '../types';
-import { Trash2, Archive, LayoutGrid, List, MonitorPlay, Workflow, Type, Images, Video, X, Maximize2, ArrowLeft, History } from 'lucide-react';
+import { Trash2, Archive, LayoutGrid, List, MonitorPlay, Workflow, Type, Images, Video, X, Maximize2, ArrowLeft, History, Camera } from 'lucide-react';
 import { Button } from './Button';
 
 interface CanvasProps {
@@ -49,6 +50,7 @@ const Node = memo(({ image, selected, onSelect, onDelete, onMouseDown, allAssets
             case 'prompt': return 'bg-blue-900/40 border-blue-800';
             case 'asset_group': return 'bg-purple-900/40 border-purple-800';
             case 'render': return 'bg-cine-panel border-cine-accent/30';
+            case 'lens_lab': return 'bg-cine-panel border-cine-accent/60';
             case 'slice': return 'bg-zinc-900 border-zinc-800';
             default: return 'bg-zinc-800';
         }
@@ -59,6 +61,7 @@ const Node = memo(({ image, selected, onSelect, onDelete, onMouseDown, allAssets
             case 'prompt': return <Type size={10} />;
             case 'asset_group': return <Images size={10} />;
             case 'render': return <MonitorPlay size={10} />;
+            case 'lens_lab': return <Camera size={10} />;
             default: return null;
         }
     };
@@ -68,13 +71,14 @@ const Node = memo(({ image, selected, onSelect, onDelete, onMouseDown, allAssets
             case 'prompt': return 'PROMPT INPUT';
             case 'asset_group': return 'STYLE REFERENCES';
             case 'render': return 'SCENE BOARD';
+            case 'lens_lab': return 'LENS LAB SEQUENCE';
             case 'slice': return 'PANEL SLICE';
             default: return 'NODE';
         }
     };
 
     const width = 320;
-    const isRenderNode = image.nodeType === 'render';
+    const isRenderNode = image.nodeType === 'render' || image.nodeType === 'lens_lab';
     const hasSlices = isRenderNode && image.slices && image.slices.length > 0;
     const cols = image.gridCols || 2;
     
@@ -144,13 +148,15 @@ const Node = memo(({ image, selected, onSelect, onDelete, onMouseDown, allAssets
                     </div>
                 )}
 
-                {image.nodeType === 'render' && (
+                {isRenderNode && (
                     <div className="space-y-2">
                         {image.textData && (
                              <div className="p-2 bg-zinc-900/50 rounded-sm border border-zinc-800/50">
                                  <div className="flex items-center gap-1.5 mb-1 opacity-50">
-                                     <Type size={8} />
-                                     <span className="text-[8px] font-mono uppercase tracking-wider">Director Prompt</span>
+                                     {image.nodeType === 'lens_lab' ? <Camera size={8} /> : <Type size={8} />}
+                                     <span className="text-[8px] font-mono uppercase tracking-wider">
+                                         {image.nodeType === 'lens_lab' ? 'Lab Parameters' : 'Director Prompt'}
+                                     </span>
                                  </div>
                                  <p className="text-[10px] text-zinc-200 font-mono leading-relaxed line-clamp-4">
                                      {image.textData}
@@ -219,7 +225,7 @@ const Node = memo(({ image, selected, onSelect, onDelete, onMouseDown, allAssets
             </div>
 
             {/* HANDLES */}
-            {image.nodeType !== 'prompt' && (
+            {(image.nodeType !== 'prompt' && image.nodeType !== 'lens_lab') && (
                  <div className="absolute left-1/2 -translate-x-1/2 -top-1.5 w-3 h-3 bg-zinc-500 rounded-full border-2 border-zinc-950 z-20"></div>
             )}
             {image.nodeType !== 'slice' && (
@@ -431,7 +437,7 @@ export const Canvas: React.FC<CanvasProps> = ({ images, assets, onSelect, select
       <div className="absolute top-0 left-0 right-0 h-14 px-6 flex items-center justify-between z-20 bg-gradient-to-b from-black via-black/90 to-transparent pointer-events-none">
          <div className="flex items-center gap-4 pointer-events-auto">
              <span className="text-zinc-300 text-[10px] uppercase tracking-[0.2em] font-mono font-bold">
-               画布 CANVAS / {images.filter(i => i.nodeType === 'render').length} TASKS
+               画布 CANVAS / {images.filter(i => i.nodeType === 'render' || i.nodeType === 'lens_lab').length} TASKS
              </span>
          </div>
          <div className="flex items-center gap-2 pointer-events-auto">
@@ -511,7 +517,7 @@ export const Canvas: React.FC<CanvasProps> = ({ images, assets, onSelect, select
                 {(viewMode === 'grid' || viewMode === 'table') && (
                     <div className="h-full overflow-y-auto p-6 pt-20 custom-scrollbar">
                         <div className={`grid gap-0 items-start ${viewMode === 'grid' ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5' : 'grid-cols-1'}`}>
-                            {images.filter(i => i.nodeType === 'render').map((img) => (
+                            {images.filter(i => i.nodeType === 'render' || i.nodeType === 'lens_lab').map((img) => (
                                 <div key={img.id} className={`group relative bg-zinc-900 border transition-all duration-200 cursor-pointer overflow-hidden ${selectedId === img.id ? 'border-cine-accent ring-1 ring-cine-accent/50' : 'border-zinc-800 hover:border-zinc-600'} ${viewMode === 'table' ? 'flex flex-row gap-4 p-4' : ''}`} onClick={() => handleItemClick(img)}>
                                     <div className={`${viewMode === 'table' ? 'w-48' : 'w-full'} relative aspect-video pointer-events-none`}>
                                         <img src={img.url} alt="node" className="w-full h-full object-cover" />
