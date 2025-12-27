@@ -249,7 +249,8 @@ const App: React.FC = () => {
             queue,
             panelAspectRatio,
             aspectRatio,
-            imageSize
+            imageSize,
+            stylePrompt
         );
 
         const node: GeneratedImage = {
@@ -257,7 +258,7 @@ const App: React.FC = () => {
             url: result.fullImage,
             fullGridUrl: result.fullImage,
             prompt: "Lens Lab Sequence Render",
-            textData: "Lens Lab Consistency Render",
+            textData: "Lens Lab Consistency Render\n\nGenerated Panels:\n" + result.panelPrompts.join('\n'),
             aspectRatio,
             panelAspectRatio,
             timestamp: Date.now(),
@@ -265,6 +266,7 @@ const App: React.FC = () => {
             position: { x: startX, y: 100 },
             cameraDescription: "Multi-angle spherical orbit sequence.",
             slices: result.slices,
+            panelPrompts: result.panelPrompts,
             gridRows: gridSize,
             gridCols: gridSize
         };

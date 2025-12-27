@@ -60,6 +60,18 @@ export const OmniViewLensLab: React.FC<OmniViewLensLabProps> = ({
 
   const isQueueFull = queue.length === totalSlots;
 
+  // 格式化俯仰角显示
+  const getPitchLabel = (val: number) => {
+    if (val === 0) return "平视 0°";
+    return val > 0 ? `俯视 ${val}°` : `仰角 ${Math.abs(val)}°`;
+  };
+
+  // 格式化环绕角显示
+  const getYawLabel = (val: number) => {
+    if (val === 0) return "正前方 0°";
+    return val > 0 ? `向右旋转 ${val}°` : `向左旋转 ${Math.abs(val)}°`;
+  };
+
   return (
     <div className="border border-zinc-800 rounded-sm bg-zinc-900/40 backdrop-blur-md overflow-hidden">
       <button 
@@ -120,10 +132,10 @@ export const OmniViewLensLab: React.FC<OmniViewLensLabProps> = ({
              <div className="space-y-2">
                 <div className="flex justify-between items-center">
                    <span className="text-[8px] text-zinc-500 font-mono uppercase tracking-widest">Camera Pitch (俯仰角)</span>
-                   <span className="text-[10px] text-cine-accent font-mono font-bold">{currentParams.pitch}°</span>
+                   <span className="text-[10px] text-cine-accent font-mono font-bold">{getPitchLabel(currentParams.pitch)}</span>
                 </div>
                 <input 
-                  type="range" min="-180" max="180" step="5" 
+                  type="range" min="-90" max="90" step="1" 
                   value={currentParams.pitch}
                   onChange={(e) => setCurrentParams({...currentParams, pitch: parseInt(e.target.value)})}
                   className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-cine-accent"
@@ -134,10 +146,10 @@ export const OmniViewLensLab: React.FC<OmniViewLensLabProps> = ({
              <div className="space-y-2">
                 <div className="flex justify-between items-center">
                    <span className="text-[8px] text-zinc-500 font-mono uppercase tracking-widest">Camera Yaw (环绕角)</span>
-                   <span className="text-[10px] text-cine-accent font-mono font-bold">{currentParams.yaw}°</span>
+                   <span className="text-[10px] text-cine-accent font-mono font-bold">{getYawLabel(currentParams.yaw)}</span>
                 </div>
                 <input 
-                  type="range" min="-180" max="180" step="5" 
+                  type="range" min="-180" max="180" step="1" 
                   value={currentParams.yaw}
                   onChange={(e) => setCurrentParams({...currentParams, yaw: parseInt(e.target.value)})}
                   className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-cine-accent"
@@ -166,7 +178,7 @@ export const OmniViewLensLab: React.FC<OmniViewLensLabProps> = ({
                 onClick={handleLockShot}
              >
                 <Lock size={12} className="mr-2" />
-                {isQueueFull ? '参数已填满' : `锁定镜头参数 (${queue.length + 1})`}
+                {isQueueFull ? '参数已填满' : `锁定参数: ${getPitchLabel(currentParams.pitch)}, ${getYawLabel(currentParams.yaw)}`}
              </Button>
 
              <Button 
@@ -188,7 +200,7 @@ export const OmniViewLensLab: React.FC<OmniViewLensLabProps> = ({
           <div className="p-3 bg-black/40 rounded-sm border border-zinc-800 flex items-start gap-3">
              <Info size={14} className="text-zinc-600 mt-0.5" />
              <p className="text-[9px] text-zinc-600 font-mono leading-relaxed">
-               本实验室采用 Nanobanana Pro 3D 模拟引擎。渲染时将通过强制性地平线锚定和陡峭角 Prompt 增强来确保透视深度的一致性。
+               镜头参数已锁定。向左滑动俯仰角为仰拍，向右为俯拍；环绕角向左旋转模拟左侧视角。
              </p>
           </div>
         </div>

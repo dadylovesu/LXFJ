@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { GeneratedImage, Asset, ImageSize } from '../types';
 import { Download, Copy, Maximize2, Wand2, X, MessageSquare, Info, Video, Fingerprint, Eye, Sparkle, LayoutGrid, ChevronLeft, ChevronRight, History, Layers, Zap, Upload, Image as ImageIcon, Plus, Trash2 } from 'lucide-react';
@@ -79,7 +80,6 @@ export const Inspector: React.FC<InspectorProps> = ({
     }
   };
 
-  // Fixed type error by explicitly casting Array.from result to File[] to ensure compatibility with fileToBase64
   const handleRefImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const newRefs: string[] = [];
@@ -110,6 +110,8 @@ export const Inspector: React.FC<InspectorProps> = ({
       </div>
     );
   }
+
+  const currentSlicePrompt = selectedImage?.panelPrompts?.[currentSliceIndex];
 
   return (
     <div className="h-full flex flex-col bg-cine-dark border-l border-cine-border animate-in slide-in-from-right-4 duration-300 w-full relative overflow-hidden">
@@ -204,16 +206,28 @@ export const Inspector: React.FC<InspectorProps> = ({
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
                 {/* Panel Info */}
                 {isSliceView && (
-                    <div className="p-3 bg-cine-accent/5 border border-cine-accent/20 rounded-sm flex items-center justify-between">
-                         <div className="flex items-center gap-3">
-                             <div className="w-8 h-8 rounded-full bg-cine-accent/20 flex items-center justify-center text-cine-accent font-bold text-xs">
-                                 {currentSliceIndex + 1}
+                    <div className="space-y-4">
+                        <div className="p-3 bg-cine-accent/5 border border-cine-accent/20 rounded-sm flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-cine-accent/20 flex items-center justify-center text-cine-accent font-bold text-xs">
+                                    {currentSliceIndex + 1}
+                                </div>
+                                <div>
+                                    <p className="text-[10px] text-cine-accent font-bold uppercase tracking-wider">当前分镜 Panel</p>
+                                    <p className="text-[8px] text-zinc-400 font-mono">INDEX: {currentSliceIndex} / {selectedImage?.slices?.length}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Inference Prompt Display */}
+                        {currentSlicePrompt && (
+                             <div className="space-y-2">
+                                <label className="text-zinc-500 text-[8px] uppercase font-bold tracking-widest font-mono">镜头推理逻辑 (INFERENCE PROMPT)</label>
+                                <div className="bg-black/30 border border-zinc-800 rounded-sm p-4 text-[11px] text-zinc-300 font-mono leading-relaxed italic">
+                                    {currentSlicePrompt}
+                                </div>
                              </div>
-                             <div>
-                                 <p className="text-[10px] text-cine-accent font-bold uppercase tracking-wider">当前分镜 Panel</p>
-                                 <p className="text-[8px] text-zinc-400 font-mono">INDEX: {currentSliceIndex} / {selectedImage?.slices?.length}</p>
-                             </div>
-                         </div>
+                        )}
                     </div>
                 )}
 
@@ -226,7 +240,9 @@ export const Inspector: React.FC<InspectorProps> = ({
                     <div className="grid grid-cols-2 gap-y-5 gap-x-4 text-[10px] font-mono">
                         <div className="flex flex-col gap-1">
                             <span className="uppercase text-zinc-500 text-[8px] tracking-widest">类型</span>
-                            <span className="text-zinc-200 font-bold">{selectedImage ? '分镜节点' : '原始资产'}</span>
+                            <span className="text-zinc-200 font-bold">
+                                {selectedImage ? (selectedImage.nodeType === 'lens_lab' ? '实验室分镜' : '分镜节点') : '原始资产'}
+                            </span>
                         </div>
                         <div className="flex flex-col gap-1">
                             <span className="uppercase text-zinc-500 text-[8px] tracking-widest">比例</span>

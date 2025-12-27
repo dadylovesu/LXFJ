@@ -82,51 +82,50 @@ export const generateLensLabSequence = async (
   params: LensLabParams[],
   panelAspectRatio: PanelAspectRatio,
   containerAspectRatio: AspectRatio,
-  imageSize: ImageSize
-): Promise<{ fullImage: string, slices: string[] }> => {
+  imageSize: ImageSize,
+  stylePrompt?: string
+): Promise<{ fullImage: string, slices: string[], panelPrompts: string[] }> => {
   await ensureApiKey();
   
-  const totalViews = gridSize * gridSize;
-  
-  const panelDescriptions = params.map((p, i) => {
+  const panelPrompts = params.map((p, i) => {
     let pitchDesc = "";
-    if (p.pitch > 45) {
-      pitchDesc = "Extreme top-down high angle shot, God's eye view, steep downward camera tilt, looking directly down at the subject, horizon line is near the very top of the frame.";
-    } else if (p.pitch < -45) {
-      pitchDesc = "Extreme low-angle shot looking up, steep upward camera tilt, worm's-eye view, camera placed near ground level, looking up at the subject against the sky, horizon line is near the very bottom of the frame.";
+    if (p.pitch > 0) {
+      pitchDesc = `俯视角 ${p.pitch}度`;
+    } else if (p.pitch < 0) {
+      pitchDesc = `仰角 ${Math.abs(p.pitch)}度`;
     } else {
-      pitchDesc = `Eye-level shot with a slight ${p.pitch}° tilt.`;
-    }
-
-    let focalDesc = "";
-    if (p.focalLength < 24) {
-      focalDesc = `Shot on ${p.focalLength}mm ultra-wide lens, dramatic perspective distortion, wide field of view.`;
-    } else if (p.focalLength > 85) {
-      focalDesc = `Shot on ${p.focalLength}mm telephoto lens, background compression, shallow depth of field, focused on subject details.`;
-    } else {
-      focalDesc = `Shot on ${p.focalLength}mm lens.`;
+      pitchDesc = "水平视角";
     }
 
     let yawDesc = "";
-    if (Math.abs(p.yaw) > 135) yawDesc = "Camera positioned at the back, viewing the subject from behind.";
-    else if (Math.abs(p.yaw) > 45) yawDesc = `Camera orbiting the subject at a ${p.yaw}° side angle view.`;
-    else yawDesc = "Frontal view of the subject.";
+    if (p.yaw > 0) {
+      yawDesc = `向右旋转 ${p.yaw}度视角`;
+    } else if (p.yaw < 0) {
+      yawDesc = `向左旋转 ${Math.abs(p.yaw)}度视角`;
+    } else {
+      yawDesc = "正前方视角";
+    }
 
-    return `Panel ${i + 1}: ${focalDesc} ${pitchDesc} ${yawDesc} MANDATORY: Maintain 100% visual consistency with the provided Anchor Image. Same character, same lighting, same environment geometry.`;
-  }).join("\n");
+    return `使用 ${p.focalLength}mm 镜头拍摄。镜头角度：${pitchDesc}，${yawDesc}。画面内容必须基于参考图进行视角转换，保持角色和环境一致。`;
+  });
 
-  const systemPrompt = `[CORE TASK]: 3D CONSISTENCY MULTI-ANGLE RE-RENDERING.
-[ANCHOR IMAGE]: You are provided with a reference image. This is the 'Anchor'.
-[STRICT CONSISTENCY]: Freeze all IDs, character features, environmental textures, and lighting.
-[CAMERA PARAMETERS]: Change ONLY the camera extrinsic and intrinsic parameters for each panel as described below.
+  const panelDescriptionsText = panelPrompts.map((p, i) => `分镜 ${i + 1}: ${p}`).join("\n");
 
-[NEGATIVE CONSTRAINTS]: No eye-level flat perspective if steep angles are requested. No 2D rotation of the image. Simulate actual 3D camera movement around the spherical center of the subject. No margins between panels.
+  const styleInstruction = stylePrompt && stylePrompt.trim() 
+    ? `[视觉风格限制]: 严格遵循以下风格: "${stylePrompt}"。`
+    : "[视觉风格]: 高级电影质感，35mm 胶片摄影风格。";
 
-[LAYOUT]: ${gridSize}x${gridSize} grid.
-[ASPECT RATIO]: Container ${containerAspectRatio}, Panels ${panelAspectRatio}.
+  const systemPrompt = `[核心任务]: 3D 多角度一致性重绘。
+[参考基准]: 你将获得一张名为“锚点”的参考图。
+[任务逻辑]: 保持锚点图中的角色、环境、光影不变。仅根据下方提供的摄像机参数（焦段、俯仰角、旋转角）重新渲染每一格画面。
 
-[PANEL INSTRUCTIONS]:
-${panelDescriptions}`;
+${styleInstruction}
+
+[布局]: ${gridSize}x${gridSize} 宫格。
+[比例]: 容器比例 ${containerAspectRatio}, 单格比例 ${panelAspectRatio}。
+
+[分镜指令]:
+${panelDescriptionsText}`;
 
   const parts = [
     { inlineData: { mimeType: 'image/png', data: anchorImageBase64 } },
@@ -155,7 +154,7 @@ ${panelDescriptions}`;
 
     if (!fullImageBase64) throw new Error("No image generated.");
     const panels = await sliceImageGrid(fullImageBase64, gridSize, gridSize);
-    return { fullImage: fullImageBase64, slices: panels };
+    return { fullImage: fullImageBase64, slices: panels, panelPrompts };
   } catch (error: any) {
     console.error("Lens Lab gen error:", error);
     throw error;
@@ -348,7 +347,7 @@ export const generateCameraSuggestions = async (prompt: string, panelCount: numb
                     
                     场景：${prompt}
                     
-                    每个分镜描述必须严格包含以下要素，并以专业电影术语描述：
+                    每个分镜描述必须严格包含以下要素，并以 professional 电影术语描述：
                     1. [环境信息]：具体的时间点与天气氛围。
                     2. [镜头语言]：具体的景别与构图逻辑。
                     3. [镜头视角与焦段]：明确视角及具体的焦段感。
