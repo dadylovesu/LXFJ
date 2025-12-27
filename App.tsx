@@ -7,12 +7,11 @@ import { Inspector } from './components/Inspector';
 import { CameraEditor } from './components/CameraEditor';
 import { CollageEditor } from './components/CollageEditor';
 import { ScriptEditor } from './components/ScriptEditor';
-import { FeatureGuide } from './components/FeatureGuide';
-import { OmniViewLab } from './components/OmniViewLab';
-import { Asset, GeneratedImage, AspectRatio, PanelAspectRatio, ImageSize, AssetCategory, CollageData, CameraParams } from './types';
-import { generateMultiViewGrid, fileToBase64, enhancePrompt, analyzeAsset, ReferenceImageData, generateCameraMovement, editImage, generateOmniViewGrid } from './services/geminiService';
+import { FeatureGuide } from './components/FeatureGuide'; 
+import { Asset, GeneratedImage, AspectRatio, PanelAspectRatio, ImageSize, AssetCategory, CollageData, CameraTransformConfig } from './types';
+import { generateMultiViewGrid, fileToBase64, enhancePrompt, analyzeAsset, ReferenceImageData, generateCameraMovement, editImage, generateMultiAngleTransformation } from './services/geminiService';
 import { saveToStorage, loadFromStorage, clearStorage } from './services/persistenceService';
-import { AlertCircle, X as XIcon, Trash2, LayoutGrid, HelpCircle } from 'lucide-react';
+import { AlertCircle, X as XIcon, Trash2, LayoutGrid, HelpCircle } from 'lucide-react'; 
 import { Button } from './components/Button';
 // @ts-ignore
 import JSZip from 'jszip';
@@ -38,6 +37,10 @@ const App: React.FC = () => {
   const [isFeatureGuideOpen, setIsFeatureGuideOpen] = useState(false); 
   const [activeCollage, setActiveCollage] = useState<CollageData | null>(null);
   
+  // Multi-Angle States
+  const [isTransformActive, setIsTransformActive] = useState(false);
+  const [transformConfigs, setTransformConfigs] = useState<CameraTransformConfig[]>([]);
+
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStep, setGenerationStep] = useState<string>(''); 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -55,6 +58,18 @@ const App: React.FC = () => {
       case PanelAspectRatio.P1_1: setAspectRatio(AspectRatio.SQUARE); break;
     }
   }, [panelAspectRatio]);
+
+  // Sync transform configs count with gridSize
+  useEffect(() => {
+    const total = gridSize * gridSize;
+    setTransformConfigs(prev => {
+      const next = [...prev];
+      while (next.length < total) {
+        next.push({ focalLength: 35, pitch: 0, yaw: 0 });
+      }
+      return next.slice(0, total);
+    });
+  }, [gridSize]);
 
   useEffect(() => {
     loadFromStorage<GeneratedImage[]>('cine_images').then(saved => {
@@ -80,48 +95,113 @@ const App: React.FC = () => {
     saveToStorage('cine_active_collage', activeCollage);
   }, [activeCollage]);
 
+  useEffect(() => {
+    if (selectedImageId) {
+      const selected = images.find(i => i.id === selectedImageId);
+      if (selected && selected.nodeType === 'render') {
+        setPrompt(selected.prompt);
+        setStylePrompt(selected.stylePrompt || ''); 
+        setPanelPrompts(selected.panelPrompts || []);
+        if (selected.gridRows) setGridSize(selected.gridRows);
+        if (selected.panelAspectRatio) setPanelAspectRatio(selected.panelAspectRatio as any);
+      }
+    }
+  }, [selectedImageId, images]);
+
   const updateImagesWithHistory = useCallback((newImages: GeneratedImage[]) => {
     setHistory(prev => [...prev, images].slice(-30)); 
     setImages(newImages);
   }, [images]);
 
+  const handleTransformGenerate = async () => {
+    const activeItem = images.find(i => i.id === selectedImageId) || assets.find(a => a.id === selectedAssetId);
+    if (!activeItem) {
+      setError("请先在画布或资产库中选择一张图片作为变换基准。");
+      return;
+    }
+
+    setError(null);
+    setIsGenerating(true);
+    setGenerationStep("正在分析镜头位移参数...");
+
+    try {
+      let base64Source = '';
+      if ('url' in activeItem) {
+        base64Source = activeItem.url;
+      } else if ('file' in activeItem) {
+        base64Source = `data:${activeItem.file.type};base64,${await fileToBase64(activeItem.file)}`;
+      }
+
+      setGenerationStep("执行多角度无缝渲染...");
+      const result = await generateMultiAngleTransformation(
+        base64Source,
+        gridSize,
+        aspectRatio,
+        imageSize,
+        transformConfigs
+      );
+
+      const parentNode = images.find(i => i.id === selectedImageId);
+      const startX = parentNode?.position ? parentNode.position.x : 100;
+      const startY = parentNode?.position ? parentNode.position.y + 480 : 100;
+
+      const newNode: GeneratedImage = {
+        id: crypto.randomUUID(),
+        url: result.fullImage,
+        fullGridUrl: result.fullImage,
+        prompt: `Transformation of ${activeItem.id}`,
+        aspectRatio,
+        panelAspectRatio,
+        timestamp: Date.now(),
+        nodeType: 'render',
+        parentId: selectedImageId,
+        position: { x: startX, y: startY },
+        cameraDescription: "多角度机位变换序列",
+        slices: result.slices,
+        gridRows: gridSize,
+        gridCols: gridSize,
+        isTransformation: true
+      };
+
+      updateImagesWithHistory([...images, newNode]);
+      setSelectedImageId(newNode.id);
+    } catch (err: any) {
+      setError(err.message || "变换生成失败");
+    } finally {
+      setIsGenerating(false);
+      setGenerationStep("");
+    }
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedImageId) {
+        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+        handleDeleteNode(selectedImageId);
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+        e.preventDefault();
+        undo();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedImageId, history, images]);
+
+  const undo = useCallback(() => {
+    if (history.length > 0) {
+      const prev = history[history.length - 1];
+      setImages(prev);
+      setHistory(prevStack => prevStack.slice(0, -1));
+      setSelectedImageId(undefined);
+    }
+  }, [history]);
+
   const handleDeleteNode = useCallback((id: string) => {
     updateImagesWithHistory(images.filter(i => i.id !== id));
     setSelectedImageId(undefined);
   }, [images, updateImagesWithHistory]);
-
-  const handleUndo = useCallback(() => {
-    if (history.length === 0) return;
-    const previousState = history[history.length - 1];
-    const newHistory = history.slice(0, -1);
-    setHistory(newHistory);
-    setImages(previousState);
-  }, [history]);
-
-  useEffect(() => {
-    const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      // Ignore shortcuts if the user is currently typing in an input field or textarea
-      const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
-        return;
-      }
-
-      // Ctrl+Z or Cmd+Z for Undo
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
-        e.preventDefault();
-        handleUndo();
-      }
-
-      // Delete or Backspace for removing selected node
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedImageId) {
-        // Only trigger delete if something is actually selected
-        handleDeleteNode(selectedImageId);
-      }
-    };
-
-    window.addEventListener('keydown', handleGlobalKeyDown);
-    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [selectedImageId, handleDeleteNode, handleUndo]);
 
   const handleUpdateNodePosition = useCallback((id: string, x: number, y: number) => {
     setImages(prev => prev.map(img => img.id === id ? { ...img, position: { x, y } } : img));
@@ -160,6 +240,8 @@ const App: React.FC = () => {
     setError(null);
     setIsGenerating(true);
     setGenerationStep("正在启动渲染引擎...");
+    abortControllerRef.current = new AbortController();
+
     try {
       const parentNode = images.find(i => i.id === selectedImageId && i.nodeType === 'render');
       let startX = 100, startY = 100, previousContextImage = undefined;
@@ -184,12 +266,15 @@ const App: React.FC = () => {
           });
       }
 
+      const instructionsToSend = activeCollage ? undefined : panelPrompts;
+
       const finalResult = await generateMultiViewGrid(
           prompt, gridSize, panelAspectRatio, aspectRatio, imageSize, 
-          referenceData, previousContextImage, activeCollage ? undefined : panelPrompts, activeCollage || undefined,
+          referenceData, previousContextImage, instructionsToSend, activeCollage || undefined,
           stylePrompt 
       );
       
+      setGenerationStep("正在分析动线逻辑...");
       const cameraMove = await generateCameraMovement(prompt);
 
       const finalNode: GeneratedImage = {
@@ -209,6 +294,7 @@ const App: React.FC = () => {
           cameraDescription: cameraMove,
           slices: finalResult.slices,
           panelPrompts: [...panelPrompts], 
+          sliceHistory: {}, 
           gridRows: gridSize,
           gridCols: gridSize
       };
@@ -223,47 +309,6 @@ const App: React.FC = () => {
     }
   };
 
-  const handleOmniViewRender = async (anchorBase64: string, params: CameraParams[]) => {
-    setError(null);
-    setIsGenerating(true);
-    setGenerationStep("正在执行全方位镜头实验室渲染...");
-    try {
-      const rootNodes = images.filter(i => !i.parentId);
-      const startX = rootNodes.length === 0 ? 100 : (rootNodes[rootNodes.length-1].position?.x || 100) + 420;
-      const startY = 100;
-
-      const result = await generateOmniViewGrid(
-          anchorBase64.split(',')[1], params, gridSize, panelAspectRatio, aspectRatio, imageSize
-      );
-
-      const finalNode: GeneratedImage = {
-          id: crypto.randomUUID(),
-          url: result.fullImage,
-          fullGridUrl: result.fullImage,
-          prompt: "Omni-View Lens Lab Generation",
-          stylePrompt: "Consistency Multi-Angle",
-          textData: "全方位镜头实验室渲染结果",
-          aspectRatio,
-          panelAspectRatio,
-          timestamp: Date.now(),
-          nodeType: 'render',
-          position: { x: startX, y: startY },
-          cameraDescription: "多角度环绕镜头",
-          slices: result.slices,
-          gridRows: gridSize,
-          gridCols: gridSize
-      };
-
-      updateImagesWithHistory([...images, finalNode]);
-      setSelectedImageId(finalNode.id);
-    } catch (err: any) {
-      setError(err.message || "实验室生成失败");
-    } finally {
-      setIsGenerating(false);
-      setGenerationStep("");
-    }
-  };
-
   const handleEditSlice = async (imageId: string, sliceIndex: number, editPrompt: string, usePro: boolean, refImage?: string, targetImageSize: ImageSize = ImageSize.K1) => {
     setIsGenerating(true);
     setGenerationStep("正在执行单格无缝重绘...");
@@ -271,42 +316,119 @@ const App: React.FC = () => {
       const image = images.find(img => img.id === imageId);
       if (!image || !image.slices) return;
       const model = usePro ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
-      const newSliceUrl = await editImage(image.slices[sliceIndex], editPrompt, model, image.panelAspectRatio || image.aspectRatio, refImage, targetImageSize, stylePrompt);
+      
+      const newSliceUrl = await editImage(
+          image.slices[sliceIndex], 
+          editPrompt, 
+          model, 
+          image.panelAspectRatio || image.aspectRatio, 
+          refImage, 
+          targetImageSize,
+          stylePrompt 
+      );
+
       const newImages = images.map(img => {
         if (img.id === imageId) {
           const newSlices = [...(img.slices || [])];
+          const newHistory = { ...(img.sliceHistory || {}) };
+          if (!newHistory[sliceIndex]) newHistory[sliceIndex] = [];
+          newHistory[sliceIndex].push(image.slices![sliceIndex]);
           newSlices[sliceIndex] = newSliceUrl;
-          return { ...img, slices: newSlices };
+          
+          const newPanelPrompts = [...(img.panelPrompts || [])];
+          while(newPanelPrompts.length <= sliceIndex) newPanelPrompts.push("");
+          newPanelPrompts[sliceIndex] = editPrompt;
+          return { ...img, slices: newSlices, sliceHistory: newHistory, panelPrompts: newPanelPrompts };
         }
         return img;
       });
       updateImagesWithHistory(newImages);
-    } catch (err: any) { setError(err.message || "重绘失败"); } finally { setIsGenerating(false); setGenerationStep(""); }
+      
+      if (imageId === selectedImageId) {
+          setPanelPrompts(prev => {
+              const next = [...prev];
+              while(next.length <= sliceIndex) next.push("");
+              next[sliceIndex] = editPrompt;
+              return next;
+          });
+      }
+    } catch (err: any) { 
+        setError(err.message || "重绘失败"); 
+    } finally { 
+        setIsGenerating(false); 
+        setGenerationStep("");
+    }
+  };
+
+  const handleSaveCameraLogic = (newPrompts: string[]) => {
+      setPanelPrompts(newPrompts);
+      if (selectedImageId) {
+          setImages(prev => prev.map(img => 
+              img.id === selectedImageId ? { ...img, panelPrompts: newPrompts } : img
+          ));
+      }
+  };
+
+  const handleApplyScripts = (summary: string, scripts: string[]) => {
+      setPrompt(summary);
+      setPanelPrompts(scripts);
+      const count = scripts.length;
+      if (count > gridSize * gridSize) {
+          const nextSide = Math.ceil(Math.sqrt(count));
+          setGridSize(nextSide);
+      }
+      if (selectedImageId) {
+          setImages(prev => prev.map(img => 
+              img.id === selectedImageId ? { ...img, prompt: summary, panelPrompts: scripts } : img
+          ));
+      }
   };
 
   const handleDownloadZip = async () => {
     const selected = images.find(i => i.id === selectedImageId);
-    if (!selected || selected.nodeType !== 'render') return;
-    setIsGenerating(true);
+    if (!selected || selected.nodeType !== 'render') {
+      alert("请先在画布上选择一个分镜组。");
+      return;
+    }
+
     setGenerationStep("准备打包 ZIP...");
+    setIsGenerating(true);
+
     try {
       const zip = new JSZip();
-      const folder = zip.folder(`分镜组-${selected.id.slice(0, 4)}`);
+      const folderName = `导出分镜_${selected.id.slice(0, 8)}`;
+      const folder = zip.folder(folderName);
+
       const base64ToBlob = (b64: string) => {
         const parts = b64.split(';base64,');
         const byteCharacters = atob(parts[1]);
         const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) byteNumbers[i] = byteCharacters.charCodeAt(i);
-        return new Blob([new Uint8Array(byteNumbers)], { type: 'image/png' });
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        return new Blob([byteArray], { type: 'image/png' });
       };
+
       folder.file(`全景宫格.png`, base64ToBlob(selected.fullGridUrl || selected.url));
-      selected.slices?.forEach((slice, i) => folder.file(`分镜${i + 1}.png`, base64ToBlob(slice)));
+
+      if (selected.slices) {
+        selected.slices.forEach((sliceUrl, i) => {
+          folder.file(`分镜_${i + 1}.png`, base64ToBlob(sliceUrl));
+        });
+      }
+
       const content = await zip.generateAsync({ type: "blob" });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(content);
-      link.download = `分镜组.zip`;
+      link.download = `${folderName}.zip`;
       link.click();
-    } catch (err) { console.error(err); } finally { setIsGenerating(false); setGenerationStep(""); }
+    } catch (err) {
+      alert("ZIP 打包失败。");
+    } finally {
+      setIsGenerating(false);
+      setGenerationStep("");
+    }
   };
 
   const selectedImage = images.find(i => i.id === selectedImageId) || null;
@@ -325,13 +447,29 @@ const App: React.FC = () => {
         </div>
 
         <div className="flex-1 flex flex-col p-4 gap-7 overflow-y-auto custom-scrollbar">
-            <OmniViewLab gridCount={gridSize * gridSize} onRender={handleOmniViewRender} isRendering={isGenerating} />
-            
             <AssetBay 
                 assets={assets} onAddAsset={handleAddAsset} onRemoveAsset={handleRemoveAsset} 
                 onSelectAsset={(a) => { setSelectedAssetId(a.id); setSelectedImageId(undefined); }}
                 selectedAssetId={selectedAssetId} onOpenCollage={() => setIsCollageEditorOpen(true)}
             />
+
+            <div className="px-2">
+                {activeCollage ? (
+                  <div className="p-3 bg-cine-accent/10 border border-cine-accent/30 rounded-sm space-y-2">
+                     <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-cine-accent font-bold uppercase tracking-widest flex items-center gap-2">
+                           <LayoutGrid size={12} /> 镜头组参考 (ACTIVE)
+                        </span>
+                        <button onClick={() => setActiveCollage(null)} className="text-cine-accent hover:text-white"><XIcon size={12} /></button>
+                     </div>
+                     <img src={activeCollage.url} className="w-full aspect-video object-contain bg-black rounded-sm border border-cine-accent/20" />
+                  </div>
+                ) : (
+                  <div className="p-3 bg-zinc-900/40 border border-zinc-800/40 border-dashed rounded-sm text-center">
+                     <p className="text-[9px] text-zinc-400 font-mono">未激活镜头组参考</p>
+                  </div>
+                )}
+            </div>
 
             <DirectorDeck 
                 gridSize={gridSize} setGridSize={setGridSize}
@@ -349,6 +487,11 @@ const App: React.FC = () => {
                 isContinuing={!!(selectedImageId && images.find(i => i.id === selectedImageId)?.nodeType === 'render')}
                 onDeselect={() => { setSelectedImageId(undefined); setSelectedAssetId(undefined); }}
                 isCollageActive={!!activeCollage}
+                transformConfigs={transformConfigs}
+                setTransformConfigs={setTransformConfigs}
+                onTransformGenerate={handleTransformGenerate}
+                isTransformActive={isTransformActive}
+                setIsTransformActive={setIsTransformActive}
             />
         </div>
       </aside>
@@ -380,14 +523,22 @@ const App: React.FC = () => {
           rows={selectedImage?.gridRows || gridSize} 
           cols={selectedImage?.gridCols || gridSize} 
           mainPrompt={selectedImage?.prompt || prompt}
-          initialPrompts={panelPrompts} onSave={(p) => setPanelPrompts(p)}
+          initialPrompts={panelPrompts} onSave={handleSaveCameraLogic}
           currentImage={selectedImage || undefined}
           onRegenSlice={(idx, p) => handleEditSlice(selectedImageId!, idx, p, true)}
           isGenerating={isGenerating}
         />
 
-        <CollageEditor isOpen={isCollageEditorOpen} onClose={() => setIsCollageEditorOpen(false)} onSave={(url, r, c, ar) => { setActiveCollage({ url, rows: r, cols: c, aspectRatio: ar }); setIsCollageEditorOpen(false); }} />
-        <ScriptEditor isOpen={isScriptEditorOpen} onClose={() => setIsScriptEditorOpen(false)} defaultPanelCount={gridSize * gridSize} onApplyScripts={(s, sc) => { setPrompt(s); setPanelPrompts(sc); }} />
+        <CollageEditor 
+          isOpen={isCollageEditorOpen} onClose={() => setIsCollageEditorOpen(false)}
+          onSave={(url, r, c, ar) => { setActiveCollage({ url, rows: r, cols: c, aspectRatio: ar }); setIsCollageEditorOpen(false); }}
+        />
+
+        <ScriptEditor 
+          isOpen={isScriptEditorOpen} onClose={() => setIsScriptEditorOpen(false)}
+          defaultPanelCount={gridSize * gridSize} onApplyScripts={handleApplyScripts}
+        />
+
         <FeatureGuide isOpen={isFeatureGuideOpen} onClose={() => setIsFeatureGuideOpen(false)} />
       </main>
 
@@ -405,6 +556,23 @@ const App: React.FC = () => {
             isAnalyzing={isAnalyzing}
             analysisResult={analysisResult}
             onEditSlice={handleEditSlice} 
+            onRevertSlice={(imgId, sIdx, hIdx) => {
+                const newImages = images.map(img => {
+                  if (img.id === imgId) {
+                    const history = img.sliceHistory?.[sIdx] || [];
+                    const newSlices = [...(img.slices || [])];
+                    const newHistoryList = [...history];
+                    const current = newSlices[sIdx];
+                    newSlices[sIdx] = history[hIdx];
+                    newHistoryList[hIdx] = current; 
+                    const updatedHistory = { ...(img.sliceHistory || {}) };
+                    updatedHistory[sIdx] = newHistoryList;
+                    return { ...img, slices: newSlices, sliceHistory: updatedHistory };
+                  }
+                  return img;
+                });
+                updateImagesWithHistory(newImages);
+            }}
          />
       </aside>
     </div>

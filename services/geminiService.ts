@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
-import { AspectRatio, ImageSize, Asset, CollageData, PanelAspectRatio, CameraParams } from "../types";
+import { AspectRatio, ImageSize, Asset, CollageData, PanelAspectRatio, CameraTransformConfig } from "../types";
 
 export const ensureApiKey = async () => {
   // @ts-ignore
@@ -69,105 +69,48 @@ const sliceImageGrid = (base64Data: string, rows: number, cols: number): Promise
   });
 };
 
-export const generateOmniViewGrid = async (
-  anchorBase64: string,
-  shotParams: CameraParams[],
+export const generateMultiAngleTransformation = async (
+  base64Source: string,
   gridSize: number,
-  panelAspectRatio: PanelAspectRatio,
   containerAspectRatio: AspectRatio,
-  imageSize: ImageSize
+  imageSize: ImageSize,
+  configs: CameraTransformConfig[]
 ): Promise<{ fullImage: string, slices: string[] }> => {
   await ensureApiKey();
   
   const totalViews = gridSize * gridSize;
   const gridType = `${gridSize}x${gridSize}`;
+  
+  // Construct per-panel prompt logic based on camera configs
+  const panelPrompts = configs.slice(0, totalViews).map((conf, i) => {
+    const focalLabel = conf.focalLength < 35 ? "Ultra-Wide Angle" : (conf.focalLength > 100 ? "Telephoto Close-up" : "Standard Lens");
+    return `Panel ${i + 1}: STRICT TRANSFORMATION. Reference image content must remain 100% IDENTICAL. Change ONLY camera state: Focal Length ${conf.focalLength}mm (${focalLabel}), Pitch: ${conf.pitch} degrees, Yaw/Rotation: ${conf.yaw} degrees. Ensure visual consistency with the source.`;
+  }).join('\n');
 
-  // Mapping numeric params to advanced cinematic descriptions to force better perspective
-  const getParamDesc = (p: CameraParams) => {
-    // 1. Focal Length Enhancements
-    let focal = "";
-    if (p.focalLength < 24) {
-      focal = `shot on ultra-wide ${p.focalLength}mm lens, dramatic perspective distortion, vast cinematic field of view`;
-    } else if (p.focalLength < 40) {
-      focal = `shot on wide ${p.focalLength}mm lens, immersive environmental framing`;
-    } else if (p.focalLength < 85) {
-      focal = `shot on standard ${p.focalLength}mm lens, human-eye perspective, balanced composition`;
-    } else {
-      focal = `shot on ${p.focalLength}mm telephoto lens, background compression, creamy bokeh, intimate subject focus`;
-    }
-    
-    // 2. Pitch (Vertical Tilt) Enhancements - CRITICAL PER USER REQUEST
-    let pitch = "";
-    if (p.pitch > 60) {
-      pitch = `Extreme top-down view, directly above the subject, steep 90-degree downward pitch, God's eye view, flat lay composition, no horizon line visible, heavy emphasis on top surfaces and geometric ground layout`;
-    } else if (p.pitch > 25) {
-      pitch = `Steep high angle shot looking down, dramatic camera tilt, elevated viewpoint, horizon line is placed near the top frame edge, visible top surfaces of objects, looking down onto ground texture`;
-    } else if (p.pitch > 10) {
-      pitch = `Cinematic high angle shot, looking down slightly, slightly elevated viewpoint`;
-    } else if (p.pitch < -60) {
-      pitch = `Extreme low angle shot looking vertically up, steep upward tilt, worm's-eye view, vanishing points converging high in the sky, subject towers powerfully over camera with dramatic height distortion, visible undersides and bottom planes`;
-    } else if (p.pitch < -25) {
-      pitch = `Steep low angle shot looking up, dramatic camera tilt, camera placed near ground surface, horizon line is near the bottom frame edge, subject dominates against the sky, visible underside and chin area`;
-    } else if (p.pitch < -10) {
-      pitch = `Cinematic low angle shot, looking up from below eye-level`;
-    } else {
-      pitch = `Eye-level shot, stable horizontal camera, balanced horizon line, straight-on naturalistic view`;
-    }
+  const systemPrompt = `[TASK]: SINGLE-SHOT MULTI-ANGLE TRANSFORMATION GRID.
+[INPUT]: A single reference image.
+[GOAL]: Generate a ${gridType} grid where EVERY panel contains the EXACT same subjects and environment from the reference, but viewed from different camera positions specified below.
+[CONSTRAINTS]:
+- DO NOT add new elements.
+- DO NOT progress the story.
+- DO NOT change the style.
+- The ONLY allowed changes are Camera Focal Length, Pitch, and Yaw.
+- NO Letterboxing. Full-bleed ${containerAspectRatio} canvas.
 
-    // 3. Yaw (Horizontal Rotation) Enhancements
-    let yaw = "";
-    const absYaw = Math.abs(p.yaw);
-    if (absYaw < 20) {
-      yaw = "Frontal view, camera facing the subject directly";
-    } else if (absYaw < 70) {
-      yaw = p.yaw > 0 ? "3/4 profile from the right side" : "3/4 profile from the left side";
-    } else if (absYaw < 110) {
-      yaw = p.yaw > 0 ? "Full side profile from the right" : "Full side profile from the left";
-    } else if (absYaw < 160) {
-      yaw = p.yaw > 0 ? "Rear 3/4 view from the right" : "Rear 3/4 view from the left";
-    } else {
-      yaw = "Full back view, subject facing away from camera";
-    }
+[CAMERA CONFIGURATIONS]:
+${panelPrompts}`;
 
-    return `${focal}. ${pitch}. ${yaw}.`;
-  };
-
-  const panelInstructions = shotParams.map((p, idx) => `Panel ${idx + 1}: ${getParamDesc(p)}`);
-
-  let systemPrompt = `[CORE TASK]: GENERATE A ${gridType} MULTI-ANGLE GRID BASED ON THE ANCHOR IMAGE.
-
-[ANCHOR CONSISTENCY RULE]:
-- You MUST maintain 100% identity of the character, environment, lighting, and geometric structure from the provided anchor image.
-- DO NOT change any core content. ONLY change the virtual camera position and lens parameters.
-
-[STRICT LAYOUT]:
-- CANVAS RATIO: ${containerAspectRatio}.
-- PANEL LAYOUT: ${gridSize}x${gridSize} grid.
-- PANEL RATIO: ${panelAspectRatio}.
-
-[CAMERA PARAMETERS]:
-${panelInstructions.join('\n')}
-
-[CINEMATIC EXECUTION]:
-- Maintain the exact cinematic style, 35mm film stock quality, and lighting of the anchor image.
-- For high-angle/low-angle panels, ensure a STEEP and DRAMATIC perspective shift. 
-- Manipulate the HORIZON LINE height to accurately reflect the pitch angles.
-
-[NEGATIVE CONSTRAINTS]:
-- AVOID eye-level shots, straight-on views, flat perspective, or horizontal camera placement when a specific pitch is requested.
-- DO NOT generate 2D rotations; only generate true 3D camera shifts.`;
+  const parts = [
+    { inlineData: { mimeType: 'image/png', data: base64Source.split(',')[1] } },
+    { text: systemPrompt }
+  ];
 
   try {
     const response = await withRetry<GenerateContentResponse>(() => {
         const ai = getClient();
         return ai.models.generateContent({
           model: 'gemini-3-pro-image-preview',
-          contents: { 
-            parts: [
-              { inlineData: { mimeType: 'image/png', data: anchorBase64 } },
-              { text: systemPrompt }
-            ] 
-          },
+          contents: { parts },
           config: {
             imageConfig: {
               aspectRatio: containerAspectRatio as any,
@@ -182,11 +125,11 @@ ${panelInstructions.join('\n')}
       if (part.inlineData) fullImageBase64 = `data:image/png;base64,${part.inlineData.data}`;
     }
 
-    if (!fullImageBase64) throw new Error("No image generated.");
+    if (!fullImageBase64) throw new Error("Transformation failed.");
     const panels = await sliceImageGrid(fullImageBase64, gridSize, gridSize);
     return { fullImage: fullImageBase64, slices: panels };
   } catch (error: any) {
-    console.error("OmniView gen error:", error);
+    console.error("Transform error:", error);
     throw error;
   }
 };
@@ -496,7 +439,7 @@ export const generateDirectorSummary = async (scripts: string[]): Promise<string
 - 严禁分条列项。
 
 示例1：角色1大橙和角色2小青桔在海边沙滩上晒太阳。
-示例2：角色在办公室 work，天花板出现黑洞吸走周围物品，角色站在原地发呆。
+示例2：角色在办公室工作，天花板出现黑洞吸走周围物品，角色站在原地发呆。
 
 分镜描述内容：
 ${scripts.join('\n')}` }
