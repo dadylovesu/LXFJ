@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { AspectRatio, ImageSize, Asset, CollageData, PanelAspectRatio, LensLabParams } from "../types";
 
@@ -72,7 +71,7 @@ const sliceImageGrid = (base64Data: string, rows: number, cols: number): Promise
 export interface ReferenceImageData {
   mimeType: string;
   data: string;
-  category: 'role' | 'background' | 'prop';
+  category: 'role' | 'background' | 'prop' | 'style';
   roleIndex?: number;
 }
 
@@ -83,7 +82,8 @@ export const generateLensLabSequence = async (
   panelAspectRatio: PanelAspectRatio,
   containerAspectRatio: AspectRatio,
   imageSize: ImageSize,
-  stylePrompt?: string
+  stylePrompt?: string,
+  styleRefImage?: string
 ): Promise<{ fullImage: string, slices: string[], panelPrompts: string[] }> => {
   await ensureApiKey();
   
@@ -111,9 +111,13 @@ export const generateLensLabSequence = async (
 
   const panelDescriptionsText = panelPrompts.map((p, i) => `分镜 ${i + 1}: ${p}`).join("\n");
 
-  const styleInstruction = stylePrompt && stylePrompt.trim() 
-    ? `[视觉风格限制]: 严格遵循以下风格: "${stylePrompt}"。`
+  let styleInstruction = stylePrompt && stylePrompt.trim() 
+    ? `[视觉风格限制]: 严格遵循以下风格描述: "${stylePrompt}"。`
     : "[视觉风格]: 高级电影质感，35mm 胶片摄影风格。";
+
+  if (styleRefImage) {
+    styleInstruction += " [核心风格参考]: 必须严格参考提供的‘风格图’，学习其构图氛围、色彩倾向、颗粒感和光影质感。";
+  }
 
   const systemPrompt = `[核心任务]: 3D 多角度一致性重绘。
 [参考基准]: 你将获得一张名为“锚点”的参考图。
@@ -127,10 +131,15 @@ ${styleInstruction}
 [分镜指令]:
 ${panelDescriptionsText}`;
 
-  const parts = [
-    { inlineData: { mimeType: 'image/png', data: anchorImageBase64 } },
-    { text: systemPrompt }
+  const parts: any[] = [
+    { inlineData: { mimeType: 'image/png', data: anchorImageBase64 } }
   ];
+
+  if (styleRefImage) {
+    parts.push({ inlineData: { mimeType: 'image/png', data: styleRefImage.split(',')[1] } });
+  }
+
+  parts.push({ text: systemPrompt });
 
   try {
     const response = await withRetry<GenerateContentResponse>(() => {
@@ -171,7 +180,8 @@ export const generateMultiViewGrid = async (
   contextImage?: string,
   panelInstructions?: string[],
   collageRef?: CollageData,
-  stylePrompt?: string 
+  stylePrompt?: string,
+  styleRefImage?: string
 ): Promise<{ fullImage: string, slices: string[] }> => {
   await ensureApiKey();
   
@@ -201,8 +211,12 @@ export const generateMultiViewGrid = async (
   const props = categorizedRefs.filter(r => r.category === 'prop');
 
   let styleInstruction = stylePrompt && stylePrompt.trim() 
-    ? `[MANDATORY STYLE CONSTRAINT]: The entire image MUST strictly follow this artistic style: "${stylePrompt}". This overrides any default cinematic look. Every panel must have perfect stylistic consistency.`
-    : `[STYLE]: Hyper-realistic cinematic film, 35mm photography style but ADAPTED TO ${containerAspectRatio} FORMAT. Consistent lighting and grading. Use reference assets for visual guidance.`;
+    ? `[MANDATORY STYLE CONSTRAINT]: The entire image MUST strictly follow this artistic style description: "${stylePrompt}". Every panel must have perfect stylistic consistency.`
+    : `[STYLE]: Hyper-realistic cinematic film, 35mm photography style but ADAPTED TO ${containerAspectRatio} FORMAT. Consistent lighting and grading.`;
+
+  if (styleRefImage) {
+    styleInstruction += ` [STRICT VISUAL STYLE REFERENCE]: A style reference image is provided. You MUST match the grading, film grain, color palette, and general artistic atmosphere of that image across all panels.`;
+  }
 
   let systemPrompt = `[CORE TASK]: GENERATE A SEAMLESS ${gridType} STORYBOARD GRID.
 
@@ -246,6 +260,7 @@ ${!collageRef && panelInstructions && panelInstructions.length > 0 ? `\n[PANEL D
   roles.forEach(r => parts.push({ inlineData: { mimeType: r.mimeType, data: r.data } }));
   bgs.forEach(b => parts.push({ inlineData: { mimeType: b.mimeType, data: b.data } }));
   props.forEach(p => parts.push({ inlineData: { mimeType: p.mimeType, data: p.data } }));
+  if (styleRefImage) parts.push({ inlineData: { mimeType: 'image/png', data: styleRefImage.split(',')[1] } });
   if (collageRef) parts.push({ inlineData: { mimeType: 'image/png', data: collageRef.url.split(',')[1] } });
   if (contextImage) parts.push({ inlineData: { mimeType: 'image/png', data: contextImage.split(',')[1] } });
   
@@ -287,19 +302,25 @@ export const editImage = async (
   aspectRatio: string = '1:1',
   refImageBase64?: string,
   imageSize: ImageSize = ImageSize.K1,
-  stylePrompt?: string 
+  stylePrompt?: string,
+  styleRefImage?: string
 ): Promise<string> => {
   await ensureApiKey();
   const cleanBase64 = base64Image.includes(',') ? base64Image.split(',')[1] : base64Image;
   const parts: any[] = [{ inlineData: { mimeType: 'image/png', data: cleanBase64 } }];
   if (refImageBase64) parts.push({ inlineData: { mimeType: 'image/png', data: refImageBase64.split(',')[1] } });
+  if (styleRefImage) parts.push({ inlineData: { mimeType: 'image/png', data: styleRefImage.split(',')[1] } });
   
   const isVertical = aspectRatio === '9:16' || aspectRatio === '3:4';
   const formatTag = isVertical ? "VERTICAL PORTRAIT" : "LANDSCAPE";
 
-  const styleConstraint = stylePrompt && stylePrompt.trim() 
-    ? `MANDATORY STYLE: Strictly follow the artistic style: "${stylePrompt}".`
+  let styleConstraint = stylePrompt && stylePrompt.trim() 
+    ? `MANDATORY STYLE: Strictly follow the artistic style description: "${stylePrompt}".`
     : "Maintain cinematic 35mm photography consistency.";
+
+  if (styleRefImage) {
+    styleConstraint += " Also, match the visual look of the provided style reference image.";
+  }
 
   parts.push({ text: `EDIT TASK: Modify this ${aspectRatio} (${formatTag}) cinematic shot.
 REQUEST: "${editPrompt}"

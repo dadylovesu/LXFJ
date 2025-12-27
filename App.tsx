@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AssetBay } from './components/AssetBay';
 import { DirectorDeck } from './components/DirectorDeck';
@@ -31,6 +30,7 @@ const App: React.FC = () => {
   const [imageSize, setImageSize] = useState<ImageSize>(ImageSize.K4);
   const [prompt, setPrompt] = useState<string>('');
   const [stylePrompt, setStylePrompt] = useState<string>(''); 
+  const [styleRefImage, setStyleRefImage] = useState<string | null>(null);
   const [panelPrompts, setPanelPrompts] = useState<string[]>([]);
   const [isCameraEditorOpen, setIsCameraEditorOpen] = useState(false);
   const [isCollageEditorOpen, setIsCollageEditorOpen] = useState(false);
@@ -66,6 +66,9 @@ const App: React.FC = () => {
     loadFromStorage<CollageData>('cine_active_collage').then(collage => {
         if (collage) setActiveCollage(collage);
     });
+    loadFromStorage<string>('cine_style_ref').then(style => {
+        if (style) setStyleRefImage(style);
+    });
   }, []);
 
   useEffect(() => {
@@ -79,6 +82,10 @@ const App: React.FC = () => {
   useEffect(() => {
     saveToStorage('cine_active_collage', activeCollage);
   }, [activeCollage]);
+
+  useEffect(() => {
+    saveToStorage('cine_style_ref', styleRefImage);
+  }, [styleRefImage]);
 
   useEffect(() => {
     if (selectedImageId) {
@@ -196,7 +203,7 @@ const App: React.FC = () => {
       const finalResult = await generateMultiViewGrid(
           prompt, gridSize, panelAspectRatio, aspectRatio, imageSize, 
           referenceData, previousContextImage, instructionsToSend, activeCollage || undefined,
-          stylePrompt 
+          stylePrompt, styleRefImage || undefined
       );
       
       setGenerationStep("正在分析动线逻辑...");
@@ -250,7 +257,8 @@ const App: React.FC = () => {
             panelAspectRatio,
             aspectRatio,
             imageSize,
-            stylePrompt
+            stylePrompt,
+            styleRefImage || undefined
         );
 
         const node: GeneratedImage = {
@@ -296,7 +304,8 @@ const App: React.FC = () => {
           image.panelAspectRatio || image.aspectRatio, 
           refImage, 
           targetImageSize,
-          stylePrompt 
+          stylePrompt,
+          styleRefImage || undefined
       );
 
       const newImages = images.map(img => {
@@ -490,6 +499,7 @@ const App: React.FC = () => {
                     imageSize={imageSize} setImageSize={setImageSize}
                     prompt={prompt} setPrompt={setPrompt}
                     stylePrompt={stylePrompt} setStylePrompt={setStylePrompt} 
+                    styleRefImage={styleRefImage} setStyleRefImage={setStyleRefImage}
                     onGenerate={handleGenerate}
                     onStop={() => setIsGenerating(false)}
                     isGenerating={isGenerating}

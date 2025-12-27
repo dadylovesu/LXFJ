@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { Button } from './Button';
 import { AspectRatio, ImageSize, PanelAspectRatio } from '../types';
-import { Settings2, GitMerge, Video, Layers, Zap, LayoutGrid, ChevronRight, ChevronLeft, XCircle, PlusCircle, Square, Wand2, Info, Palette, Cpu } from 'lucide-react';
+import { Settings2, GitMerge, Video, Layers, Zap, LayoutGrid, ChevronRight, ChevronLeft, XCircle, PlusCircle, Square, Wand2, Info, Palette, Cpu, ImagePlus, X } from 'lucide-react';
 
 interface DirectorDeckProps {
   gridSize: number;
@@ -13,8 +13,10 @@ interface DirectorDeckProps {
   setImageSize: (size: ImageSize) => void;
   prompt: string;
   setPrompt: (text: string) => void;
-  stylePrompt: string; // 新增属性
-  setStylePrompt: (text: string) => void; // 新增属性
+  stylePrompt: string;
+  setStylePrompt: (text: string) => void;
+  styleRefImage: string | null;
+  setStyleRefImage: (url: string | null) => void;
   onGenerate: () => void;
   onStop?: () => void;
   isGenerating: boolean;
@@ -38,6 +40,8 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
   setPrompt,
   stylePrompt,
   setStylePrompt,
+  styleRefImage,
+  setStyleRefImage,
   onGenerate,
   onStop,
   isGenerating,
@@ -48,7 +52,17 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
   onDeselect,
   isCollageActive = false
 }) => {
-  
+  const styleInputRef = useRef<HTMLInputElement>(null);
+
+  const handleStyleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (ev) => setStyleRefImage(ev.target?.result as string);
+      reader.readAsDataURL(file);
+    }
+  };
+
   const getQualityLabel = () => {
       switch(imageSize) {
           case ImageSize.K1: return "1K 标准";
@@ -125,7 +139,7 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
         </div>
       </div>
 
-      {/* Engine Group (Resolution Selection) - NEW SECTION ADDED AS REQUESTED */}
+      {/* Engine Group */}
       <div className="space-y-4">
         <label className="text-[9px] text-zinc-400 font-mono uppercase tracking-[0.15em] flex items-center gap-2.5">
             <span className="w-1 h-3 bg-zinc-700 rounded-full"></span>
@@ -161,16 +175,41 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
             <span className="w-1 h-3 bg-zinc-700 rounded-full"></span>
             视觉风格 (STYLE PRESET)
         </label>
-        <div className="relative group/style">
-            <input 
-                type="text"
-                value={stylePrompt}
-                onChange={(e) => setStylePrompt(e.target.value)}
-                placeholder="默认：参考图风格 (Default: Asset Style)"
-                className="w-full bg-black/60 border border-zinc-800/80 rounded-sm px-4 py-3 text-[11px] text-cine-accent font-mono focus:border-cine-accent focus:ring-1 focus:ring-cine-accent/20 placeholder:text-zinc-700 transition-all"
-                spellCheck={false}
-            />
-            <Palette size={12} className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within/style:text-cine-accent transition-colors" />
+        <div className="space-y-3">
+          <div className="relative group/style">
+              <input 
+                  type="text"
+                  value={stylePrompt}
+                  onChange={(e) => setStylePrompt(e.target.value)}
+                  placeholder="参考图风格 (Default: Asset Style)"
+                  className="w-full bg-black/60 border border-zinc-800/80 rounded-sm px-4 py-3 pr-10 text-[11px] text-cine-accent font-mono focus:border-cine-accent focus:ring-1 focus:ring-cine-accent/20 placeholder:text-zinc-700 transition-all"
+                  spellCheck={false}
+              />
+              <Palette size={12} className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within/style:text-cine-accent transition-colors" />
+          </div>
+          
+          <div className="flex items-center gap-2">
+              <button 
+                onClick={() => styleInputRef.current?.click()}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 bg-black/40 border border-dashed rounded-sm text-[9px] font-mono font-bold transition-all ${styleRefImage ? 'border-cine-accent text-cine-accent bg-cine-accent/5' : 'border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300'}`}
+              >
+                  <ImagePlus size={14} />
+                  {styleRefImage ? '已上传参考风格' : '上传参考风格图'}
+              </button>
+              <input type="file" ref={styleInputRef} className="hidden" accept="image/*" onChange={handleStyleImageUpload} />
+              
+              {styleRefImage && (
+                <div className="relative w-10 h-10 group/styleimg">
+                   <img src={styleRefImage} className="w-full h-full object-cover rounded-sm border border-cine-accent" />
+                   <button 
+                     onClick={() => setStyleRefImage(null)}
+                     className="absolute -top-1.5 -right-1.5 bg-black text-red-500 rounded-full border border-zinc-800 p-0.5 opacity-0 group-hover/styleimg:opacity-100 transition-opacity"
+                   >
+                     <X size={10} />
+                   </button>
+                </div>
+              )}
+          </div>
         </div>
       </div>
 
