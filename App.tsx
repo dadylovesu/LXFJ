@@ -7,11 +7,12 @@ import { Inspector } from './components/Inspector';
 import { CameraEditor } from './components/CameraEditor';
 import { CollageEditor } from './components/CollageEditor';
 import { ScriptEditor } from './components/ScriptEditor';
-import { FeatureGuide } from './components/FeatureGuide'; // 新增导入
-import { Asset, GeneratedImage, AspectRatio, PanelAspectRatio, ImageSize, AssetCategory, CollageData } from './types';
-import { generateMultiViewGrid, fileToBase64, enhancePrompt, analyzeAsset, ReferenceImageData, generateCameraMovement, editImage } from './services/geminiService';
+import { FeatureGuide } from './components/FeatureGuide';
+import { OmniViewLab } from './components/OmniViewLab';
+import { Asset, GeneratedImage, AspectRatio, PanelAspectRatio, ImageSize, AssetCategory, CollageData, CameraParams } from './types';
+import { generateMultiViewGrid, fileToBase64, enhancePrompt, analyzeAsset, ReferenceImageData, generateCameraMovement, editImage, generateOmniViewGrid } from './services/geminiService';
 import { saveToStorage, loadFromStorage, clearStorage } from './services/persistenceService';
-import { AlertCircle, X as XIcon, Trash2, LayoutGrid, HelpCircle } from 'lucide-react'; // 新增 HelpCircle
+import { AlertCircle, X as XIcon, Trash2, LayoutGrid, HelpCircle } from 'lucide-react';
 import { Button } from './components/Button';
 // @ts-ignore
 import JSZip from 'jszip';
@@ -34,7 +35,7 @@ const App: React.FC = () => {
   const [isCameraEditorOpen, setIsCameraEditorOpen] = useState(false);
   const [isCollageEditorOpen, setIsCollageEditorOpen] = useState(false);
   const [isScriptEditorOpen, setIsScriptEditorOpen] = useState(false);
-  const [isFeatureGuideOpen, setIsFeatureGuideOpen] = useState(false); // 新增状态
+  const [isFeatureGuideOpen, setIsFeatureGuideOpen] = useState(false); 
   const [activeCollage, setActiveCollage] = useState<CollageData | null>(null);
   
   const [isGenerating, setIsGenerating] = useState(false);
@@ -79,48 +80,10 @@ const App: React.FC = () => {
     saveToStorage('cine_active_collage', activeCollage);
   }, [activeCollage]);
 
-  useEffect(() => {
-    if (selectedImageId) {
-      const selected = images.find(i => i.id === selectedImageId);
-      if (selected && selected.nodeType === 'render') {
-        setPrompt(selected.prompt);
-        setStylePrompt(selected.stylePrompt || ''); 
-        setPanelPrompts(selected.panelPrompts || []);
-        if (selected.gridRows) setGridSize(selected.gridRows);
-        if (selected.panelAspectRatio) setPanelAspectRatio(selected.panelAspectRatio as any);
-      }
-    }
-  }, [selectedImageId, images]);
-
   const updateImagesWithHistory = useCallback((newImages: GeneratedImage[]) => {
     setHistory(prev => [...prev, images].slice(-30)); 
     setImages(newImages);
   }, [images]);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedImageId) {
-        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-        handleDeleteNode(selectedImageId);
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-        e.preventDefault();
-        undo();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedImageId, history, images]);
-
-  const undo = useCallback(() => {
-    if (history.length > 0) {
-      const prev = history[history.length - 1];
-      setImages(prev);
-      setHistory(prevStack => prevStack.slice(0, -1));
-      setSelectedImageId(undefined);
-    }
-  }, [history]);
 
   const handleDeleteNode = useCallback((id: string) => {
     updateImagesWithHistory(images.filter(i => i.id !== id));
@@ -164,8 +127,6 @@ const App: React.FC = () => {
     setError(null);
     setIsGenerating(true);
     setGenerationStep("正在启动渲染引擎...");
-    abortControllerRef.current = new AbortController();
-
     try {
       const parentNode = images.find(i => i.id === selectedImageId && i.nodeType === 'render');
       let startX = 100, startY = 100, previousContextImage = undefined;
@@ -190,15 +151,12 @@ const App: React.FC = () => {
           });
       }
 
-      const instructionsToSend = activeCollage ? undefined : panelPrompts;
-
       const finalResult = await generateMultiViewGrid(
           prompt, gridSize, panelAspectRatio, aspectRatio, imageSize, 
-          referenceData, previousContextImage, instructionsToSend, activeCollage || undefined,
+          referenceData, previousContextImage, activeCollage ? undefined : panelPrompts, activeCollage || undefined,
           stylePrompt 
       );
       
-      setGenerationStep("正在分析动线逻辑...");
       const cameraMove = await generateCameraMovement(prompt);
 
       const finalNode: GeneratedImage = {
@@ -218,7 +176,6 @@ const App: React.FC = () => {
           cameraDescription: cameraMove,
           slices: finalResult.slices,
           panelPrompts: [...panelPrompts], 
-          sliceHistory: {}, 
           gridRows: gridSize,
           gridCols: gridSize
       };
@@ -233,6 +190,47 @@ const App: React.FC = () => {
     }
   };
 
+  const handleOmniViewRender = async (anchorBase64: string, params: CameraParams[]) => {
+    setError(null);
+    setIsGenerating(true);
+    setGenerationStep("正在执行全方位镜头实验室渲染...");
+    try {
+      const rootNodes = images.filter(i => !i.parentId);
+      const startX = rootNodes.length === 0 ? 100 : (rootNodes[rootNodes.length-1].position?.x || 100) + 420;
+      const startY = 100;
+
+      const result = await generateOmniViewGrid(
+          anchorBase64.split(',')[1], params, gridSize, panelAspectRatio, aspectRatio, imageSize
+      );
+
+      const finalNode: GeneratedImage = {
+          id: crypto.randomUUID(),
+          url: result.fullImage,
+          fullGridUrl: result.fullImage,
+          prompt: "Omni-View Lens Lab Generation",
+          stylePrompt: "Consistency Multi-Angle",
+          textData: "全方位镜头实验室渲染结果",
+          aspectRatio,
+          panelAspectRatio,
+          timestamp: Date.now(),
+          nodeType: 'render',
+          position: { x: startX, y: startY },
+          cameraDescription: "多角度环绕镜头",
+          slices: result.slices,
+          gridRows: gridSize,
+          gridCols: gridSize
+      };
+
+      updateImagesWithHistory([...images, finalNode]);
+      setSelectedImageId(finalNode.id);
+    } catch (err: any) {
+      setError(err.message || "实验室生成失败");
+    } finally {
+      setIsGenerating(false);
+      setGenerationStep("");
+    }
+  };
+
   const handleEditSlice = async (imageId: string, sliceIndex: number, editPrompt: string, usePro: boolean, refImage?: string, targetImageSize: ImageSize = ImageSize.K1) => {
     setIsGenerating(true);
     setGenerationStep("正在执行单格无缝重绘...");
@@ -240,145 +238,42 @@ const App: React.FC = () => {
       const image = images.find(img => img.id === imageId);
       if (!image || !image.slices) return;
       const model = usePro ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
-      
-      const newSliceUrl = await editImage(
-          image.slices[sliceIndex], 
-          editPrompt, 
-          model, 
-          image.panelAspectRatio || image.aspectRatio, 
-          refImage, 
-          targetImageSize,
-          stylePrompt 
-      );
-
+      const newSliceUrl = await editImage(image.slices[sliceIndex], editPrompt, model, image.panelAspectRatio || image.aspectRatio, refImage, targetImageSize, stylePrompt);
       const newImages = images.map(img => {
         if (img.id === imageId) {
           const newSlices = [...(img.slices || [])];
-          const newHistory = { ...(img.sliceHistory || {}) };
-          if (!newHistory[sliceIndex]) newHistory[sliceIndex] = [];
-          newHistory[sliceIndex].push(image.slices![sliceIndex]);
           newSlices[sliceIndex] = newSliceUrl;
-          
-          const newPanelPrompts = [...(img.panelPrompts || [])];
-          while(newPanelPrompts.length <= sliceIndex) newPanelPrompts.push("");
-          newPanelPrompts[sliceIndex] = editPrompt;
-          return { ...img, slices: newSlices, sliceHistory: newHistory, panelPrompts: newPanelPrompts };
+          return { ...img, slices: newSlices };
         }
         return img;
       });
       updateImagesWithHistory(newImages);
-      
-      if (imageId === selectedImageId) {
-          setPanelPrompts(prev => {
-              const next = [...prev];
-              while(next.length <= sliceIndex) next.push("");
-              next[sliceIndex] = editPrompt;
-              return next;
-          });
-      }
-    } catch (err: any) { 
-        setError(err.message || "重绘失败"); 
-    } finally { 
-        setIsGenerating(false); 
-        setGenerationStep("");
-    }
-  };
-
-  const handleSaveCameraLogic = (newPrompts: string[]) => {
-      setPanelPrompts(newPrompts);
-      if (selectedImageId) {
-          setImages(prev => prev.map(img => 
-              img.id === selectedImageId ? { ...img, panelPrompts: newPrompts } : img
-          ));
-      }
-  };
-
-  const handleApplyScripts = (summary: string, scripts: string[]) => {
-      setPrompt(summary);
-      setPanelPrompts(scripts);
-      const count = scripts.length;
-      if (count > gridSize * gridSize) {
-          const nextSide = Math.ceil(Math.sqrt(count));
-          setGridSize(nextSide);
-      }
-      if (selectedImageId) {
-          setImages(prev => prev.map(img => 
-              img.id === selectedImageId ? { ...img, prompt: summary, panelPrompts: scripts } : img
-          ));
-      }
+    } catch (err: any) { setError(err.message || "重绘失败"); } finally { setIsGenerating(false); setGenerationStep(""); }
   };
 
   const handleDownloadZip = async () => {
     const selected = images.find(i => i.id === selectedImageId);
-    if (!selected || selected.nodeType !== 'render') {
-      alert("请先在画布上选择一个分镜组。");
-      return;
-    }
-
-    setGenerationStep("准备打包 ZIP...");
+    if (!selected || selected.nodeType !== 'render') return;
     setIsGenerating(true);
-
+    setGenerationStep("准备打包 ZIP...");
     try {
       const zip = new JSZip();
-      
-      const getRootId = (nodeId: string): string => {
-          const node = images.find(n => n.id === nodeId);
-          if (!node || !node.parentId) return nodeId;
-          return getRootId(node.parentId);
-      };
-
-      const getDepth = (nodeId: string, depth = 1): number => {
-          const node = images.find(n => n.id === nodeId);
-          if (!node || !node.parentId) return depth;
-          return getDepth(node.parentId, depth + 1);
-      };
-
-      const rootNodes = images
-          .filter(i => i.nodeType === 'render' && !i.parentId)
-          .sort((a, b) => a.timestamp - b.timestamp);
-
-      const currentRootId = getRootId(selected.id);
-      const groupIdx = rootNodes.findIndex(r => r.id === currentRootId) + 1;
-      const shotIdx = getDepth(selected.id);
-      
-      const folderName = `组${groupIdx}-镜头${shotIdx}`;
-      const folder = zip.folder(folderName);
-
+      const folder = zip.folder(`分镜组-${selected.id.slice(0, 4)}`);
       const base64ToBlob = (b64: string) => {
         const parts = b64.split(';base64,');
         const byteCharacters = atob(parts[1]);
         const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-        return new Blob([byteArray], { type: 'image/png' });
+        for (let i = 0; i < byteCharacters.length; i++) byteNumbers[i] = byteCharacters.charCodeAt(i);
+        return new Blob([new Uint8Array(byteNumbers)], { type: 'image/png' });
       };
-
-      const fullGridBlob = base64ToBlob(selected.fullGridUrl || selected.url);
-      folder.file(`${folderName}_全景宫格.png`, fullGridBlob);
-
-      if (selected.slices) {
-        selected.slices.forEach((sliceUrl, i) => {
-          const sliceBlob = base64ToBlob(sliceUrl);
-          folder.file(`${folderName}_分镜${i + 1}.png`, sliceBlob);
-        });
-      }
-
+      folder.file(`全景宫格.png`, base64ToBlob(selected.fullGridUrl || selected.url));
+      selected.slices?.forEach((slice, i) => folder.file(`分镜${i + 1}.png`, base64ToBlob(slice)));
       const content = await zip.generateAsync({ type: "blob" });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(content);
-      link.download = `${folderName}_分镜组.zip`;
-      document.body.appendChild(link);
+      link.download = `分镜组.zip`;
       link.click();
-      document.body.removeChild(link);
-    } catch (err) {
-      console.error("ZIP Error:", err);
-      alert("ZIP 打包失败，请重试。");
-    } finally {
-      setIsGenerating(false);
-      setGenerationStep("");
-    }
+    } catch (err) { console.error(err); } finally { setIsGenerating(false); setGenerationStep(""); }
   };
 
   const selectedImage = images.find(i => i.id === selectedImageId) || null;
@@ -391,39 +286,19 @@ const App: React.FC = () => {
                 <span className="w-2.5 h-2.5 bg-cine-accent rounded-[1px]"></span>
                 橙意机构 - 连续分镜
             </h1>
-            <button 
-                onClick={() => setIsFeatureGuideOpen(true)}
-                className="p-1.5 text-zinc-500 hover:text-cine-accent transition-all hover:bg-zinc-800 rounded-md"
-                title="查看功能指南"
-            >
+            <button onClick={() => setIsFeatureGuideOpen(true)} className="p-1.5 text-zinc-500 hover:text-cine-accent transition-all hover:bg-zinc-800 rounded-md">
                 <HelpCircle size={18} />
             </button>
         </div>
 
         <div className="flex-1 flex flex-col p-4 gap-7 overflow-y-auto custom-scrollbar">
+            <OmniViewLab gridCount={gridSize * gridSize} onRender={handleOmniViewRender} isRendering={isGenerating} />
+            
             <AssetBay 
                 assets={assets} onAddAsset={handleAddAsset} onRemoveAsset={handleRemoveAsset} 
                 onSelectAsset={(a) => { setSelectedAssetId(a.id); setSelectedImageId(undefined); }}
                 selectedAssetId={selectedAssetId} onOpenCollage={() => setIsCollageEditorOpen(true)}
             />
-
-            <div className="px-2">
-                {activeCollage ? (
-                  <div className="p-3 bg-cine-accent/10 border border-cine-accent/30 rounded-sm space-y-2">
-                     <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-cine-accent font-bold uppercase tracking-widest flex items-center gap-2">
-                           <LayoutGrid size={12} /> 镜头组参考 (ACTIVE)
-                        </span>
-                        <button onClick={() => setActiveCollage(null)} className="text-cine-accent hover:text-white"><XIcon size={12} /></button>
-                     </div>
-                     <img src={activeCollage.url} className="w-full aspect-video object-contain bg-black rounded-sm border border-cine-accent/20" />
-                  </div>
-                ) : (
-                  <div className="p-3 bg-zinc-900/40 border border-zinc-800/40 border-dashed rounded-sm text-center">
-                     <p className="text-[9px] text-zinc-400 font-mono">未激活镜头组参考</p>
-                  </div>
-                )}
-            </div>
 
             <DirectorDeck 
                 gridSize={gridSize} setGridSize={setGridSize}
@@ -472,26 +347,15 @@ const App: React.FC = () => {
           rows={selectedImage?.gridRows || gridSize} 
           cols={selectedImage?.gridCols || gridSize} 
           mainPrompt={selectedImage?.prompt || prompt}
-          initialPrompts={panelPrompts} onSave={handleSaveCameraLogic}
+          initialPrompts={panelPrompts} onSave={(p) => setPanelPrompts(p)}
           currentImage={selectedImage || undefined}
           onRegenSlice={(idx, p) => handleEditSlice(selectedImageId!, idx, p, true)}
           isGenerating={isGenerating}
         />
 
-        <CollageEditor 
-          isOpen={isCollageEditorOpen} onClose={() => setIsCollageEditorOpen(false)}
-          onSave={(url, r, c, ar) => { setActiveCollage({ url, rows: r, cols: c, aspectRatio: ar }); setIsCollageEditorOpen(false); }}
-        />
-
-        <ScriptEditor 
-          isOpen={isScriptEditorOpen} onClose={() => setIsScriptEditorOpen(false)}
-          defaultPanelCount={gridSize * gridSize} onApplyScripts={handleApplyScripts}
-        />
-
-        <FeatureGuide 
-          isOpen={isFeatureGuideOpen} 
-          onClose={() => setIsFeatureGuideOpen(false)} 
-        />
+        <CollageEditor isOpen={isCollageEditorOpen} onClose={() => setIsCollageEditorOpen(false)} onSave={(url, r, c, ar) => { setActiveCollage({ url, rows: r, cols: c, aspectRatio: ar }); setIsCollageEditorOpen(false); }} />
+        <ScriptEditor isOpen={isScriptEditorOpen} onClose={() => setIsScriptEditorOpen(false)} defaultPanelCount={gridSize * gridSize} onApplyScripts={(s, sc) => { setPrompt(s); setPanelPrompts(sc); }} />
+        <FeatureGuide isOpen={isFeatureGuideOpen} onClose={() => setIsFeatureGuideOpen(false)} />
       </main>
 
       <aside className="w-[400px] bg-cine-dark border-l border-cine-border z-20">
@@ -508,23 +372,6 @@ const App: React.FC = () => {
             isAnalyzing={isAnalyzing}
             analysisResult={analysisResult}
             onEditSlice={handleEditSlice} 
-            onRevertSlice={(imgId, sIdx, hIdx) => {
-                const newImages = images.map(img => {
-                  if (img.id === imgId) {
-                    const history = img.sliceHistory?.[sIdx] || [];
-                    const newSlices = [...(img.slices || [])];
-                    const newHistoryList = [...history];
-                    const current = newSlices[sIdx];
-                    newSlices[sIdx] = history[hIdx];
-                    newHistoryList[hIdx] = current; 
-                    const updatedHistory = { ...(img.sliceHistory || {}) };
-                    updatedHistory[sIdx] = newHistoryList;
-                    return { ...img, slices: newSlices, sliceHistory: updatedHistory };
-                  }
-                  return img;
-                });
-                updateImagesWithHistory(newImages);
-            }}
          />
       </aside>
     </div>

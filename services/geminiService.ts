@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
-import { AspectRatio, ImageSize, Asset, CollageData, PanelAspectRatio } from "../types";
+import { AspectRatio, ImageSize, Asset, CollageData, PanelAspectRatio, CameraParams } from "../types";
 
 export const ensureApiKey = async () => {
   // @ts-ignore
@@ -69,6 +69,89 @@ const sliceImageGrid = (base64Data: string, rows: number, cols: number): Promise
   });
 };
 
+export const generateOmniViewGrid = async (
+  anchorBase64: string,
+  shotParams: CameraParams[],
+  gridSize: number,
+  panelAspectRatio: PanelAspectRatio,
+  containerAspectRatio: AspectRatio,
+  imageSize: ImageSize
+): Promise<{ fullImage: string, slices: string[] }> => {
+  await ensureApiKey();
+  
+  const totalViews = gridSize * gridSize;
+  const gridType = `${gridSize}x${gridSize}`;
+
+  // Mapping numeric params to cinematic descriptions
+  const getParamDesc = (p: CameraParams) => {
+    let focal = p.focalLength < 35 ? `shot on ${p.focalLength}mm ultra-wide lens, exaggerated perspective` : 
+                p.focalLength > 85 ? `shot on ${p.focalLength}mm telephoto lens, compressed background, shallow depth of field` : 
+                `shot on ${p.focalLength}mm standard cinematic lens`;
+    
+    let pitch = p.pitch > 45 ? "extreme bird's eye view, looking straight down" :
+                p.pitch > 15 ? "high angle shot" :
+                p.pitch < -45 ? "extreme worm's eye view, looking straight up" :
+                p.pitch < -15 ? "low angle shot" : "eye-level shot";
+
+    let yaw = Math.abs(p.yaw) > 135 ? "back view" :
+              Math.abs(p.yaw) > 45 ? (p.yaw > 0 ? "3/4 profile from right" : "3/4 profile from left") :
+              "front view";
+
+    return `${focal}, ${pitch}, ${yaw}`;
+  };
+
+  const panelInstructions = shotParams.map((p, idx) => `Panel ${idx + 1}: ${getParamDesc(p)}`);
+
+  let systemPrompt = `[CORE TASK]: GENERATE A ${gridType} MULTI-ANGLE GRID BASED ON THE ANCHOR IMAGE.
+
+[ANCHOR CONSISTENCY RULE]:
+- You MUST maintain 100% identity of the character, environment, lighting, and geometric structure from the provided anchor image.
+- DO NOT change any core content. ONLY change the virtual camera position and lens parameters.
+
+[STRICT LAYOUT]:
+- CANVAS RATIO: ${containerAspectRatio}.
+- PANEL LAYOUT: ${gridSize}x${gridSize} grid.
+- PANEL RATIO: ${panelAspectRatio}.
+
+[CAMERA PARAMETERS]:
+${panelInstructions.join('\n')}
+
+[STYLE]: Maintain the exact cinematic 35mm photography style of the anchor image.`;
+
+  try {
+    const response = await withRetry<GenerateContentResponse>(() => {
+        const ai = getClient();
+        return ai.models.generateContent({
+          model: 'gemini-3-pro-image-preview',
+          contents: { 
+            parts: [
+              { inlineData: { mimeType: 'image/png', data: anchorBase64 } },
+              { text: systemPrompt }
+            ] 
+          },
+          config: {
+            imageConfig: {
+              aspectRatio: containerAspectRatio as any,
+              imageSize: imageSize as any 
+            }
+          }
+        });
+    });
+
+    let fullImageBase64 = '';
+    for (const part of response.candidates?.[0]?.content?.parts || []) {
+      if (part.inlineData) fullImageBase64 = `data:image/png;base64,${part.inlineData.data}`;
+    }
+
+    if (!fullImageBase64) throw new Error("No image generated.");
+    const panels = await sliceImageGrid(fullImageBase64, gridSize, gridSize);
+    return { fullImage: fullImageBase64, slices: panels };
+  } catch (error: any) {
+    console.error("OmniView gen error:", error);
+    throw error;
+  }
+};
+
 export interface ReferenceImageData {
   mimeType: string;
   data: string;
@@ -86,7 +169,7 @@ export const generateMultiViewGrid = async (
   contextImage?: string,
   panelInstructions?: string[],
   collageRef?: CollageData,
-  stylePrompt?: string // 新增画风参数
+  stylePrompt?: string 
 ): Promise<{ fullImage: string, slices: string[] }> => {
   await ensureApiKey();
   
@@ -202,7 +285,7 @@ export const editImage = async (
   aspectRatio: string = '1:1',
   refImageBase64?: string,
   imageSize: ImageSize = ImageSize.K1,
-  stylePrompt?: string // 新增画风参数
+  stylePrompt?: string 
 ): Promise<string> => {
   await ensureApiKey();
   const cleanBase64 = base64Image.includes(',') ? base64Image.split(',')[1] : base64Image;
