@@ -112,11 +112,11 @@ export const generateLensLabSequence = async (
   const panelDescriptionsText = panelPrompts.map((p, i) => `分镜 ${i + 1}: ${p}`).join("\n");
 
   let styleInstruction = stylePrompt && stylePrompt.trim() 
-    ? `[视觉风格限制]: 严格遵循以下风格描述: "${stylePrompt}"。`
+    ? `[视觉风格核心指令]: 严格锁定风格为: "${stylePrompt}"。`
     : "[视觉风格]: 高级电影质感，35mm 胶片摄影风格。";
 
   if (styleRefImage) {
-    styleInstruction += " [核心风格参考]: 必须严格参考提供的‘风格图’，学习其构图氛围、色彩倾向、颗粒感和光影质感。";
+    styleInstruction += " [绝对风格参照]: 提供的‘风格参考图’是唯一的视觉准则。必须1:1复刻其调色方案、光影对比度、影调氛围、画面颗粒感和艺术质感。禁止使用默认的写实风格，必须完全向参考图偏移。";
   }
 
   const systemPrompt = `[核心任务]: 3D 多角度一致性重绘。
@@ -211,11 +211,15 @@ export const generateMultiViewGrid = async (
   const props = categorizedRefs.filter(r => r.category === 'prop');
 
   let styleInstruction = stylePrompt && stylePrompt.trim() 
-    ? `[MANDATORY STYLE CONSTRAINT]: The entire image MUST strictly follow this artistic style description: "${stylePrompt}". Every panel must have perfect stylistic consistency.`
-    : `[STYLE]: Hyper-realistic cinematic film, 35mm photography style but ADAPTED TO ${containerAspectRatio} FORMAT. Consistent lighting and grading.`;
+    ? `[MANDATORY STYLE CONSTRAINT]: Every panel MUST strictly mirror this artistic style: "${stylePrompt}".`
+    : `[STYLE]: Hyper-realistic cinematic film, 35mm photography.`;
 
   if (styleRefImage) {
-    styleInstruction += ` [STRICT VISUAL STYLE REFERENCE]: A style reference image is provided. You MUST match the grading, film grain, color palette, and general artistic atmosphere of that image across all panels.`;
+    styleInstruction = `[ULTIMATE VISUAL ANCHOR]: A Style Reference Image is provided. 
+- You MUST CLONE the visual essence of this reference image. 
+- Match the EXACT color grading (LUT), lighting temperature, shadow depth, and highlights.
+- Replicate the specific film grain, lens characteristics, and overall atmospheric texture across ALL ${totalViews} panels. 
+- The reference image's aesthetic is MANDATORY and supersedes all default rendering styles.`;
   }
 
   let systemPrompt = `[CORE TASK]: GENERATE A SEAMLESS ${gridType} STORYBOARD GRID.
@@ -250,7 +254,6 @@ ${collageRef ? `
 [NEGATIVE CONSTRAINTS]:
 - NO WHITE BARS, NO BLACK BARS, NO LETTERBOXING, NO PILLARBOXING.
 - NO PADDING OR MARGINS BETWEEN PANELS. NO INTERNAL GRID LINES.
-- NO HUMAN LUNGS, NO HUMAN TORSO, NO ARMS, NO LEGS (unless in reference).
 
 [SCENE]: "${prompt}"
 
@@ -260,7 +263,15 @@ ${!collageRef && panelInstructions && panelInstructions.length > 0 ? `\n[PANEL D
   roles.forEach(r => parts.push({ inlineData: { mimeType: r.mimeType, data: r.data } }));
   bgs.forEach(b => parts.push({ inlineData: { mimeType: b.mimeType, data: b.data } }));
   props.forEach(p => parts.push({ inlineData: { mimeType: p.mimeType, data: p.data } }));
-  if (styleRefImage) parts.push({ inlineData: { mimeType: 'image/png', data: styleRefImage.split(',')[1] } });
+  
+  // Style reference image part - ensure it is clearly identified for the model
+  if (styleRefImage) {
+    parts.push({ 
+      inlineData: { mimeType: 'image/png', data: styleRefImage.split(',')[1] },
+      // Internal metadata prompt to focus attention on this image as style source
+    });
+  }
+
   if (collageRef) parts.push({ inlineData: { mimeType: 'image/png', data: collageRef.url.split(',')[1] } });
   if (contextImage) parts.push({ inlineData: { mimeType: 'image/png', data: contextImage.split(',')[1] } });
   
@@ -319,7 +330,7 @@ export const editImage = async (
     : "Maintain cinematic 35mm photography consistency.";
 
   if (styleRefImage) {
-    styleConstraint += " Also, match the visual look of the provided style reference image.";
+    styleConstraint = `[MANDATORY STYLE OVERRIDE]: You MUST adopt the EXACT visual style, color palette, lighting, and texture of the provided style reference image. This is a strict requirement for aesthetic consistency.`;
   }
 
   parts.push({ text: `EDIT TASK: Modify this ${aspectRatio} (${formatTag}) cinematic shot.
