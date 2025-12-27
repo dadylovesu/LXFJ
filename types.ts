@@ -21,12 +21,6 @@ export enum ImageSize {
   K4 = '4K'
 }
 
-export interface CameraTransformConfig {
-  focalLength: number; // 15 - 250
-  pitch: number;      // -180 - 180
-  yaw: number;        // -180 - 180
-}
-
 export type NodeType = 'prompt' | 'asset_group' | 'render' | 'slice';
 
 export type AssetCategory = 'role' | 'background' | 'prop';
@@ -36,24 +30,25 @@ export interface GeneratedImage {
   url: string; 
   fullGridUrl?: string;
   prompt: string;
-  stylePrompt?: string;
+  stylePrompt?: string; // 新增画风设定字段
   aspectRatio: string;
   panelAspectRatio?: string;
   timestamp: number;
   
+  // Node Graph Properties
   nodeType: NodeType; 
   parentId?: string; 
   position?: { x: number; y: number }; 
   
+  // Specific data containers
   assetIds?: string[]; 
   textData?: string; 
   cameraDescription?: string; 
   slices?: string[]; 
-  panelPrompts?: string[]; 
-  sliceHistory?: Record<number, string[]>;
+  panelPrompts?: string[]; // Detailed prompts for each slice
+  sliceHistory?: Record<number, string[]>; // Map slice index to array of past image URLs
   gridRows?: number;
   gridCols?: number;
-  isTransformation?: boolean;
 }
 
 export interface Asset {

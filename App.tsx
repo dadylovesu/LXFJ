@@ -7,11 +7,11 @@ import { Inspector } from './components/Inspector';
 import { CameraEditor } from './components/CameraEditor';
 import { CollageEditor } from './components/CollageEditor';
 import { ScriptEditor } from './components/ScriptEditor';
-import { FeatureGuide } from './components/FeatureGuide'; 
-import { Asset, GeneratedImage, AspectRatio, PanelAspectRatio, ImageSize, AssetCategory, CollageData, CameraTransformConfig } from './types';
-import { generateMultiViewGrid, fileToBase64, enhancePrompt, analyzeAsset, ReferenceImageData, generateCameraMovement, editImage, generateMultiAngleTransformation } from './services/geminiService';
+import { FeatureGuide } from './components/FeatureGuide'; // 新增导入
+import { Asset, GeneratedImage, AspectRatio, PanelAspectRatio, ImageSize, AssetCategory, CollageData } from './types';
+import { generateMultiViewGrid, fileToBase64, enhancePrompt, analyzeAsset, ReferenceImageData, generateCameraMovement, editImage } from './services/geminiService';
 import { saveToStorage, loadFromStorage, clearStorage } from './services/persistenceService';
-import { AlertCircle, X as XIcon, Trash2, LayoutGrid, HelpCircle } from 'lucide-react'; 
+import { AlertCircle, X as XIcon, Trash2, LayoutGrid, HelpCircle } from 'lucide-react'; // 新增 HelpCircle
 import { Button } from './components/Button';
 // @ts-ignore
 import JSZip from 'jszip';
@@ -34,13 +34,9 @@ const App: React.FC = () => {
   const [isCameraEditorOpen, setIsCameraEditorOpen] = useState(false);
   const [isCollageEditorOpen, setIsCollageEditorOpen] = useState(false);
   const [isScriptEditorOpen, setIsScriptEditorOpen] = useState(false);
-  const [isFeatureGuideOpen, setIsFeatureGuideOpen] = useState(false); 
+  const [isFeatureGuideOpen, setIsFeatureGuideOpen] = useState(false); // 新增状态
   const [activeCollage, setActiveCollage] = useState<CollageData | null>(null);
   
-  // Multi-Angle States
-  const [isTransformActive, setIsTransformActive] = useState(false);
-  const [transformConfigs, setTransformConfigs] = useState<CameraTransformConfig[]>([]);
-
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStep, setGenerationStep] = useState<string>(''); 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -58,18 +54,6 @@ const App: React.FC = () => {
       case PanelAspectRatio.P1_1: setAspectRatio(AspectRatio.SQUARE); break;
     }
   }, [panelAspectRatio]);
-
-  // Sync transform configs count with gridSize
-  useEffect(() => {
-    const total = gridSize * gridSize;
-    setTransformConfigs(prev => {
-      const next = [...prev];
-      while (next.length < total) {
-        next.push({ focalLength: 35, pitch: 0, yaw: 0 });
-      }
-      return next.slice(0, total);
-    });
-  }, [gridSize]);
 
   useEffect(() => {
     loadFromStorage<GeneratedImage[]>('cine_images').then(saved => {
@@ -112,66 +96,6 @@ const App: React.FC = () => {
     setHistory(prev => [...prev, images].slice(-30)); 
     setImages(newImages);
   }, [images]);
-
-  const handleTransformGenerate = async () => {
-    const activeItem = images.find(i => i.id === selectedImageId) || assets.find(a => a.id === selectedAssetId);
-    if (!activeItem) {
-      setError("请先在画布或资产库中选择一张图片作为变换基准。");
-      return;
-    }
-
-    setError(null);
-    setIsGenerating(true);
-    setGenerationStep("正在分析镜头位移参数...");
-
-    try {
-      let base64Source = '';
-      if ('url' in activeItem) {
-        base64Source = activeItem.url;
-      } else if ('file' in activeItem) {
-        base64Source = `data:${activeItem.file.type};base64,${await fileToBase64(activeItem.file)}`;
-      }
-
-      setGenerationStep("执行多角度无缝渲染...");
-      const result = await generateMultiAngleTransformation(
-        base64Source,
-        gridSize,
-        aspectRatio,
-        imageSize,
-        transformConfigs
-      );
-
-      const parentNode = images.find(i => i.id === selectedImageId);
-      const startX = parentNode?.position ? parentNode.position.x : 100;
-      const startY = parentNode?.position ? parentNode.position.y + 480 : 100;
-
-      const newNode: GeneratedImage = {
-        id: crypto.randomUUID(),
-        url: result.fullImage,
-        fullGridUrl: result.fullImage,
-        prompt: `Transformation of ${activeItem.id}`,
-        aspectRatio,
-        panelAspectRatio,
-        timestamp: Date.now(),
-        nodeType: 'render',
-        parentId: selectedImageId,
-        position: { x: startX, y: startY },
-        cameraDescription: "多角度机位变换序列",
-        slices: result.slices,
-        gridRows: gridSize,
-        gridCols: gridSize,
-        isTransformation: true
-      };
-
-      updateImagesWithHistory([...images, newNode]);
-      setSelectedImageId(newNode.id);
-    } catch (err: any) {
-      setError(err.message || "变换生成失败");
-    } finally {
-      setIsGenerating(false);
-      setGenerationStep("");
-    }
-  };
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -396,7 +320,28 @@ const App: React.FC = () => {
 
     try {
       const zip = new JSZip();
-      const folderName = `导出分镜_${selected.id.slice(0, 8)}`;
+      
+      const getRootId = (nodeId: string): string => {
+          const node = images.find(n => n.id === nodeId);
+          if (!node || !node.parentId) return nodeId;
+          return getRootId(node.parentId);
+      };
+
+      const getDepth = (nodeId: string, depth = 1): number => {
+          const node = images.find(n => n.id === nodeId);
+          if (!node || !node.parentId) return depth;
+          return getDepth(node.parentId, depth + 1);
+      };
+
+      const rootNodes = images
+          .filter(i => i.nodeType === 'render' && !i.parentId)
+          .sort((a, b) => a.timestamp - b.timestamp);
+
+      const currentRootId = getRootId(selected.id);
+      const groupIdx = rootNodes.findIndex(r => r.id === currentRootId) + 1;
+      const shotIdx = getDepth(selected.id);
+      
+      const folderName = `组${groupIdx}-镜头${shotIdx}`;
       const folder = zip.folder(folderName);
 
       const base64ToBlob = (b64: string) => {
@@ -410,21 +355,26 @@ const App: React.FC = () => {
         return new Blob([byteArray], { type: 'image/png' });
       };
 
-      folder.file(`全景宫格.png`, base64ToBlob(selected.fullGridUrl || selected.url));
+      const fullGridBlob = base64ToBlob(selected.fullGridUrl || selected.url);
+      folder.file(`${folderName}_全景宫格.png`, fullGridBlob);
 
       if (selected.slices) {
         selected.slices.forEach((sliceUrl, i) => {
-          folder.file(`分镜_${i + 1}.png`, base64ToBlob(sliceUrl));
+          const sliceBlob = base64ToBlob(sliceUrl);
+          folder.file(`${folderName}_分镜${i + 1}.png`, sliceBlob);
         });
       }
 
       const content = await zip.generateAsync({ type: "blob" });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(content);
-      link.download = `${folderName}.zip`;
+      link.download = `${folderName}_分镜组.zip`;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
     } catch (err) {
-      alert("ZIP 打包失败。");
+      console.error("ZIP Error:", err);
+      alert("ZIP 打包失败，请重试。");
     } finally {
       setIsGenerating(false);
       setGenerationStep("");
@@ -441,7 +391,11 @@ const App: React.FC = () => {
                 <span className="w-2.5 h-2.5 bg-cine-accent rounded-[1px]"></span>
                 橙意机构 - 连续分镜
             </h1>
-            <button onClick={() => setIsFeatureGuideOpen(true)} className="p-1.5 text-zinc-500 hover:text-cine-accent transition-all hover:bg-zinc-800 rounded-md">
+            <button 
+                onClick={() => setIsFeatureGuideOpen(true)}
+                className="p-1.5 text-zinc-500 hover:text-cine-accent transition-all hover:bg-zinc-800 rounded-md"
+                title="查看功能指南"
+            >
                 <HelpCircle size={18} />
             </button>
         </div>
@@ -487,11 +441,6 @@ const App: React.FC = () => {
                 isContinuing={!!(selectedImageId && images.find(i => i.id === selectedImageId)?.nodeType === 'render')}
                 onDeselect={() => { setSelectedImageId(undefined); setSelectedAssetId(undefined); }}
                 isCollageActive={!!activeCollage}
-                transformConfigs={transformConfigs}
-                setTransformConfigs={setTransformConfigs}
-                onTransformGenerate={handleTransformGenerate}
-                isTransformActive={isTransformActive}
-                setIsTransformActive={setIsTransformActive}
             />
         </div>
       </aside>
@@ -539,7 +488,10 @@ const App: React.FC = () => {
           defaultPanelCount={gridSize * gridSize} onApplyScripts={handleApplyScripts}
         />
 
-        <FeatureGuide isOpen={isFeatureGuideOpen} onClose={() => setIsFeatureGuideOpen(false)} />
+        <FeatureGuide 
+          isOpen={isFeatureGuideOpen} 
+          onClose={() => setIsFeatureGuideOpen(false)} 
+        />
       </main>
 
       <aside className="w-[400px] bg-cine-dark border-l border-cine-border z-20">

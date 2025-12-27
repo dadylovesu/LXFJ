@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
-import { AspectRatio, ImageSize, Asset, CollageData, PanelAspectRatio, CameraTransformConfig } from "../types";
+import { AspectRatio, ImageSize, Asset, CollageData, PanelAspectRatio } from "../types";
 
 export const ensureApiKey = async () => {
   // @ts-ignore
@@ -69,71 +69,6 @@ const sliceImageGrid = (base64Data: string, rows: number, cols: number): Promise
   });
 };
 
-export const generateMultiAngleTransformation = async (
-  base64Source: string,
-  gridSize: number,
-  containerAspectRatio: AspectRatio,
-  imageSize: ImageSize,
-  configs: CameraTransformConfig[]
-): Promise<{ fullImage: string, slices: string[] }> => {
-  await ensureApiKey();
-  
-  const totalViews = gridSize * gridSize;
-  const gridType = `${gridSize}x${gridSize}`;
-  
-  // Construct per-panel prompt logic based on camera configs
-  const panelPrompts = configs.slice(0, totalViews).map((conf, i) => {
-    const focalLabel = conf.focalLength < 35 ? "Ultra-Wide Angle" : (conf.focalLength > 100 ? "Telephoto Close-up" : "Standard Lens");
-    return `Panel ${i + 1}: STRICT TRANSFORMATION. Reference image content must remain 100% IDENTICAL. Change ONLY camera state: Focal Length ${conf.focalLength}mm (${focalLabel}), Pitch: ${conf.pitch} degrees, Yaw/Rotation: ${conf.yaw} degrees. Ensure visual consistency with the source.`;
-  }).join('\n');
-
-  const systemPrompt = `[TASK]: SINGLE-SHOT MULTI-ANGLE TRANSFORMATION GRID.
-[INPUT]: A single reference image.
-[GOAL]: Generate a ${gridType} grid where EVERY panel contains the EXACT same subjects and environment from the reference, but viewed from different camera positions specified below.
-[CONSTRAINTS]:
-- DO NOT add new elements.
-- DO NOT progress the story.
-- DO NOT change the style.
-- The ONLY allowed changes are Camera Focal Length, Pitch, and Yaw.
-- NO Letterboxing. Full-bleed ${containerAspectRatio} canvas.
-
-[CAMERA CONFIGURATIONS]:
-${panelPrompts}`;
-
-  const parts = [
-    { inlineData: { mimeType: 'image/png', data: base64Source.split(',')[1] } },
-    { text: systemPrompt }
-  ];
-
-  try {
-    const response = await withRetry<GenerateContentResponse>(() => {
-        const ai = getClient();
-        return ai.models.generateContent({
-          model: 'gemini-3-pro-image-preview',
-          contents: { parts },
-          config: {
-            imageConfig: {
-              aspectRatio: containerAspectRatio as any,
-              imageSize: imageSize as any 
-            }
-          }
-        });
-    });
-
-    let fullImageBase64 = '';
-    for (const part of response.candidates?.[0]?.content?.parts || []) {
-      if (part.inlineData) fullImageBase64 = `data:image/png;base64,${part.inlineData.data}`;
-    }
-
-    if (!fullImageBase64) throw new Error("Transformation failed.");
-    const panels = await sliceImageGrid(fullImageBase64, gridSize, gridSize);
-    return { fullImage: fullImageBase64, slices: panels };
-  } catch (error: any) {
-    console.error("Transform error:", error);
-    throw error;
-  }
-};
-
 export interface ReferenceImageData {
   mimeType: string;
   data: string;
@@ -151,7 +86,7 @@ export const generateMultiViewGrid = async (
   contextImage?: string,
   panelInstructions?: string[],
   collageRef?: CollageData,
-  stylePrompt?: string 
+  stylePrompt?: string // 新增画风参数
 ): Promise<{ fullImage: string, slices: string[] }> => {
   await ensureApiKey();
   
@@ -267,7 +202,7 @@ export const editImage = async (
   aspectRatio: string = '1:1',
   refImageBase64?: string,
   imageSize: ImageSize = ImageSize.K1,
-  stylePrompt?: string 
+  stylePrompt?: string // 新增画风参数
 ): Promise<string> => {
   await ensureApiKey();
   const cleanBase64 = base64Image.includes(',') ? base64Image.split(',')[1] : base64Image;
