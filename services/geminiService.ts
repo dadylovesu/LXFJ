@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { AspectRatio, ImageSize, Asset, CollageData, PanelAspectRatio, LensLabParams } from "../types";
 
@@ -17,18 +18,37 @@ const getClient = () => {
   return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
-async function withRetry<T>(operation: () => Promise<T>, maxRetries = 3): Promise<T> {
+async function withRetry<T>(operation: () => Promise<T>, maxRetries = 5): Promise<T> {
   let lastError: any;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await operation();
     } catch (error: any) {
       lastError = error;
-      const isOverloaded = error?.status === 'UNAVAILABLE' || error?.code === 503;
-      const isRateLimited = error?.status === 'RESOURCE_EXHAUSTED' || error?.code === 429;
+      
+      // 提取错误信息，因为 SDK 可能返回对象或 stringified JSON
+      const errorMsg = error?.message || String(error);
+      const statusCode = error?.status || error?.code;
+
+      // 针对 503 (Deadline expired / UNAVAILABLE) 进行深度识别
+      const isOverloaded = 
+        statusCode === 'UNAVAILABLE' || 
+        statusCode === 503 || 
+        errorMsg.includes("503") || 
+        errorMsg.includes("Deadline expired") ||
+        errorMsg.includes("UNAVAILABLE");
+
+      const isRateLimited = 
+        statusCode === 'RESOURCE_EXHAUSTED' || 
+        statusCode === 429 || 
+        errorMsg.includes("429") || 
+        errorMsg.includes("RESOURCE_EXHAUSTED");
 
       if ((isOverloaded || isRateLimited) && attempt < maxRetries) {
-        const delay = Math.pow(2, attempt) * 2000 + Math.random() * 1000;
+        // 对于 503 等重负载错误，采用更长的初始延迟和指数退避
+        const baseDelay = isOverloaded ? 5000 : 2000;
+        const delay = Math.pow(1.5, attempt) * baseDelay + Math.random() * 2000;
+        console.debug(`[GeminiService] Attempt ${attempt + 1} failed. Retrying in ${Math.round(delay)}ms...`);
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
       }
@@ -264,11 +284,9 @@ ${!collageRef && panelInstructions && panelInstructions.length > 0 ? `\n[PANEL D
   bgs.forEach(b => parts.push({ inlineData: { mimeType: b.mimeType, data: b.data } }));
   props.forEach(p => parts.push({ inlineData: { mimeType: p.mimeType, data: p.data } }));
   
-  // Style reference image part - ensure it is clearly identified for the model
   if (styleRefImage) {
     parts.push({ 
-      inlineData: { mimeType: 'image/png', data: styleRefImage.split(',')[1] },
-      // Internal metadata prompt to focus attention on this image as style source
+      inlineData: { mimeType: 'image/png', data: styleRefImage.split(',')[1] }
     });
   }
 

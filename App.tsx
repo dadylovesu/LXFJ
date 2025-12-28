@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AssetBay } from './components/AssetBay';
 import { DirectorDeck } from './components/DirectorDeck';
@@ -234,7 +235,15 @@ const App: React.FC = () => {
       updateImagesWithHistory([...images, finalNode]);
       setSelectedImageId(finalNode.id);
     } catch (err: any) {
-      setError(err.message || "生成失败");
+      // 优化错误消息展示，如果是 JSON 字符串则解析它
+      let errorMsg = err.message || "生成失败";
+      try {
+          if (errorMsg.startsWith('{')) {
+              const parsed = JSON.parse(errorMsg);
+              errorMsg = parsed.error?.message || parsed.message || errorMsg;
+          }
+      } catch (e) {}
+      setError(errorMsg);
     } finally {
       setIsGenerating(false);
       setGenerationStep("");
@@ -282,7 +291,14 @@ const App: React.FC = () => {
         updateImagesWithHistory([...images, node]);
         setSelectedImageId(node.id);
       } catch (err: any) {
-          setError(err.message || "Lens Lab 渲染失败");
+          let errorMsg = err.message || "Lens Lab 渲染失败";
+          try {
+              if (errorMsg.startsWith('{')) {
+                  const parsed = JSON.parse(errorMsg);
+                  errorMsg = parsed.error?.message || parsed.message || errorMsg;
+              }
+          } catch (e) {}
+          setError(errorMsg);
       } finally {
           setIsGenerating(false);
           setGenerationStep("");
@@ -334,7 +350,14 @@ const App: React.FC = () => {
           });
       }
     } catch (err: any) { 
-        setError(err.message || "重绘失败"); 
+        let errorMsg = err.message || "重绘失败";
+        try {
+            if (errorMsg.startsWith('{')) {
+                const parsed = JSON.parse(errorMsg);
+                errorMsg = parsed.error?.message || parsed.message || errorMsg;
+            }
+        } catch (e) {}
+        setError(errorMsg); 
     } finally { 
         setIsGenerating(false); 
         setGenerationStep("");
