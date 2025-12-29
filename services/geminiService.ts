@@ -14,8 +14,13 @@ export const ensureApiKey = async () => {
   }
 };
 
+// 缓存客户端实例，避免重复创建开销
+let cachedClient: GoogleGenAI | null = null;
 const getClient = () => {
-  return new GoogleGenAI({ apiKey: process.env.API_KEY });
+  if (!cachedClient) {
+    cachedClient = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  }
+  return cachedClient;
 };
 
 async function withRetry<T>(operation: () => Promise<T>, maxRetries = 5): Promise<T> {
@@ -26,11 +31,9 @@ async function withRetry<T>(operation: () => Promise<T>, maxRetries = 5): Promis
     } catch (error: any) {
       lastError = error;
       
-      // 提取错误信息，因为 SDK 可能返回对象或 stringified JSON
       const errorMsg = error?.message || String(error);
       const statusCode = error?.status || error?.code;
 
-      // 针对 503 (Deadline expired / UNAVAILABLE) 进行深度识别
       const isOverloaded = 
         statusCode === 'UNAVAILABLE' || 
         statusCode === 503 || 
@@ -45,10 +48,10 @@ async function withRetry<T>(operation: () => Promise<T>, maxRetries = 5): Promis
         errorMsg.includes("RESOURCE_EXHAUSTED");
 
       if ((isOverloaded || isRateLimited) && attempt < maxRetries) {
-        // 对于 503 等重负载错误，采用更长的初始延迟和指数退避
-        const baseDelay = isOverloaded ? 5000 : 2000;
-        const delay = Math.pow(1.5, attempt) * baseDelay + Math.random() * 2000;
-        console.debug(`[GeminiService] Attempt ${attempt + 1} failed. Retrying in ${Math.round(delay)}ms...`);
+        // 【优化】：压缩初始重试等待时长，引入随机 Jitter 避免并发冲突
+        const baseDelay = isOverloaded ? 3000 : 1500; 
+        const delay = Math.pow(1.3, attempt) * baseDelay + Math.random() * 1000;
+        console.debug(`[GeminiService] Attempt ${attempt + 1} overloaded. Retrying in ${Math.round(delay)}ms...`);
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
       }

@@ -1,7 +1,8 @@
-import React, { useRef } from 'react';
+
+import React, { useRef, useState } from 'react';
 import { Button } from './Button';
-import { AspectRatio, ImageSize, PanelAspectRatio } from '../types';
-import { Settings2, GitMerge, Video, Layers, Zap, LayoutGrid, ChevronRight, ChevronLeft, XCircle, PlusCircle, Square, Wand2, Info, Palette, Cpu, ImagePlus, X } from 'lucide-react';
+import { AspectRatio, ImageSize, PanelAspectRatio, GeneratedImage } from '../types';
+import { Settings2, GitMerge, Video, Layers, Zap, LayoutGrid, ChevronRight, ChevronLeft, XCircle, PlusCircle, Square, Wand2, Info, Palette, Cpu, ImagePlus, X, History } from 'lucide-react';
 
 interface DirectorDeckProps {
   gridSize: number;
@@ -24,6 +25,7 @@ interface DirectorDeckProps {
   onGenerateCamera?: () => void;
   onOpenScriptDeconstruct?: () => void;
   isContinuing?: boolean;
+  selectedImage?: GeneratedImage | null;
   onDeselect?: () => void;
   isCollageActive?: boolean;
 }
@@ -49,10 +51,12 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
   onGenerateCamera,
   onOpenScriptDeconstruct,
   isContinuing = false,
+  selectedImage,
   onDeselect,
   isCollageActive = false
 }) => {
   const styleInputRef = useRef<HTMLInputElement>(null);
+  const [showHistoryPreview, setShowHistoryPreview] = useState(false);
 
   const handleStyleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -221,28 +225,55 @@ export const DirectorDeck: React.FC<DirectorDeckProps> = ({
                 创作指令 (DIRECTOR PROMPT)
             </label>
             
-            {isContinuing ? (
-                <button onClick={onDeselect} className="flex items-center gap-1.5 bg-cine-accent/5 text-cine-accent px-2.5 py-1 rounded-full border border-cine-accent/40 animate-in fade-in duration-500 shadow-[0_0_10px_rgba(255,122,0,0.1)] hover:bg-cine-accent/20 transition-all group">
-                    <GitMerge size={10} />
-                    <span className="text-[8px] font-mono tracking-widest font-bold">续写模式</span>
-                    <XCircle size={10} className="opacity-60" />
-                </button>
-            ) : (
-                <div className="flex items-center gap-1.5 text-zinc-400 px-2.5 py-1 font-mono text-[8px] tracking-widest">
-                    <PlusCircle size={10} />
-                    <span>新创作模式</span>
-                </div>
-            )}
+            <div className="flex gap-2">
+                {isContinuing && selectedImage && (
+                    <button 
+                        onClick={() => setShowHistoryPreview(!showHistoryPreview)}
+                        className={`flex items-center gap-1.5 px-2 py-1 rounded-full border transition-all group ${showHistoryPreview ? 'bg-cine-accent text-black border-cine-accent' : 'bg-zinc-800/50 text-zinc-400 border-zinc-800 hover:text-zinc-200'}`}
+                    >
+                        <History size={10} />
+                        <span className="text-[8px] font-mono tracking-widest font-bold">查看历史指令</span>
+                    </button>
+                )}
+                
+                {isContinuing ? (
+                    <button onClick={onDeselect} className="flex items-center gap-1.5 bg-cine-accent/5 text-cine-accent px-2.5 py-1 rounded-full border border-cine-accent/40 shadow-[0_0_10px_rgba(255,122,0,0.1)] hover:bg-cine-accent/20 transition-all group">
+                        <GitMerge size={10} />
+                        <span className="text-[8px] font-mono tracking-widest font-bold">续写模式</span>
+                        <XCircle size={10} className="opacity-60" />
+                    </button>
+                ) : (
+                    <div className="flex items-center gap-1.5 text-zinc-400 px-2.5 py-1 font-mono text-[8px] tracking-widest">
+                        <PlusCircle size={10} />
+                        <span>新创作模式</span>
+                    </div>
+                )}
+            </div>
         </div>
         
         <div className={`relative flex-1 group transition-all duration-500 overflow-hidden rounded-sm ${isContinuing ? 'ring-1 ring-cine-accent/20 border border-cine-accent/30' : 'ring-1 ring-zinc-800/50 focus-within:ring-cine-accent/30 border border-transparent'}`}>
-            <textarea
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                placeholder={isContinuing ? "// 继续扩展该分镜的世界观..." : "// 描述一个电影级画面..."}
-                className="w-full h-full absolute inset-0 bg-black/60 backdrop-blur-sm border-none p-4 text-[13px] text-zinc-200 focus:ring-0 resize-none font-mono leading-relaxed placeholder:text-zinc-600 custom-scrollbar transition-all duration-500 focus:bg-zinc-900/20"
-                spellCheck={false}
-            />
+            {showHistoryPreview && selectedImage ? (
+                <div className="w-full h-full absolute inset-0 bg-zinc-900 p-4 text-[13px] text-cine-accent/70 font-mono leading-relaxed overflow-y-auto custom-scrollbar animate-in fade-in slide-in-from-top-2">
+                    <div className="flex justify-between items-start mb-2 pb-2 border-b border-zinc-800">
+                        <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-500">该节点的原始指令:</span>
+                        <button 
+                            onClick={() => { setPrompt(selectedImage.prompt); setShowHistoryPreview(false); }}
+                            className="text-[9px] text-black bg-cine-accent px-2 py-0.5 rounded-[2px] font-bold hover:brightness-110"
+                        >
+                            载入此指令
+                        </button>
+                    </div>
+                    {selectedImage.prompt}
+                </div>
+            ) : (
+                <textarea
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
+                    placeholder={isContinuing ? "// 继续扩展该分镜的世界观..." : "// 描述一个电影级画面..."}
+                    className="w-full h-full absolute inset-0 bg-black/60 backdrop-blur-sm border-none p-4 text-[13px] text-zinc-200 focus:ring-0 resize-none font-mono leading-relaxed placeholder:text-zinc-600 custom-scrollbar transition-all duration-500 focus:bg-zinc-900/20"
+                    spellCheck={false}
+                />
+            )}
         </div>
       </div>
 

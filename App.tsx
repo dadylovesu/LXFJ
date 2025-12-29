@@ -25,6 +25,7 @@ const App: React.FC = () => {
   const [selectedImageId, setSelectedImageId] = useState<string | undefined>(undefined);
   const [selectedAssetId, setSelectedAssetId] = useState<string | undefined>(undefined);
   
+  // 当前正在编辑的全局状态（不随选中而改变，除非用户手动点击恢复）
   const [gridSize, setGridSize] = useState(2);
   const [panelAspectRatio, setPanelAspectRatio] = useState<PanelAspectRatio>(PanelAspectRatio.P16_9);
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>(AspectRatio.WIDE);
@@ -33,6 +34,7 @@ const App: React.FC = () => {
   const [stylePrompt, setStylePrompt] = useState<string>(''); 
   const [styleRefImage, setStyleRefImage] = useState<string | null>(null);
   const [panelPrompts, setPanelPrompts] = useState<string[]>([]);
+
   const [isCameraEditorOpen, setIsCameraEditorOpen] = useState(false);
   const [isCollageEditorOpen, setIsCollageEditorOpen] = useState(false);
   const [isScriptEditorOpen, setIsScriptEditorOpen] = useState(false);
@@ -88,18 +90,7 @@ const App: React.FC = () => {
     saveToStorage('cine_style_ref', styleRefImage);
   }, [styleRefImage]);
 
-  useEffect(() => {
-    if (selectedImageId) {
-      const selected = images.find(i => i.id === selectedImageId);
-      if (selected && selected.nodeType === 'render') {
-        setPrompt(selected.prompt);
-        setStylePrompt(selected.stylePrompt || ''); 
-        setPanelPrompts(selected.panelPrompts || []);
-        if (selected.gridRows) setGridSize(selected.gridRows);
-        if (selected.panelAspectRatio) setPanelAspectRatio(selected.panelAspectRatio as any);
-      }
-    }
-  }, [selectedImageId, images]);
+  // 注意：删除了之前 useEffect 中自动 setPrompt 的逻辑，实现了隔离
 
   const updateImagesWithHistory = useCallback((newImages: GeneratedImage[]) => {
     setHistory(prev => [...prev, images].slice(-30)); 
@@ -188,27 +179,27 @@ const App: React.FC = () => {
           startX = rootNodes.length === 0 ? 100 : (rootNodes[rootNodes.length-1].position?.x || 100) + 420;
       }
 
-      setGenerationStep("正在渲染分镜组...");
-      const referenceData: ReferenceImageData[] = [];
-      for (const asset of assets) {
-          referenceData.push({
-             data: await fileToBase64(asset.file),
-             mimeType: asset.file.type,
-             category: asset.category,
-             roleIndex: asset.index
-          });
-      }
+      setGenerationStep("正在准备多模态资产...");
+      const referenceDataPromise = Promise.all(assets.map(async (asset) => ({
+          data: await fileToBase64(asset.file),
+          mimeType: asset.file.type,
+          category: asset.category as any,
+          roleIndex: asset.index
+      })));
 
+      const referenceData = await referenceDataPromise;
       const instructionsToSend = activeCollage ? undefined : panelPrompts;
 
-      const finalResult = await generateMultiViewGrid(
-          prompt, gridSize, panelAspectRatio, aspectRatio, imageSize, 
-          referenceData, previousContextImage, instructionsToSend, activeCollage || undefined,
-          stylePrompt, styleRefImage || undefined
-      );
+      setGenerationStep("分镜渲染与动线分析同步执行中...");
       
-      setGenerationStep("正在分析动线逻辑...");
-      const cameraMove = await generateCameraMovement(prompt);
+      const [finalResult, cameraMove] = await Promise.all([
+        generateMultiViewGrid(
+            prompt, gridSize, panelAspectRatio, aspectRatio, imageSize, 
+            referenceData, previousContextImage, instructionsToSend, activeCollage || undefined,
+            stylePrompt, styleRefImage || undefined
+        ),
+        generateCameraMovement(prompt)
+      ]);
 
       const finalNode: GeneratedImage = {
           id: crypto.randomUUID(),
@@ -235,7 +226,6 @@ const App: React.FC = () => {
       updateImagesWithHistory([...images, finalNode]);
       setSelectedImageId(finalNode.id);
     } catch (err: any) {
-      // 优化错误消息展示，如果是 JSON 字符串则解析它
       let errorMsg = err.message || "生成失败";
       try {
           if (errorMsg.startsWith('{')) {
@@ -341,14 +331,7 @@ const App: React.FC = () => {
       });
       updateImagesWithHistory(newImages);
       
-      if (imageId === selectedImageId) {
-          setPanelPrompts(prev => {
-              const next = [...prev];
-              while(next.length <= sliceIndex) next.push("");
-              next[sliceIndex] = editPrompt;
-              return next;
-          });
-      }
+      // 注意：不再修改全局 panelPrompts，保持隔离
     } catch (err: any) { 
         let errorMsg = err.message || "重绘失败";
         try {
@@ -366,11 +349,6 @@ const App: React.FC = () => {
 
   const handleSaveCameraLogic = (newPrompts: string[]) => {
       setPanelPrompts(newPrompts);
-      if (selectedImageId) {
-          setImages(prev => prev.map(img => 
-              img.id === selectedImageId ? { ...img, panelPrompts: newPrompts } : img
-          ));
-      }
   };
 
   const handleApplyScripts = (summary: string, scripts: string[]) => {
@@ -380,11 +358,6 @@ const App: React.FC = () => {
       if (count > gridSize * gridSize) {
           const nextSide = Math.ceil(Math.sqrt(count));
           setGridSize(nextSide);
-      }
-      if (selectedImageId) {
-          setImages(prev => prev.map(img => 
-              img.id === selectedImageId ? { ...img, prompt: summary, panelPrompts: scripts } : img
-          ));
       }
   };
 
@@ -400,19 +373,16 @@ const App: React.FC = () => {
 
     try {
       const zip = new JSZip();
-      
       const getRootId = (nodeId: string): string => {
           const node = images.find(n => n.id === nodeId);
           if (!node || !node.parentId) return nodeId;
           return getRootId(node.parentId);
       };
-
       const getDepth = (nodeId: string, depth = 1): number => {
           const node = images.find(n => n.id === nodeId);
           if (!node || !node.parentId) return depth;
           return getDepth(node.parentId, depth + 1);
       };
-
       const rootNodes = images
           .filter(i => (i.nodeType === 'render' || i.nodeType === 'lens_lab') && !i.parentId)
           .sort((a, b) => a.timestamp - b.timestamp);
@@ -529,7 +499,8 @@ const App: React.FC = () => {
                     onEnhancePrompt={async () => setPrompt(await enhancePrompt(prompt))}
                     onGenerateCamera={() => setIsCameraEditorOpen(true)}
                     onOpenScriptDeconstruct={() => setIsScriptEditorOpen(true)}
-                    isContinuing={!!(selectedImageId && images.find(i => i.id === selectedImageId)?.nodeType === 'render')}
+                    isContinuing={!!selectedImageId}
+                    selectedImage={selectedImage}
                     onDeselect={() => { setSelectedImageId(undefined); setSelectedAssetId(undefined); }}
                     isCollageActive={!!activeCollage}
                 />
@@ -561,11 +532,11 @@ const App: React.FC = () => {
 
         <CameraEditor 
           isOpen={isCameraEditorOpen} onClose={() => setIsCameraEditorOpen(false)}
-          rows={selectedImage?.gridRows || gridSize} 
-          cols={selectedImage?.gridCols || gridSize} 
-          mainPrompt={selectedImage?.prompt || prompt}
+          rows={gridSize} // 严格遵循当前全局设置
+          cols={gridSize} // 严格遵循当前全局设置
+          mainPrompt={prompt}
           initialPrompts={panelPrompts} onSave={handleSaveCameraLogic}
-          currentImage={selectedImage || undefined}
+          selectedImage={selectedImage || undefined}
           onRegenSlice={(idx, p) => handleEditSlice(selectedImageId!, idx, p, true)}
           isGenerating={isGenerating}
         />
