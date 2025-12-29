@@ -14,16 +14,15 @@ export const ensureApiKey = async () => {
   }
 };
 
-// 缓存客户端实例，避免重复创建开销
-let cachedClient: GoogleGenAI | null = null;
-const getClient = () => {
-  if (!cachedClient) {
-    cachedClient = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  }
-  return cachedClient;
+/**
+ * 遵循开发准则：每次调用 API 前创建新的实例，不使用缓存。
+ * 这样可以确保始终使用最新的 API KEY 状态。
+ */
+const getFreshClient = () => {
+  return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
-async function withRetry<T>(operation: () => Promise<T>, maxRetries = 5): Promise<T> {
+async function withRetry<T>(operation: () => Promise<T>, maxRetries = 4): Promise<T> {
   let lastError: any;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
@@ -34,11 +33,16 @@ async function withRetry<T>(operation: () => Promise<T>, maxRetries = 5): Promis
       const errorMsg = error?.message || String(error);
       const statusCode = error?.status || error?.code;
 
+      // 识别超时或服务器繁忙
       const isOverloaded = 
         statusCode === 'UNAVAILABLE' || 
+        statusCode === 'DEADLINE_EXCEEDED' ||
         statusCode === 503 || 
+        statusCode === 504 ||
         errorMsg.includes("503") || 
+        errorMsg.includes("504") ||
         errorMsg.includes("Deadline expired") ||
+        errorMsg.includes("DEADLINE_EXCEEDED") ||
         errorMsg.includes("UNAVAILABLE");
 
       const isRateLimited = 
@@ -48,12 +52,19 @@ async function withRetry<T>(operation: () => Promise<T>, maxRetries = 5): Promis
         errorMsg.includes("RESOURCE_EXHAUSTED");
 
       if ((isOverloaded || isRateLimited) && attempt < maxRetries) {
-        // 【优化】：压缩初始重试等待时长，引入随机 Jitter 避免并发冲突
-        const baseDelay = isOverloaded ? 3000 : 1500; 
-        const delay = Math.pow(1.3, attempt) * baseDelay + Math.random() * 1000;
-        console.debug(`[GeminiService] Attempt ${attempt + 1} overloaded. Retrying in ${Math.round(delay)}ms...`);
+        // 针对 Deadline Expired 采用更长的退避，给服务器更多恢复时间
+        const baseDelay = isOverloaded ? 4000 : 2000; 
+        const delay = Math.pow(1.5, attempt) * baseDelay + Math.random() * 2000;
+        
+        console.warn(`[GeminiService] API ${isOverloaded ? '超时/繁忙' : '限流'}. 尝试重试 (${attempt + 1}/${maxRetries}), 等待 ${Math.round(delay)}ms...`);
+        
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
+      }
+      
+      // 如果是特定错误或重试耗尽，抛出更易读的错误
+      if (errorMsg.includes("Deadline expired")) {
+        throw new Error("模型响应超时（Deadline Expired）。这通常是因为服务器负载过高，请稍后重试或尝试缩小宫格规模。");
       }
       throw error;
     }
@@ -166,7 +177,7 @@ ${panelDescriptionsText}`;
 
   try {
     const response = await withRetry<GenerateContentResponse>(() => {
-        const ai = getClient();
+        const ai = getFreshClient();
         return ai.models.generateContent({
           model: 'gemini-3-pro-image-preview',
           contents: { parts },
@@ -300,7 +311,7 @@ ${!collageRef && panelInstructions && panelInstructions.length > 0 ? `\n[PANEL D
 
   try {
     const response = await withRetry<GenerateContentResponse>(() => {
-        const ai = getClient();
+        const ai = getFreshClient();
         return ai.models.generateContent({
           model: 'gemini-3-pro-image-preview',
           contents: { parts },
@@ -365,7 +376,7 @@ RULE: ABSOLUTELY NO BLACK/WHITE BORDERS. Maintain full-bleed ${aspectRatio} fram
 
   try {
     const response = await withRetry<GenerateContentResponse>(() => {
-        const ai = getClient();
+        const ai = getFreshClient();
         return ai.models.generateContent({
           model: modelName,
           contents: { parts },
@@ -391,7 +402,7 @@ export const generateCameraSuggestions = async (prompt: string, panelCount: numb
     await ensureApiKey();
     try {
         const response = await withRetry<GenerateContentResponse>(() => {
-            const ai = getClient();
+            const ai = getFreshClient();
             return ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
                 contents: { 
@@ -435,7 +446,7 @@ export const generateCameraMovement = async (prompt: string): Promise<string> =>
     await ensureApiKey();
     try {
         const response = await withRetry<GenerateContentResponse>(() => {
-            const ai = getClient();
+            const ai = getFreshClient();
             return ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
                 contents: { parts: [{ text: `场景: ${prompt}` }] },
@@ -450,7 +461,7 @@ export const generateScriptLines = async (instruction: string, count: number, at
     await ensureApiKey();
     try {
         const response = await withRetry<GenerateContentResponse>(() => {
-            const ai = getClient();
+            const ai = getFreshClient();
             return ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
                 contents: { 
@@ -489,7 +500,7 @@ export const generateDirectorSummary = async (scripts: string[]): Promise<string
     await ensureApiKey();
     try {
         const response = await withRetry<GenerateContentResponse>(() => {
-            const ai = getClient();
+            const ai = getFreshClient();
             return ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
                 contents: { 
@@ -511,7 +522,7 @@ export const enhancePrompt = async (rawPrompt: string): Promise<string> => {
   await ensureApiKey();
   try {
     const response = await withRetry<GenerateContentResponse>(() => {
-        const ai = getClient();
+        const ai = getFreshClient();
         return ai.models.generateContent({
           model: 'gemini-3-flash-preview',
           contents: `Enhance cinematic prompt: "${rawPrompt}"`,
@@ -525,7 +536,7 @@ export const analyzeAsset = async (fileBase64: string, mimeType: string, prompt:
   await ensureApiKey();
   try {
     const response = await withRetry<GenerateContentResponse>(() => {
-        const ai = getClient();
+        const ai = getFreshClient();
         return ai.models.generateContent({
           model: 'gemini-3-pro-preview',
           contents: { parts: [{ inlineData: { mimeType, data: fileBase64 } }, { text: prompt }] }
