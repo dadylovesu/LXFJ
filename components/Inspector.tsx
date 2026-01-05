@@ -1,9 +1,11 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { GeneratedImage, Asset, ImageSize } from '../types';
-import { Download, Copy, Maximize2, Wand2, X, MessageSquare, Info, Video, Fingerprint, Eye, Sparkle, LayoutGrid, ChevronLeft, ChevronRight, History, Layers, Zap, Upload, Image as ImageIcon, Plus, Trash2 } from 'lucide-react';
+// Added Check to the imports from lucide-react
+import { Download, Copy, Maximize2, Wand2, X, MessageSquare, Info, Video, Fingerprint, Eye, Sparkle, LayoutGrid, ChevronLeft, ChevronRight, History, Layers, Zap, Upload, Image as ImageIcon, Plus, Trash2, Monitor, Check } from 'lucide-react';
 import { Button } from './Button';
 import { fileToBase64 } from '../services/geminiService';
+import { VisualAnnotationEditor } from './VisualAnnotationEditor';
 
 interface InspectorProps {
   selectedImage: GeneratedImage | null;
@@ -33,10 +35,14 @@ export const Inspector: React.FC<InspectorProps> = ({
   
   // AI Edit States
   const [editPrompt, setEditPrompt] = useState("");
-  const [useProModel, setUseProModel] = useState(false); // false = nanobanana, true = nanobanana pro
+  const [useProModel, setUseProModel] = useState(false);
   const [upscaleSize, setUpscaleSize] = useState<ImageSize>(ImageSize.K1);
   const [editRefImages, setEditRefImages] = useState<string[]>([]);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  
+  // Annotation View State
+  const [isAnnotationMode, setIsAnnotationMode] = useState(false);
+  const [annotatedRef, setAnnotatedRef] = useState<string | null>(null);
   
   const editRefInputRef = useRef<HTMLInputElement>(null);
 
@@ -46,6 +52,7 @@ export const Inspector: React.FC<InspectorProps> = ({
     setEditRefImages([]);
     setUpscaleSize(ImageSize.K1);
     setUseProModel(false);
+    setAnnotatedRef(null);
     if (selectedImage || selectedAsset) {
         setActiveTab('view');
     }
@@ -73,10 +80,18 @@ export const Inspector: React.FC<InspectorProps> = ({
 
   const handleEdit = () => {
     if (selectedImage && isSliceView && onEditSlice) {
-      const primaryRef = editRefImages.length > 0 ? editRefImages[0] : undefined;
-      onEditSlice(selectedImage.id, currentSliceIndex, editPrompt, useProModel, primaryRef, upscaleSize);
+      const primaryRef = annotatedRef || (editRefImages.length > 0 ? editRefImages[0] : undefined);
+      
+      // If we use annotation, augment prompt
+      let finalPrompt = editPrompt;
+      if (annotatedRef) {
+          finalPrompt += " (请重点关注图中通过颜色线条标注的区域或指向，并据此进行精确的画面逻辑重构。)";
+      }
+
+      onEditSlice(selectedImage.id, currentSliceIndex, finalPrompt, useProModel, primaryRef, upscaleSize);
       setEditPrompt("");
       setEditRefImages([]);
+      setAnnotatedRef(null);
     }
   };
 
@@ -115,6 +130,19 @@ export const Inspector: React.FC<InspectorProps> = ({
 
   return (
     <div className="h-full flex flex-col bg-cine-dark border-l border-cine-border animate-in slide-in-from-right-4 duration-300 w-full relative overflow-hidden">
+      {/* Visual Annotation Overlay (Full Screen) */}
+      {isAnnotationMode && displayUrl && (
+        <VisualAnnotationEditor 
+            imageUrl={displayUrl} 
+            onClose={() => setIsAnnotationMode(false)} 
+            onConfirm={(merged) => {
+                setAnnotatedRef(merged);
+                setIsAnnotationMode(false);
+                setActiveTab('edit');
+            }}
+        />
+      )}
+
       {/* Background Subtle Gradient */}
       <div className="absolute top-0 right-0 w-64 h-64 bg-cine-accent/5 blur-[100px] pointer-events-none"></div>
 
@@ -133,7 +161,21 @@ export const Inspector: React.FC<InspectorProps> = ({
       {/* Main Preview Area */}
       <div className="relative aspect-video bg-black flex items-center justify-center overflow-hidden group shadow-2xl z-10">
          {displayUrl ? (
-             <img src={displayUrl} alt="Inspector View" className="max-w-full max-h-full object-contain" />
+             <div className="w-full h-full relative flex items-center justify-center">
+                <img src={displayUrl} alt="Inspector View" className="max-w-full max-h-full object-contain" />
+                
+                {/* Central Hit Area for Full Screen / Annotation */}
+                {!showFullGrid && (
+                    <div 
+                        onClick={() => setIsAnnotationMode(true)}
+                        className="absolute inset-0 cursor-zoom-in flex items-center justify-center group/center"
+                    >
+                        <div className="bg-black/40 backdrop-blur-md border border-white/20 p-4 rounded-full opacity-0 group-hover/center:opacity-100 transition-all scale-75 group-hover/center:scale-100 shadow-2xl">
+                            <Maximize2 size={24} className="text-white" />
+                        </div>
+                    </div>
+                )}
+             </div>
          ) : (
              <div className="flex flex-col items-center gap-3 text-zinc-700">
                  <Video size={40} className="opacity-20" />
@@ -162,17 +204,24 @@ export const Inspector: React.FC<InspectorProps> = ({
          )}
 
          {/* Grid Toggle Overlay */}
-         {selectedImage?.fullGridUrl && (
-             <div className="absolute bottom-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0">
+         <div className="absolute bottom-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0">
+             {selectedImage?.fullGridUrl && (
                  <button 
                     onClick={() => setShowFullGrid(!showFullGrid)}
                     className="bg-black/70 backdrop-blur-md text-white text-[9px] px-3 py-1.5 rounded-[2px] border border-zinc-700 hover:border-cine-accent flex items-center gap-2 transition-all uppercase tracking-widest font-mono font-bold"
                  >
-                    <Maximize2 size={10} />
+                    <LayoutGrid size={10} />
                     {showFullGrid ? "查看当前格" : "查看总宫格"}
                  </button>
-             </div>
-         )}
+             )}
+             <button 
+                onClick={() => setIsAnnotationMode(true)}
+                className="bg-cine-accent/90 backdrop-blur-md text-black text-[9px] px-3 py-1.5 rounded-[2px] border border-cine-accent hover:brightness-110 flex items-center gap-2 transition-all uppercase tracking-widest font-mono font-bold"
+             >
+                <Monitor size={10} />
+                全屏标注
+             </button>
+         </div>
       </div>
 
       {/* Tabs */}
@@ -256,7 +305,7 @@ export const Inspector: React.FC<InspectorProps> = ({
                 {/* Actions */}
                 <div className="pt-2">
                      <a href={displayUrl || '#'} download={`Cine-${activeItem.id}.png`} className="block">
-                         <Button variant="primary" size="md" className="w-full gap-3 py-6 h-12 shadow-xl border-cine-accent/20">
+                         <Button variant="primary" size="md" className="w-full gap-3 py-6 h-12 shadow-xl border-zinc-800 bg-zinc-900/50">
                              <Download size={14} /> 下载无损原图
                          </Button>
                      </a>
@@ -297,6 +346,17 @@ export const Inspector: React.FC<InspectorProps> = ({
                     />
                  </div>
 
+                 {/* Annotation Status */}
+                 {annotatedRef && (
+                     <div className="p-3 bg-cine-accent/10 border border-cine-accent/30 rounded-sm flex items-center justify-between">
+                         <div className="flex items-center gap-2">
+                             <Check size={14} className="text-cine-accent" />
+                             <span className="text-[9px] text-cine-accent font-bold uppercase font-mono tracking-widest">视觉标注已载入</span>
+                         </div>
+                         <button onClick={() => setAnnotatedRef(null)} className="text-cine-accent hover:text-white"><X size={12} /></button>
+                     </div>
+                 )}
+
                  {/* Reference Images */}
                  <div className="space-y-3">
                     <div className="flex items-center justify-between">
@@ -307,21 +367,21 @@ export const Inspector: React.FC<InspectorProps> = ({
                         <input type="file" ref={editRefInputRef} className="hidden" multiple accept="image/*" onChange={handleRefImageUpload} />
                     </div>
                     <div className="grid grid-cols-4 gap-2">
+                        {annotatedRef && (
+                            <div className="relative aspect-square bg-zinc-900 border border-cine-accent rounded-sm overflow-hidden group">
+                                <img src={annotatedRef} className="w-full h-full object-cover" />
+                                <div className="absolute top-1 left-1 bg-cine-accent text-black text-[7px] font-bold px-1 rounded-[1px]">标注</div>
+                            </div>
+                        )}
                         {editRefImages.map((url, idx) => (
                             <div key={idx} className="relative aspect-square bg-zinc-900 border border-zinc-800 rounded-sm overflow-hidden group">
                                 <img src={url} className="w-full h-full object-cover opacity-60" />
-                                <div className="absolute top-1 left-1 bg-cine-accent text-black text-[7px] font-bold px-1 rounded-[1px]">REF {idx + 1}</div>
+                                <div className="absolute top-1 left-1 bg-zinc-700 text-white text-[7px] font-bold px-1 rounded-[1px]">REF {idx + 1}</div>
                                 <button onClick={() => removeRefImage(idx)} className="absolute top-1 right-1 p-0.5 bg-black/50 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
                                     <X size={8} />
                                 </button>
                             </div>
                         ))}
-                        {editRefImages.length === 0 && (
-                            <div className="col-span-4 py-4 border border-dashed border-zinc-800/50 rounded-sm flex flex-col items-center justify-center opacity-30">
-                                <ImageIcon size={16} className="mb-1" />
-                                <span className="text-[8px] font-mono tracking-widest text-zinc-500">NO ASSET</span>
-                            </div>
-                        )}
                     </div>
                  </div>
 
@@ -349,10 +409,10 @@ export const Inspector: React.FC<InspectorProps> = ({
                         size="md" 
                         className="w-full gap-2.5 h-12 shadow-[0_0_20px_rgba(255,122,0,0.2)]"
                         onClick={handleEdit}
-                        disabled={!editPrompt.trim()}
+                        disabled={!editPrompt.trim() && !annotatedRef}
                     >
                         <Wand2 size={14} />
-                        执行 AI 无缝重绘
+                        执行 AI 精准重绘
                     </Button>
                  </div>
 
