@@ -9,23 +9,25 @@ import { CameraEditor } from './components/CameraEditor';
 import { CollageEditor } from './components/CollageEditor';
 import { ScriptEditor } from './components/ScriptEditor';
 import { FeatureGuide } from './components/FeatureGuide'; 
-import { Asset, GeneratedImage, AspectRatio, PanelAspectRatio, ImageSize, AssetCategory, CollageData, LensLabParams } from './types';
+import { ProjectManager } from './components/ProjectManager';
+import { Asset, GeneratedImage, AspectRatio, PanelAspectRatio, ImageSize, AssetCategory, CollageData, LensLabParams, ProjectState } from './types';
 import { generateMultiViewGrid, fileToBase64, enhancePrompt, analyzeAsset, ReferenceImageData, generateCameraMovement, editImage, generateLensLabSequence } from './services/geminiService';
 import { saveToStorage, loadFromStorage, clearStorage } from './services/persistenceService';
-import { AlertCircle, X as XIcon, Trash2, LayoutGrid, HelpCircle } from 'lucide-react'; 
+import { exportProjectBundle, parseProjectFile } from './services/projectService';
+import { AlertCircle, X as XIcon, Trash2, LayoutGrid, HelpCircle, CheckCircle2 } from 'lucide-react'; 
 import { Button } from './components/Button';
 // @ts-ignore
 import JSZip from 'jszip';
 
 const App: React.FC = () => {
+  // --- Global Projects State ---
+  const [projects, setProjects] = useState<ProjectState[]>([]);
+  const [activeProjectId, setActiveProjectId] = useState<string>('');
+
+  // --- Current Project Derived States ---
   const [assets, setAssets] = useState<Asset[]>([]);
   const [images, setImages] = useState<GeneratedImage[]>([]);
   const [history, setHistory] = useState<GeneratedImage[][]>([]);
-  
-  const [selectedImageId, setSelectedImageId] = useState<string | undefined>(undefined);
-  const [selectedAssetId, setSelectedAssetId] = useState<string | undefined>(undefined);
-  
-  // 当前正在编辑的全局状态（不随选中而改变，除非用户手动点击恢复）
   const [gridSize, setGridSize] = useState(2);
   const [panelAspectRatio, setPanelAspectRatio] = useState<PanelAspectRatio>(PanelAspectRatio.P16_9);
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>(AspectRatio.WIDE);
@@ -34,20 +36,205 @@ const App: React.FC = () => {
   const [stylePrompt, setStylePrompt] = useState<string>(''); 
   const [styleRefImage, setStyleRefImage] = useState<string | null>(null);
   const [panelPrompts, setPanelPrompts] = useState<string[]>([]);
+  const [activeCollage, setActiveCollage] = useState<CollageData | null>(null);
 
+  // --- UI UI UI ---
+  const [selectedImageId, setSelectedImageId] = useState<string | undefined>(undefined);
+  const [selectedAssetId, setSelectedAssetId] = useState<string | undefined>(undefined);
   const [isCameraEditorOpen, setIsCameraEditorOpen] = useState(false);
   const [isCollageEditorOpen, setIsCollageEditorOpen] = useState(false);
   const [isScriptEditorOpen, setIsScriptEditorOpen] = useState(false);
   const [isFeatureGuideOpen, setIsFeatureGuideOpen] = useState(false); 
-  const [activeCollage, setActiveCollage] = useState<CollageData | null>(null);
-  
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStep, setGenerationStep] = useState<string>(''); 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  // 1. Initialize DB and Load Projects
+  useEffect(() => {
+    const init = async () => {
+        const savedProjects = await loadFromStorage<ProjectState[]>('cine_projects_list');
+        const activeId = await loadFromStorage<string>('cine_active_project_id');
+
+        if (savedProjects && savedProjects.length > 0) {
+            setProjects(savedProjects);
+            const initialId = activeId && savedProjects.find(p => p.id === activeId) ? activeId : savedProjects[0].id;
+            setActiveProjectId(initialId);
+            loadProjectToState(savedProjects.find(p => p.id === initialId)!);
+        } else {
+            // Create default first project
+            const defaultProject: ProjectState = createEmptyProject("我的第一个分镜工程");
+            setProjects([defaultProject]);
+            setActiveProjectId(defaultProject.id);
+            loadProjectToState(defaultProject);
+        }
+    };
+    init();
+  }, []);
+
+  // 2. State Mapping logic
+  const createEmptyProject = (name: string): ProjectState => ({
+    id: crypto.randomUUID(),
+    name,
+    images: [],
+    assets: [],
+    gridSize: 2,
+    panelAspectRatio: PanelAspectRatio.P16_9,
+    imageSize: ImageSize.K4,
+    prompt: '',
+    stylePrompt: '',
+    styleRefImage: null,
+    panelPrompts: [],
+    activeCollage: null
+  });
+
+  const loadProjectToState = (p: ProjectState) => {
+    setAssets(p.assets || []);
+    setImages(p.images || []);
+    setGridSize(p.gridSize || 2);
+    setPanelAspectRatio(p.panelAspectRatio || PanelAspectRatio.P16_9);
+    setImageSize(p.imageSize || ImageSize.K4);
+    setPrompt(p.prompt || '');
+    setStylePrompt(p.stylePrompt || '');
+    setStyleRefImage(p.styleRefImage || null);
+    setPanelPrompts(p.panelPrompts || []);
+    setActiveCollage(p.activeCollage || null);
+    setSelectedImageId(undefined);
+  };
+
+  const captureCurrentStateAsProject = (): ProjectState | null => {
+    const current = projects.find(p => p.id === activeProjectId);
+    if (!current) return null;
+    return {
+        ...current,
+        assets,
+        images,
+        gridSize,
+        panelAspectRatio,
+        imageSize,
+        prompt,
+        stylePrompt,
+        styleRefImage,
+        panelPrompts,
+        activeCollage
+    };
+  };
+
+  // 3. Persistent Save Loop
+  useEffect(() => {
+    const saveAll = async () => {
+        const updatedState = captureCurrentStateAsProject();
+        if (updatedState) {
+            const updatedList = projects.map(p => p.id === activeProjectId ? updatedState : p);
+            setProjects(updatedList);
+            await saveToStorage('cine_projects_list', updatedList);
+            await saveToStorage('cine_active_project_id', activeProjectId);
+        }
+    };
+    if (activeProjectId) saveAll();
+  }, [activeProjectId, assets, images, gridSize, panelAspectRatio, imageSize, prompt, stylePrompt, styleRefImage, panelPrompts, activeCollage]);
+
+  // --- Project Actions ---
+  const handleNewProject = () => {
+      const p = createEmptyProject(`未命名工程 ${projects.length + 1}`);
+      setProjects([...projects, p]);
+      setActiveProjectId(p.id);
+      loadProjectToState(p);
+  };
+
+  const handleSwitchProject = (id: string) => {
+      const p = projects.find(proj => proj.id === id);
+      if (p) {
+          setActiveProjectId(id);
+          loadProjectToState(p);
+      }
+  };
+
+  const handleRenameProject = (id: string, name: string) => {
+      setProjects(prev => prev.map(p => p.id === id ? { ...p, name } : p));
+  };
+
+  const handleDeleteProject = (id: string) => {
+      if (projects.length <= 1) return;
+      const newList = projects.filter(p => p.id !== id);
+      setProjects(newList);
+      if (activeProjectId === id) {
+          setActiveProjectId(newList[0].id);
+          loadProjectToState(newList[0]);
+      }
+  };
+
+  const handleImportProject = async (file: File) => {
+    try {
+        const imported = await parseProjectFile(file);
+        setProjects(prev => [...prev, imported]);
+        setActiveProjectId(imported.id);
+        loadProjectToState(imported);
+        setSuccessMsg("项目脚本导入成功");
+    } catch (e: any) {
+        setError(e.message);
+    }
+  };
+
+  const handleExportFull = async () => {
+      const current = captureCurrentStateAsProject();
+      if (!current) return;
+      setIsGenerating(true);
+      setGenerationStep("正在打包完整工程结构...");
+      try {
+          const blob = await exportProjectBundle(current);
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `${current.name}_完整工程.zip`;
+          a.click();
+          
+          // 更新最后导出时间
+          setProjects(prev => prev.map(p => p.id === activeProjectId ? { ...p, lastExportTimestamp: Date.now() } : p));
+          setSuccessMsg("工程已完整导出");
+      } catch (e: any) {
+          setError("导出失败: " + e.message);
+      } finally {
+          setIsGenerating(false);
+      }
+  };
+
+  const handleSaveProjectScript = async () => {
+      const current = captureCurrentStateAsProject();
+      if (!current) return;
+
+      if (!current.lastExportTimestamp) {
+          alert("检测到该工程尚未进行过完整导出。为了确保文件夹结构一致，请先点击‘导出完整工程’。");
+          handleExportFull();
+          return;
+      }
+
+      const blob = new Blob([JSON.stringify(current, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${current.name}_脚本_${new Date().getTime()}.json`;
+      a.click();
+      setSuccessMsg("新版本脚本已另存");
+  };
+
+  // Keyboard Ctrl+S
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+            e.preventDefault();
+            handleSaveProjectScript();
+        }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeProjectId, projects, assets, images]);
+
+  // --- End Project Logic ---
 
   useEffect(() => {
     switch (panelAspectRatio) {
@@ -59,46 +246,13 @@ const App: React.FC = () => {
     }
   }, [panelAspectRatio]);
 
-  useEffect(() => {
-    loadFromStorage<GeneratedImage[]>('cine_images').then(saved => {
-        if (saved) setImages(saved);
-    });
-    loadFromStorage<string>('cine_selected_id').then(id => {
-        if (id) setSelectedImageId(id);
-    });
-    loadFromStorage<CollageData>('cine_active_collage').then(collage => {
-        if (collage) setActiveCollage(collage);
-    });
-    loadFromStorage<string>('cine_style_ref').then(style => {
-        if (style) setStyleRefImage(style);
-    });
-  }, []);
-
-  useEffect(() => {
-    saveToStorage('cine_images', images);
-  }, [images]);
-
-  useEffect(() => {
-    saveToStorage('cine_selected_id', selectedImageId || null);
-  }, [selectedImageId]);
-
-  useEffect(() => {
-    saveToStorage('cine_active_collage', activeCollage);
-  }, [activeCollage]);
-
-  useEffect(() => {
-    saveToStorage('cine_style_ref', styleRefImage);
-  }, [styleRefImage]);
-
-  // 注意：删除了之前 useEffect 中自动 setPrompt 的逻辑，实现了隔离
-
   const updateImagesWithHistory = useCallback((newImages: GeneratedImage[]) => {
     setHistory(prev => [...prev, images].slice(-30)); 
     setImages(newImages);
   }, [images]);
 
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
+    const handleGlobalKeys = (e: KeyboardEvent) => {
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedImageId) {
         if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
         handleDeleteNode(selectedImageId);
@@ -109,8 +263,8 @@ const App: React.FC = () => {
         undo();
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleGlobalKeys);
+    return () => window.removeEventListener('keydown', handleGlobalKeys);
   }, [selectedImageId, history, images]);
 
   const undo = useCallback(() => {
@@ -132,13 +286,12 @@ const App: React.FC = () => {
   }, []);
 
   const handleAddAsset = (files: FileList, category: AssetCategory) => {
-    Array.from(files).forEach((file) => {
-      const url = URL.createObjectURL(file);
+    Array.from(files).forEach(async (file) => {
+      const base64 = `data:${file.type};base64,${await fileToBase64(file)}`;
       const categoryCount = assets.filter(a => a.category === category).length;
       const newAsset: Asset = {
         id: crypto.randomUUID(),
-        file,
-        previewUrl: url,
+        previewUrl: base64,
         type: 'image',
         category,
         index: (category === 'role' || category === 'prop') ? categoryCount + 1 : undefined
@@ -180,22 +333,19 @@ const App: React.FC = () => {
       }
 
       setGenerationStep("正在准备多模态资产...");
-      const referenceDataPromise = Promise.all(assets.map(async (asset) => ({
-          data: await fileToBase64(asset.file),
-          mimeType: asset.file.type,
+      const referenceData = assets.map(asset => ({
+          data: asset.previewUrl.split(',')[1],
+          mimeType: 'image/png',
           category: asset.category as any,
           roleIndex: asset.index
-      })));
-
-      const referenceData = await referenceDataPromise;
-      const instructionsToSend = activeCollage ? undefined : panelPrompts;
+      }));
 
       setGenerationStep("分镜渲染与动线分析同步执行中...");
       
       const [finalResult, cameraMove] = await Promise.all([
         generateMultiViewGrid(
             prompt, gridSize, panelAspectRatio, aspectRatio, imageSize, 
-            referenceData, previousContextImage, instructionsToSend, activeCollage || undefined,
+            referenceData, previousContextImage, activeCollage ? undefined : panelPrompts, activeCollage || undefined,
             stylePrompt, styleRefImage || undefined
         ),
         generateCameraMovement(prompt)
@@ -226,14 +376,7 @@ const App: React.FC = () => {
       updateImagesWithHistory([...images, finalNode]);
       setSelectedImageId(finalNode.id);
     } catch (err: any) {
-      let errorMsg = err.message || "生成失败";
-      try {
-          if (errorMsg.startsWith('{')) {
-              const parsed = JSON.parse(errorMsg);
-              errorMsg = parsed.error?.message || parsed.message || errorMsg;
-          }
-      } catch (e) {}
-      setError(errorMsg);
+      setError(err.message || "生成失败");
     } finally {
       setIsGenerating(false);
       setGenerationStep("");
@@ -281,14 +424,7 @@ const App: React.FC = () => {
         updateImagesWithHistory([...images, node]);
         setSelectedImageId(node.id);
       } catch (err: any) {
-          let errorMsg = err.message || "Lens Lab 渲染失败";
-          try {
-              if (errorMsg.startsWith('{')) {
-                  const parsed = JSON.parse(errorMsg);
-                  errorMsg = parsed.error?.message || parsed.message || errorMsg;
-              }
-          } catch (e) {}
-          setError(errorMsg);
+          setError(err.message || "Lens Lab 渲染失败");
       } finally {
           setIsGenerating(false);
           setGenerationStep("");
@@ -330,17 +466,8 @@ const App: React.FC = () => {
         return img;
       });
       updateImagesWithHistory(newImages);
-      
-      // 注意：不再修改全局 panelPrompts，保持隔离
     } catch (err: any) { 
-        let errorMsg = err.message || "重绘失败";
-        try {
-            if (errorMsg.startsWith('{')) {
-                const parsed = JSON.parse(errorMsg);
-                errorMsg = parsed.error?.message || parsed.message || errorMsg;
-            }
-        } catch (e) {}
-        setError(errorMsg); 
+        setError(err.message || "重绘失败"); 
     } finally { 
         setIsGenerating(false); 
         setGenerationStep("");
@@ -361,70 +488,57 @@ const App: React.FC = () => {
       }
   };
 
+  /**
+   * 修复后的 ZIP 下载逻辑：
+   * 1. 自动识别该分镜属于第几个镜头（Shot）
+   * 2. 统一命名格式 Panel_1, Panel_2...
+   * 3. 所有文件存放在 Shot 文件夹内
+   */
   const handleDownloadZip = async () => {
     const selected = images.find(i => i.id === selectedImageId);
-    if (!selected) {
-      alert("请先在画布上选择一个分镜组。");
-      return;
-    }
-
-    setGenerationStep("准备打包 ZIP...");
+    if (!selected) return;
+    
     setIsGenerating(true);
-
+    setGenerationStep("正在准备镜头素材打包...");
+    
     try {
       const zip = new JSZip();
-      const getRootId = (nodeId: string): string => {
-          const node = images.find(n => n.id === nodeId);
-          if (!node || !node.parentId) return nodeId;
-          return getRootId(node.parentId);
-      };
-      const getDepth = (nodeId: string, depth = 1): number => {
-          const node = images.find(n => n.id === nodeId);
-          if (!node || !node.parentId) return depth;
-          return getDepth(node.parentId, depth + 1);
-      };
-      const rootNodes = images
-          .filter(i => (i.nodeType === 'render' || i.nodeType === 'lens_lab') && !i.parentId)
-          .sort((a, b) => a.timestamp - b.timestamp);
-
-      const currentRootId = getRootId(selected.id);
-      const groupIdx = rootNodes.findIndex(r => r.id === currentRootId) + 1;
-      const shotIdx = getDepth(selected.id);
       
-      const folderName = `组${groupIdx}-镜头${shotIdx}`;
+      // 找到该镜头在所有渲染节点中的物理索引
+      const renderNodes = images.filter(i => i.nodeType === 'render' || i.nodeType === 'lens_lab');
+      const sortedNodes = [...renderNodes].sort((a, b) => a.timestamp - b.timestamp);
+      const shotIndex = sortedNodes.findIndex(n => n.id === selected.id) + 1;
+      
+      const folderName = `镜头_${shotIndex}_${selected.id.slice(0, 4)}`;
       const folder = zip.folder(folderName);
-
+      
       const base64ToBlob = (b64: string) => {
         const parts = b64.split(';base64,');
         const byteCharacters = atob(parts[1]);
         const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-        return new Blob([byteArray], { type: 'image/png' });
+        for (let i = 0; i < byteCharacters.length; i++) byteNumbers[i] = byteCharacters.charCodeAt(i);
+        return new Blob([new Uint8Array(byteNumbers)], { type: 'image/png' });
       };
 
-      const fullGridBlob = base64ToBlob(selected.fullGridUrl || selected.url);
-      folder.file(`${folderName}_全景宫格.png`, fullGridBlob);
-
-      if (selected.slices) {
-        selected.slices.forEach((sliceUrl, i) => {
-          const sliceBlob = base64ToBlob(sliceUrl);
-          folder.file(`${folderName}_分镜${i + 1}.png`, sliceBlob);
-        });
+      if (folder) {
+          // 导出每一张分镜图
+          if (selected.slices) {
+            selected.slices.forEach((s, i) => {
+              folder.file(`渲染图_Shot${shotIndex}_Panel${i+1}.png`, base64ToBlob(s));
+            });
+          }
+          // 导出全景图
+          folder.file(`全景宫格_Shot${shotIndex}.png`, base64ToBlob(selected.fullGridUrl || selected.url));
       }
-
+      
       const content = await zip.generateAsync({ type: "blob" });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(content);
-      link.download = `${folderName}_分镜组.zip`;
-      document.body.appendChild(link);
+      link.download = `${folderName}_素材包.zip`;
       link.click();
-      document.body.removeChild(link);
+      setSuccessMsg("镜头素材包已导出");
     } catch (err) {
-      console.error("ZIP Error:", err);
-      alert("ZIP 打包失败，请重试。");
+      alert("ZIP 打包失败");
     } finally {
       setIsGenerating(false);
       setGenerationStep("");
@@ -436,17 +550,28 @@ const App: React.FC = () => {
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-cine-black text-zinc-400 font-sans">
       <aside className="w-[340px] flex flex-col border-r border-cine-border bg-cine-dark z-20 shadow-2xl">
-        <div className="p-5 border-b border-cine-border bg-cine-black/50 flex justify-between items-center">
-            <h1 className="text-white text-xs font-bold tracking-[0.15em] uppercase font-mono flex items-center gap-2.5">
-                <span className="w-2.5 h-2.5 bg-cine-accent rounded-[1px]"></span>
-                橙意机构 - 连续分镜
+        <ProjectManager 
+            projects={projects}
+            activeProjectId={activeProjectId}
+            onSwitchProject={handleSwitchProject}
+            onNewProject={handleNewProject}
+            onImportProject={handleImportProject}
+            onExportFull={handleExportFull}
+            onSaveIncremental={handleSaveProjectScript}
+            onRenameProject={handleRenameProject}
+            onDeleteProject={handleDeleteProject}
+        />
+
+        <div className="p-4 border-b border-cine-border bg-cine-black/50 flex justify-between items-center">
+            <h1 className="text-white text-[10px] font-bold tracking-[0.15em] uppercase font-mono flex items-center gap-2.5">
+                <span className="w-2 h-2 bg-cine-accent rounded-[1px]"></span>
+                创作中心 (WORKSPACE)
             </h1>
             <button 
                 onClick={() => setIsFeatureGuideOpen(true)}
-                className="p-1.5 text-zinc-500 hover:text-cine-accent transition-all hover:bg-zinc-800 rounded-md"
-                title="查看功能指南"
+                className="p-1 text-zinc-500 hover:text-cine-accent"
             >
-                <HelpCircle size={18} />
+                <HelpCircle size={16} />
             </button>
         </div>
 
@@ -525,17 +650,21 @@ const App: React.FC = () => {
         )}
 
         {error && (
-            <div className="absolute bottom-8 left-8 z-50 bg-red-950/80 backdrop-blur border border-red-500/30 text-red-200 p-4 rounded-md text-xs flex gap-3">
+            <div className="absolute bottom-8 left-8 z-50 bg-red-950/80 backdrop-blur border border-red-500/30 text-red-200 p-4 rounded-md text-xs flex gap-3 animate-in slide-in-from-left-4">
                 <AlertCircle size={16} /> <span className="font-mono">{error}</span> <button onClick={() => setError(null)}><XIcon size={14} /></button>
+            </div>
+        )}
+
+        {successMsg && (
+            <div className="absolute bottom-8 left-8 z-50 bg-cine-accent/20 backdrop-blur border border-cine-accent/40 text-cine-accent p-4 rounded-md text-xs flex gap-3 animate-in slide-in-from-left-4">
+                <CheckCircle2 size={16} /> <span className="font-mono">{successMsg}</span> <button onClick={() => setSuccessMsg(null)}><XIcon size={14} /></button>
             </div>
         )}
 
         <CameraEditor 
           isOpen={isCameraEditorOpen} onClose={() => setIsCameraEditorOpen(false)}
-          rows={gridSize} // 严格遵循当前全局设置
-          cols={gridSize} // 严格遵循当前全局设置
-          mainPrompt={prompt}
-          initialPrompts={panelPrompts} onSave={handleSaveCameraLogic}
+          rows={gridSize} cols={gridSize}
+          mainPrompt={prompt} initialPrompts={panelPrompts} onSave={handleSaveCameraLogic}
           selectedImage={selectedImage || undefined}
           onRegenSlice={(idx, p) => handleEditSlice(selectedImageId!, idx, p, true)}
           isGenerating={isGenerating}
@@ -551,10 +680,7 @@ const App: React.FC = () => {
           defaultPanelCount={gridSize * gridSize} onApplyScripts={handleApplyScripts}
         />
 
-        <FeatureGuide 
-          isOpen={isFeatureGuideOpen} 
-          onClose={() => setIsFeatureGuideOpen(false)} 
-        />
+        <FeatureGuide isOpen={isFeatureGuideOpen} onClose={() => setIsFeatureGuideOpen(false)} />
       </main>
 
       <aside className="w-[400px] bg-cine-dark border-l border-cine-border z-20">
@@ -565,7 +691,7 @@ const App: React.FC = () => {
             onAnalyze={async (p) => { 
                 setIsAnalyzing(true);
                 const asset = assets.find(a => a.id === selectedAssetId);
-                if (asset) setAnalysisResult(await analyzeAsset(await fileToBase64(asset.file), asset.file.type, p));
+                if (asset) setAnalysisResult(await analyzeAsset(asset.previewUrl.split(',')[1], 'image/png', p));
                 setIsAnalyzing(false);
             }}
             isAnalyzing={isAnalyzing}
@@ -574,13 +700,13 @@ const App: React.FC = () => {
             onRevertSlice={(imgId, sIdx, hIdx) => {
                 const newImages = images.map(img => {
                   if (img.id === imgId) {
-                    const history = img.sliceHistory?.[sIdx] || [];
+                    const historyList = img.sliceHistory?.[sIdx] || [];
                     const newSlices = [...(img.slices || [])];
-                    const newHistoryList = [...history];
                     const current = newSlices[sIdx];
-                    newSlices[sIdx] = history[hIdx];
-                    newHistoryList[hIdx] = current; 
+                    newSlices[sIdx] = historyList[hIdx];
                     const updatedHistory = { ...(img.sliceHistory || {}) };
+                    const newHistoryList = [...historyList];
+                    newHistoryList[hIdx] = current;
                     updatedHistory[sIdx] = newHistoryList;
                     return { ...img, slices: newSlices, sliceHistory: updatedHistory };
                   }

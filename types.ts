@@ -59,8 +59,8 @@ export interface GeneratedImage {
 
 export interface Asset {
   id: string;
-  file: File;
-  previewUrl: string;
+  file?: File; // Only present in current session
+  previewUrl: string; // Base64 or Blob
   type: 'image' | 'video';
   category: AssetCategory;
   index?: number; 
@@ -74,7 +74,21 @@ export interface CollageData {
   aspectRatio: string;
 }
 
-export type InspectorTab = 'details' | 'analysis';
+export interface ProjectState {
+  id: string;
+  name: string;
+  images: GeneratedImage[];
+  assets: Asset[];
+  gridSize: number;
+  panelAspectRatio: PanelAspectRatio;
+  imageSize: ImageSize;
+  prompt: string;
+  stylePrompt: string;
+  styleRefImage: string | null;
+  panelPrompts: string[];
+  activeCollage: CollageData | null;
+  lastExportTimestamp?: number;
+}
 
 export interface ScriptItem {
   id: string;
