@@ -456,10 +456,9 @@ const App: React.FC = () => {
           newHistory[sliceIndex].push(image.slices![sliceIndex]);
           newSlices[sliceIndex] = newSliceUrl;
           
-          const newPanelPrompts = [...(img.panelPrompts || [])];
-          while(newPanelPrompts.length <= sliceIndex) newPanelPrompts.push("");
-          newPanelPrompts[sliceIndex] = editPrompt;
-          return { ...img, slices: newSlices, sliceHistory: newHistory, panelPrompts: newPanelPrompts };
+          // BUG FIX: Removed line that overwrote panelPrompts[sliceIndex] with editPrompt.
+          // This ensures the cinematic script remains untouched by the AI redraw instruction.
+          return { ...img, slices: newSlices, sliceHistory: newHistory };
         }
         return img;
       });
