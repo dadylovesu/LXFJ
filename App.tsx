@@ -47,8 +47,6 @@ const App: React.FC = () => {
   const [isFeatureGuideOpen, setIsFeatureGuideOpen] = useState(false); 
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStep, setGenerationStep] = useState<string>(''); 
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysisResult, setAnalysisResult] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
@@ -688,14 +686,6 @@ const App: React.FC = () => {
             selectedImage={selectedImage}
             selectedAsset={assets.find(a => a.id === selectedAssetId) || null}
             onClose={() => { setSelectedImageId(undefined); setSelectedAssetId(undefined); }}
-            onAnalyze={async (p) => { 
-                setIsAnalyzing(true);
-                const asset = assets.find(a => a.id === selectedAssetId);
-                if (asset) setAnalysisResult(await analyzeAsset(asset.previewUrl.split(',')[1], 'image/png', p));
-                setIsAnalyzing(false);
-            }}
-            isAnalyzing={isAnalyzing}
-            analysisResult={analysisResult}
             onEditSlice={handleEditSlice} 
             onRevertSlice={(imgId, sIdx, hIdx) => {
                 const newImages = images.map(img => {
