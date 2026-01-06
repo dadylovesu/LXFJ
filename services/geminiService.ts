@@ -169,6 +169,9 @@ export const editImage = async (
   } catch (error: any) { throw error; }
 };
 
+/**
+ * 自动规划镜头功能 - 已根据截图逻辑更新
+ */
 export const generateCameraSuggestions = async (prompt: string, panelCount: number): Promise<string[]> => {
     await ensureApiKey();
     try {
@@ -176,12 +179,26 @@ export const generateCameraSuggestions = async (prompt: string, panelCount: numb
             const ai = getFreshClient();
             return ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
-                contents: { parts: [{ text: `你是一个世界级的电影摄影指导。基于场景描述，规划 ${panelCount} 个极具专业深度的电影级分镜脚本。场景：${prompt}。每个分镜包含：[环境信息]、[镜头语言]、[镜头视角与焦段]、[动态状态]、[角色构图元素]。请输出恰好 ${panelCount} 行纯文本。` }] }
+                contents: { parts: [{ text: `你是一个世界级的电影摄影指导。请基于场景描述，规划 ${panelCount} 个具备极高专业深度的电影级分镜脚本。
+                
+场景背景：${prompt}
+
+每一个分镜必须严格按照以下 5 维度格式输出（必须使用中文）：
+1. [环境信息]：描述场景发生的时间、光效氛围、环境核心色调。
+2. [镜头语言]：明确镜头的景别（如：特写 CU、中景 MCU、远景 WS）以及具体的画面构图逻辑。
+3. [镜头视角与焦段]：设定摄像机的视角（平视/俯视/仰视）以及模拟焦段（如：35mm、85mm人像焦段）。
+4. [动态状态]：描述镜头的运镜方式（推拉摇移）或画面中主体的动态趋势。
+5. [角色构图元素]：描述角色的位置坐标（例如：角色位于(0.3, 0.5)）、角色的画面占比描述、角色的朝向以及具体的动作细节。
+
+输出要求：
+- 请输出恰好 ${panelCount} 行纯文本。
+- 每一行代表一个独立的分镜描述。
+- 严禁输出任何序号、前导词或多余的解释。` }] }
             });
         });
         const rawText = response.text || "";
         return rawText.split('\n').map(line => line.replace(/^[0-9]+[.\-、\s]*/, '').trim()).filter(line => line.length > 5).slice(0, panelCount);
-    } catch (error) { return new Array(panelCount).fill("专业级电影分镜：35mm焦段，导演级构图逻辑。"); }
+    } catch (error) { return new Array(panelCount).fill("[环境信息]：电影级光影。[镜头语言]：MCU。[镜头视角与焦段]：平视，35mm。[动态状态]：固定镜头。[角色构图元素]：角色位于中心(0.5, 0.5)，动作待命。"); }
 };
 
 export const generateCameraMovement = async (prompt: string): Promise<string> => {
@@ -215,7 +232,7 @@ export const generateScriptLines = async (instruction: string, count: number, at
 2. [镜头语言]：明确镜头的景别（如：特写、中景、远景）及画面构图逻辑。
 3. [镜头视角与焦段]：设定摄像机的视角（平视/俯视/仰视）以及模拟焦段（如：35mm、85mm）。
 4. [动态状态]：描述镜头的运镜方式或画面中主体的动态趋势。
-5. [角色构图元素]：描述角色的位置、朝向以及具体的动作细节。
+5. [角色构图元素]：描述角色的位置(坐标X,Y)、占比描述、朝向以及具体的动作细节。
 
 输入内容：${attachmentText || ''}
 附加指令：${instruction}
