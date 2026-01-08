@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { GeneratedImage, Asset, ImageSize } from '../types';
-// Added Check to the imports from lucide-react
 import { Download, Copy, Maximize2, Wand2, X, MessageSquare, Info, Video, Fingerprint, Eye, Sparkle, LayoutGrid, ChevronLeft, ChevronRight, History, Layers, Zap, Upload, Image as ImageIcon, Plus, Trash2, Monitor, Check } from 'lucide-react';
 import { Button } from './Button';
 import { fileToBase64 } from '../services/geminiService';
@@ -11,9 +10,6 @@ interface InspectorProps {
   selectedImage: GeneratedImage | null;
   selectedAsset: Asset | null;
   onClose: () => void;
-  onAnalyze: (prompt: string) => void;
-  isAnalyzing: boolean;
-  analysisResult?: string;
   onEditSlice?: (imageId: string, sliceIndex: number, prompt: string, usePro: boolean, refImage?: string, imageSize?: ImageSize) => void;
   onRevertSlice?: (imageId: string, sliceIndex: number, historyIndex: number) => void;
 }
@@ -22,14 +18,10 @@ export const Inspector: React.FC<InspectorProps> = ({
   selectedImage, 
   selectedAsset, 
   onClose,
-  onAnalyze,
-  isAnalyzing,
-  analysisResult,
   onEditSlice,
   onRevertSlice
 }) => {
-  const [activeTab, setActiveTab] = useState<'view' | 'analyze' | 'edit'>('view');
-  const [analysisPrompt, setAnalysisPrompt] = useState("深度分析该画面的视觉语言、构图平衡以及灯光设计。");
+  const [activeTab, setActiveTab] = useState<'view' | 'edit'>('view');
   const [showFullGrid, setShowFullGrid] = useState(false);
   const [currentSliceIndex, setCurrentSliceIndex] = useState(0);
   
@@ -74,7 +66,7 @@ export const Inspector: React.FC<InspectorProps> = ({
   };
 
   const displayUrl = getDisplayUrl();
-  const hasContent = activeItem || analysisResult;
+  const hasContent = !!activeItem;
   const isSliceView = selectedImage && !showFullGrid && selectedImage.slices;
   const historyForCurrentSlice = isSliceView ? (selectedImage.sliceHistory?.[currentSliceIndex] || []) : [];
 
@@ -240,12 +232,6 @@ export const Inspector: React.FC<InspectorProps> = ({
                 AI 重绘
               </button>
           )}
-          <button 
-            onClick={() => setActiveTab('analyze')}
-            className={`flex-1 py-3.5 text-[9px] font-mono uppercase tracking-[0.2em] font-bold transition-all ${activeTab === 'analyze' ? 'text-cine-accent bg-cine-accent/5' : 'text-zinc-500 hover:text-zinc-300'}`}
-          >
-            视觉分析
-          </button>
       </div>
 
       {/* Content Area */}
@@ -432,42 +418,6 @@ export const Inspector: React.FC<InspectorProps> = ({
                         </div>
                      </div>
                  )}
-             </div>
-        )}
-
-        {activeTab === 'analyze' && (
-             <div className="space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-500 h-full flex flex-col">
-                <div className="space-y-3">
-                    <label className="text-zinc-300 text-[10px] font-bold uppercase tracking-[0.2em]">分析指令</label>
-                    <textarea 
-                        value={analysisPrompt}
-                        onChange={(e) => setAnalysisPrompt(e.target.value)}
-                        className="w-full bg-black/40 border border-zinc-800/80 rounded-sm p-4 text-[11px] text-zinc-200 focus:border-cine-accent focus:ring-0 resize-none font-mono min-h-[80px] leading-relaxed transition-all"
-                    />
-                    <Button 
-                        variant="accent" 
-                        size="md" 
-                        className="w-full gap-2.5 h-11"
-                        onClick={() => onAnalyze(analysisPrompt)}
-                        disabled={isAnalyzing}
-                    >
-                         {isAnalyzing ? <Wand2 size={14} className="animate-spin" /> : <MessageSquare size={14} />}
-                         开始视觉分析
-                    </Button>
-                </div>
-
-                <div className="flex-1 min-h-0 flex flex-col space-y-3 pt-2 border-t border-zinc-800/50">
-                    <div className="flex-1 bg-black/50 border border-zinc-900/80 rounded-sm p-5 overflow-y-auto custom-scrollbar shadow-inner relative">
-                        {analysisResult ? (
-                            <p className="text-zinc-300 text-xs leading-relaxed whitespace-pre-wrap font-mono tracking-tight">{analysisResult}</p>
-                        ) : (
-                            <div className="h-full flex flex-col items-center justify-center text-zinc-700 gap-4 opacity-30">
-                                <Sparkle size={24} />
-                                <span className="text-[10px] font-mono tracking-[0.3em] uppercase text-center">等待 AI 分析反馈</span>
-                            </div>
-                        )}
-                    </div>
-                </div>
              </div>
         )}
 

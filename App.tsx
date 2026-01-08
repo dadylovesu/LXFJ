@@ -47,8 +47,6 @@ const App: React.FC = () => {
   const [isFeatureGuideOpen, setIsFeatureGuideOpen] = useState(false); 
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStep, setGenerationStep] = useState<string>(''); 
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysisResult, setAnalysisResult] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
@@ -203,15 +201,12 @@ const App: React.FC = () => {
       }
   };
 
+  /**
+   * 修正后的保存脚本逻辑：仅导出 JSON 文件，不包含外部素材，不涉及 ZIP 压缩包逻辑。
+   */
   const handleSaveProjectScript = async () => {
       const current = captureCurrentStateAsProject();
       if (!current) return;
-
-      if (!current.lastExportTimestamp) {
-          alert("检测到该工程尚未进行过完整导出。为了确保文件夹结构一致，请先点击‘导出完整工程’。");
-          handleExportFull();
-          return;
-      }
 
       const blob = new Blob([JSON.stringify(current, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
@@ -219,7 +214,7 @@ const App: React.FC = () => {
       a.href = url;
       a.download = `${current.name}_脚本_${new Date().getTime()}.json`;
       a.click();
-      setSuccessMsg("新版本脚本已另存");
+      setSuccessMsg("分镜脚本已导出 (JSON)");
   };
 
   // Keyboard Ctrl+S
@@ -458,10 +453,7 @@ const App: React.FC = () => {
           newHistory[sliceIndex].push(image.slices![sliceIndex]);
           newSlices[sliceIndex] = newSliceUrl;
           
-          const newPanelPrompts = [...(img.panelPrompts || [])];
-          while(newPanelPrompts.length <= sliceIndex) newPanelPrompts.push("");
-          newPanelPrompts[sliceIndex] = editPrompt;
-          return { ...img, slices: newSlices, sliceHistory: newHistory, panelPrompts: newPanelPrompts };
+          return { ...img, slices: newSlices, sliceHistory: newHistory };
         }
         return img;
       });
@@ -488,12 +480,6 @@ const App: React.FC = () => {
       }
   };
 
-  /**
-   * 修复后的 ZIP 下载逻辑：
-   * 1. 自动识别该分镜属于第几个镜头（Shot）
-   * 2. 统一命名格式 Panel_1, Panel_2...
-   * 3. 所有文件存放在 Shot 文件夹内
-   */
   const handleDownloadZip = async () => {
     const selected = images.find(i => i.id === selectedImageId);
     if (!selected) return;
@@ -504,7 +490,6 @@ const App: React.FC = () => {
     try {
       const zip = new JSZip();
       
-      // 找到该镜头在所有渲染节点中的物理索引
       const renderNodes = images.filter(i => i.nodeType === 'render' || i.nodeType === 'lens_lab');
       const sortedNodes = [...renderNodes].sort((a, b) => a.timestamp - b.timestamp);
       const shotIndex = sortedNodes.findIndex(n => n.id === selected.id) + 1;
@@ -521,13 +506,11 @@ const App: React.FC = () => {
       };
 
       if (folder) {
-          // 导出每一张分镜图
           if (selected.slices) {
             selected.slices.forEach((s, i) => {
               folder.file(`渲染图_Shot${shotIndex}_Panel${i+1}.png`, base64ToBlob(s));
             });
           }
-          // 导出全景图
           folder.file(`全景宫格_Shot${shotIndex}.png`, base64ToBlob(selected.fullGridUrl || selected.url));
       }
       
@@ -688,14 +671,6 @@ const App: React.FC = () => {
             selectedImage={selectedImage}
             selectedAsset={assets.find(a => a.id === selectedAssetId) || null}
             onClose={() => { setSelectedImageId(undefined); setSelectedAssetId(undefined); }}
-            onAnalyze={async (p) => { 
-                setIsAnalyzing(true);
-                const asset = assets.find(a => a.id === selectedAssetId);
-                if (asset) setAnalysisResult(await analyzeAsset(asset.previewUrl.split(',')[1], 'image/png', p));
-                setIsAnalyzing(false);
-            }}
-            isAnalyzing={isAnalyzing}
-            analysisResult={analysisResult}
             onEditSlice={handleEditSlice} 
             onRevertSlice={(imgId, sIdx, hIdx) => {
                 const newImages = images.map(img => {
