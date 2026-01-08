@@ -78,6 +78,16 @@ export interface ReferenceImageData {
   roleIndex?: number;
 }
 
+// 定义统一的五维度脚本指南
+const FIVE_DIMENSION_SCRIPT_GUIDE = `
+每一个分镜必须严格按照以下 5 维度格式输出（必须使用中文）：
+1. [环境信息]：描述场景发生的时间、光效氛围、环境核心色调及建筑/自然特征。
+2. [镜头语言]：明确镜头的景别（如：特写 CU、中景 MCU、远景 WS、大远景 VWS）以及具体的构图逻辑（如：三分法、对称式、黄金分割）。
+3. [镜头视角与焦段]：设定摄像机的视角（平视/俯视/仰视/倾斜）以及模拟焦段（如：24mm广角、35mm标准、85mm人像、200mm长焦）。
+4. [动态状态]：描述镜头的运镜方式（推拉摇移、手持震颤、跟随拍摄）或画面中主体的动态趋势。
+5. [角色构图元素]：描述角色在画面中的相对坐标（如：(0.3, 0.5)）、角色在画面中的占比描述、角色朝向、视线焦点以及具体的动作细节描述。
+`;
+
 export const generateLensLabSequence = async (
   anchorImageBase64: string,
   gridSize: number,
@@ -118,17 +128,41 @@ export const generateMultiViewGrid = async (
   prompt: string, gridSize: number, panelAspectRatio: PanelAspectRatio, containerAspectRatio: AspectRatio, imageSize: ImageSize, categorizedRefs: ReferenceImageData[] = [], contextImage?: string, panelInstructions?: string[], collageRef?: CollageData, stylePrompt?: string, styleRefImage?: string
 ): Promise<{ fullImage: string, slices: string[] }> => {
   await ensureApiKey();
-  const totalViews = gridSize * gridSize;
-  const isVertical = panelAspectRatio === PanelAspectRatio.P9_16 || panelAspectRatio === PanelAspectRatio.P3_4;
-  const isWidescreen = panelAspectRatio === PanelAspectRatio.P16_9 || panelAspectRatio === PanelAspectRatio.P4_3;
-  const isSquare = panelAspectRatio === PanelAspectRatio.P1_1;
-  let compositionInstruction = isVertical ? `MANDATORY: Use EDGE-TO-EDGE VERTICAL COMPOSITION. The ENTIRE CANVAS must be a single vertical ${containerAspectRatio} block.` : (isSquare ? "MANDATORY: Use FULL-BLEED SQUARE COMPOSITION. ZERO GUTTERS." : "MANDATORY: Use CINEMATIC WIDESCREEN with ZERO LETTERBOXING.");
-  const roles = categorizedRefs.filter(r => r.category === 'role');
   const bgs = categorizedRefs.filter(r => r.category === 'background');
+  const roles = categorizedRefs.filter(r => r.category === 'role');
   const props = categorizedRefs.filter(r => r.category === 'prop');
-  let styleInstruction = stylePrompt && stylePrompt.trim() ? `[MANDATORY STYLE CONSTRAINT]: Every panel MUST strictly mirror: "${stylePrompt}".` : `[STYLE]: Hyper-realistic cinematic film.`;
-  if (styleRefImage) styleInstruction = `[ULTIMATE VISUAL ANCHOR]: Match EXACT color grading, lighting and texture of style reference.`;
-  let systemPrompt = `[CORE TASK]: GENERATE A SEAMLESS ${gridSize}x${gridSize} STORYBOARD GRID.\n\n[FORMAT]: ${panelAspectRatio}. CANVAS: ${containerAspectRatio}. ${compositionInstruction}\n\n${styleInstruction}\n\n[SCENE]: "${prompt}"\n\n${!collageRef && panelInstructions && panelInstructions.length > 0 ? `\n[PANEL DETAILS]:\n${panelInstructions.map((instr, idx) => `Panel ${idx + 1}: ${instr}`).join('\n')}` : ''}`;
+  
+  const hasBgRef = bgs.length > 0;
+  const hasPanelScripts = panelInstructions && panelInstructions.length > 0;
+
+  // 核心逻辑升级：处理环境参考图与脚本的融合
+  let environmentFusionInstruction = "";
+  if (hasBgRef && hasPanelScripts) {
+    environmentFusionInstruction = `
+[ENVIRONMENT FUSION - CRITICAL]: 
+1. 检测到已提供“环境参考图”。该图定义了分镜的唯一物理舞台（Stage）。
+2. 下方[分镜详细指令]中的“[环境信息]”必须服从于“环境参考图”。
+3. 严禁生成参考图之外的新环境结构。如果脚本描述了“夜晚”，则在参考图的物理结构基础上进行夜间光效渲染，而不是更换场景。
+4. 保持所有宫格在视觉空间上的绝对连贯，所有的镜头切换都发生在这个确定的物理空间内。`;
+  } else if (hasBgRef) {
+    environmentFusionInstruction = `[ENVIRONMENT]: 严格复刻提供的环境参考图作为场景背景。`;
+  }
+
+  const isVertical = panelAspectRatio === PanelAspectRatio.P9_16 || panelAspectRatio === PanelAspectRatio.P3_4;
+  let compositionInstruction = isVertical ? `MANDATORY: Use EDGE-TO-EDGE VERTICAL COMPOSITION.` : "MANDATORY: Use CINEMATIC WIDESCREEN with ZERO LETTERBOXING.";
+  
+  let styleInstruction = stylePrompt && stylePrompt.trim() ? `[MANDATORY STYLE]: "${stylePrompt}".` : `[STYLE]: Hyper-realistic cinematic film.`;
+  if (styleRefImage) styleInstruction = `[VISUAL ANCHOR]: Match EXACT color/lighting of style reference.`;
+
+  let systemPrompt = `[CORE TASK]: GENERATE A SEAMLESS ${gridSize}x${gridSize} STORYBOARD GRID.
+[FORMAT]: ${panelAspectRatio}. CANVAS: ${containerAspectRatio}. ${compositionInstruction}
+${styleInstruction}
+${environmentFusionInstruction}
+
+[SCENE BASE PROMPT]: "${prompt}"
+
+${hasPanelScripts && !collageRef ? `\n[PANEL DETAILED SCRIPTS]:\n${panelInstructions.map((instr, idx) => `Panel ${idx + 1}: ${instr}`).join('\n')}` : ''}`;
+
   const parts: any[] = [];
   roles.forEach(r => parts.push({ inlineData: { mimeType: r.mimeType, data: r.data } }));
   bgs.forEach(b => parts.push({ inlineData: { mimeType: b.mimeType, data: b.data } }));
@@ -137,6 +171,7 @@ export const generateMultiViewGrid = async (
   if (collageRef) parts.push({ inlineData: { mimeType: 'image/png', data: collageRef.url.split(',')[1] } });
   if (contextImage) parts.push({ inlineData: { mimeType: 'image/png', data: contextImage.split(',')[1] } });
   parts.push({ text: systemPrompt });
+
   try {
     const response = await withRetry<GenerateContentResponse>(() => {
         const ai = getFreshClient();
@@ -169,9 +204,6 @@ export const editImage = async (
   } catch (error: any) { throw error; }
 };
 
-/**
- * 自动规划镜头功能 - 已根据截图逻辑更新
- */
 export const generateCameraSuggestions = async (prompt: string, panelCount: number): Promise<string[]> => {
     await ensureApiKey();
     try {
@@ -183,12 +215,7 @@ export const generateCameraSuggestions = async (prompt: string, panelCount: numb
                 
 场景背景：${prompt}
 
-每一个分镜必须严格按照以下 5 维度格式输出（必须使用中文）：
-1. [环境信息]：描述场景发生的时间、光效氛围、环境核心色调。
-2. [镜头语言]：明确镜头的景别（如：特写 CU、中景 MCU、远景 WS）以及具体的画面构图逻辑。
-3. [镜头视角与焦段]：设定摄像机的视角（平视/俯视/仰视）以及模拟焦段（如：35mm、85mm人像焦段）。
-4. [动态状态]：描述镜头的运镜方式（推拉摇移）或画面中主体的动态趋势。
-5. [角色构图元素]：描述角色的位置坐标（例如：角色位于(0.3, 0.5)）、角色的画面占比描述、角色的朝向以及具体的动作细节。
+${FIVE_DIMENSION_SCRIPT_GUIDE}
 
 输出要求：
 - 请输出恰好 ${panelCount} 行纯文本。
@@ -197,7 +224,7 @@ export const generateCameraSuggestions = async (prompt: string, panelCount: numb
             });
         });
         const rawText = response.text || "";
-        return rawText.split('\n').map(line => line.replace(/^[0-9]+[.\-、\s]*/, '').trim()).filter(line => line.length > 5).slice(0, panelCount);
+        return rawText.split('\n').map(line => line.replace(/^[0-9]+[.\-、\s]*/, '').trim()).filter(line => line.length > 10).slice(0, panelCount);
     } catch (error) { return new Array(panelCount).fill("[环境信息]：电影级光影。[镜头语言]：MCU。[镜头视角与焦段]：平视，35mm。[动态状态]：固定镜头。[角色构图元素]：角色位于中心(0.5, 0.5)，动作待命。"); }
 };
 
@@ -212,10 +239,6 @@ export const generateCameraMovement = async (prompt: string): Promise<string> =>
     } catch { return "电影动效。"; }
 };
 
-/**
- * 智能脚本拆解服务
- * 将用户输入的文本/故事梗概，拆解为符合专业标准的 5 维度分镜描述
- */
 export const generateScriptLines = async (instruction: string, count: number, attachmentText?: string): Promise<string[]> => {
     await ensureApiKey();
     try {
@@ -227,12 +250,7 @@ export const generateScriptLines = async (instruction: string, count: number, at
                   parts: [{ 
                     text: `你是一个世界级电影分镜脚本专家。请将以下输入内容拆解为恰好 ${count} 个独立的、具备极高视觉冲击力的电影级分镜描述。
 
-每一个分镜必须严格按照以下标准 5 维度格式输出（必须使用中文）：
-1. [环境信息]：描述场景发生的时间、光影基调、环境核心氛围。
-2. [镜头语言]：明确镜头的景别（如：特写、中景、远景）及画面构图逻辑。
-3. [镜头视角与焦段]：设定摄像机的视角（平视/俯视/仰视）以及模拟焦段（如：35mm、85mm）。
-4. [动态状态]：描述镜头的运镜方式或画面中主体的动态趋势。
-5. [角色构图元素]：描述角色的位置(坐标X,Y)、占比描述、朝向以及具体的动作细节。
+${FIVE_DIMENSION_SCRIPT_GUIDE}
 
 输入内容：${attachmentText || ''}
 附加指令：${instruction}
@@ -252,10 +270,6 @@ export const generateScriptLines = async (instruction: string, count: number, at
     }
 };
 
-/**
- * 视频反推分镜脚本服务
- * 识别镜头切换点并描述每一个镜头的视觉逻辑
- */
 export const analyzeVideoToScript = async (videoBase64: string, mimeType: string): Promise<string[]> => {
     await ensureApiKey();
     try {
@@ -269,12 +283,8 @@ export const analyzeVideoToScript = async (videoBase64: string, mimeType: string
                     { text: `你是一个世界顶尖的电影分析专家。
 请仔细观察这段视频，识别视频中的所有镜头切换点（Shot Cuts）。
 
-对每一个识别出的独立镜头，请按照以下标准分镜脚本格式进行反推描述（必须使用中文）：
-1. [环境信息]：场景发生的时间、天气、环境核心氛围。
-2. [镜头语言]：该镜头的景别（特写/中景/全景）与构图逻辑。
-3. [镜头视角与焦段]：摄像机视角（平视/俯视/仰视）及模拟焦段。
-4. [动态状态]：该镜头的运镜方式（推拉摇移）或角色的动态趋势。
-5. [角色构图元素]：描述角色的位置坐标(X,Y)、画面占比、朝向以及具体动作。
+对每一个识别出的独立镜头，请按照以下标准分镜脚本格式进行反推描述：
+${FIVE_DIMENSION_SCRIPT_GUIDE}
 
 输出要求：
 - 每一行代表一个独立的镜头分镜描述。
