@@ -3,6 +3,15 @@ import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { AspectRatio, ImageSize, Asset, CollageData, PanelAspectRatio, LensLabParams } from "../types";
 
 export const ensureApiKey = async () => {
+  // 首先检查用户是否已登录
+  const token = localStorage.getItem("cine_auth_token");
+  if (!token) {
+    setTimeout(() => {
+      window.location.reload();
+    }, 2500);
+
+    throw new Error("请重新登录");
+  }
   // @ts-ignore
   if (window.aistudio && window.aistudio.hasSelectedApiKey) {
     // @ts-ignore

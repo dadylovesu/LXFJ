@@ -12,9 +12,21 @@ const request: AxiosInstance = axios.create({
 // 请求拦截器
 request.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("cine_auth_token");
-    if (token && config.headers) {
-      config.headers.Authorization = `Bearer ${token}`;
+    // 检查是否为登录请求
+    const isLoginRequest = config.url?.includes("/cyUser/login");
+    if (!isLoginRequest) {
+      const token = localStorage.getItem("cine_auth_token");
+      if (!token) {
+        setTimeout(() => {
+          window.location.reload();
+        }, 2500);
+        return Promise.reject(new Error("请重新登录"));
+      }
+
+      // 如果有 token，添加到请求头
+      if (config.headers) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
     }
 
     return config;
