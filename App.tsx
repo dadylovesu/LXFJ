@@ -10,6 +10,7 @@ import { CollageEditor } from './components/CollageEditor';
 import { ScriptEditor } from './components/ScriptEditor';
 import { FeatureGuide } from './components/FeatureGuide'; 
 import { ProjectManager } from './components/ProjectManager';
+import { generateUUID } from './utils/uuid';
 import { Asset, GeneratedImage, AspectRatio, PanelAspectRatio, ImageSize, AssetCategory, CollageData, LensLabParams, ProjectState } from './types';
 import { generateMultiViewGrid, fileToBase64, enhancePrompt, analyzeAsset, ReferenceImageData, generateCameraMovement, editImage, generateLensLabSequence } from './services/geminiService';
 import { saveToStorage, loadFromStorage, clearStorage } from './services/persistenceService';
@@ -76,7 +77,7 @@ const App: React.FC = () => {
 
   // 2. State Mapping logic
   const createEmptyProject = (name: string): ProjectState => ({
-    id: crypto.randomUUID(),
+    id: generateUUID(),
     name,
     images: [],
     assets: [],
@@ -285,7 +286,7 @@ const App: React.FC = () => {
       const base64 = `data:${file.type};base64,${await fileToBase64(file)}`;
       const categoryCount = assets.filter(a => a.category === category).length;
       const newAsset: Asset = {
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         previewUrl: base64,
         type: 'image',
         category,
@@ -347,7 +348,7 @@ const App: React.FC = () => {
       ]);
 
       const finalNode: GeneratedImage = {
-          id: crypto.randomUUID(),
+          id: generateUUID(),
           url: finalResult.fullImage,
           fullGridUrl: finalResult.fullImage,
           prompt,
@@ -399,7 +400,7 @@ const App: React.FC = () => {
         );
 
         const node: GeneratedImage = {
-            id: crypto.randomUUID(),
+            id: generateUUID(),
             url: result.fullImage,
             fullGridUrl: result.fullImage,
             prompt: "Lens Lab Sequence Render",
