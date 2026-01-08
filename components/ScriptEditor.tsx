@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { X, FileText, Send, Check, Trash2, Plus, Sparkles, Save, BookOpen, Layers, CheckCircle2, Circle, Hash, FileUp, Eraser, Edit3, FolderOpen, History, Film, Play, RotateCcw } from 'lucide-react';
+import { X, FileText, Send, Check, Trash2, Plus, Sparkles, Save, BookOpen, Layers, CheckCircle2, Circle, Hash, FileUp, Eraser, Edit3, FolderOpen, History, Film, Play, RotateCcw, Download } from 'lucide-react';
 import { Button } from './Button';
 import { ScriptItem, SavedPrompt, ScriptGroup } from '../types';
 import { generateScriptLines, generateDirectorSummary, analyzeVideoToScript, fileToBase64 } from '../services/geminiService';
@@ -38,6 +38,7 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
   const [savedPrompts, setSavedPrompts] = useState<SavedPrompt[]>([]);
   const [scriptGroups, setScriptGroups] = useState<ScriptGroup[]>([]);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [tempName, setTempName] = useState("");
   const [activeTab, setActiveTab] = useState<'input' | 'history'>('input');
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -126,16 +127,33 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
   };
 
   const handleRenameGroup = async (id: string, newName: string) => {
+      if (!newName.trim()) {
+        setEditingGroupId(null);
+        return;
+      }
       const updated = scriptGroups.map(g => g.id === id ? { ...g, name: newName } : g);
       setScriptGroups(updated);
       await saveToStorage('cine_script_groups', updated);
       setEditingGroupId(null);
+      setTempName("");
   };
 
   const handleDeleteGroup = async (id: string) => {
       const updated = scriptGroups.filter(g => g.id !== id);
       setScriptGroups(updated);
       await saveToStorage('cine_script_groups', updated);
+  };
+
+  const handleDownloadGroup = (group: ScriptGroup) => {
+      const content = `橙意机构 - 分镜脚本专家导出\n项目名称: ${group.name}\n生成时间: ${new Date(group.timestamp).toLocaleString()}\n\n---\n\n` + 
+                      group.scripts.map((s, i) => `[分镜 ${i + 1}]\n${s}`).join('\n\n');
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${group.name}_脚本导出.txt`;
+      link.click();
+      URL.revokeObjectURL(url);
   };
 
   const handleLoadGroup = (group: ScriptGroup) => {
@@ -326,10 +344,49 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
                 ) : (
                     <div className="space-y-4">
                          {scriptGroups.map(group => (
-                             <div key={group.id} className="bg-black/40 border border-zinc-800 rounded-sm p-3 hover:border-cine-accent/30 transition-all cursor-pointer" onClick={() => handleLoadGroup(group)}>
+                             <div key={group.id} className="bg-black/40 border border-zinc-800 rounded-sm p-4 hover:border-cine-accent/30 transition-all cursor-pointer group/card" onClick={() => handleLoadGroup(group)}>
                                  <div className="flex items-center justify-between mb-2">
-                                     <span className="text-[10px] text-zinc-200 font-bold font-mono truncate">{group.name}</span>
-                                     <button onClick={(e) => { e.stopPropagation(); handleDeleteGroup(group.id); }} className="text-zinc-600 hover:text-red-500"><Trash2 size={12} /></button>
+                                     {editingGroupId === group.id ? (
+                                         <div className="flex items-center gap-2 flex-1 mr-2" onClick={e => e.stopPropagation()}>
+                                             <input 
+                                                autoFocus
+                                                value={tempName}
+                                                onChange={e => setTempName(e.target.value)}
+                                                onKeyDown={e => e.key === 'Enter' && handleRenameGroup(group.id, tempName)}
+                                                className="bg-black border border-cine-accent text-zinc-200 text-[10px] font-mono px-2 py-1 w-full rounded-sm"
+                                             />
+                                             <button onClick={() => handleRenameGroup(group.id, tempName)} className="text-cine-accent"><Check size={14} /></button>
+                                             <button onClick={() => setEditingGroupId(null)} className="text-zinc-500"><X size={14} /></button>
+                                         </div>
+                                     ) : (
+                                         <span className="text-[10px] text-zinc-200 font-bold font-mono truncate">{group.name}</span>
+                                     )}
+                                     
+                                     {editingGroupId !== group.id && (
+                                         <div className="flex items-center gap-2 opacity-0 group-hover/card:opacity-100 transition-opacity">
+                                             <button 
+                                                onClick={(e) => { e.stopPropagation(); setEditingGroupId(group.id); setTempName(group.name); }} 
+                                                className="text-zinc-500 hover:text-white"
+                                                title="重命名"
+                                             >
+                                                <Edit3 size={12} />
+                                             </button>
+                                             <button 
+                                                onClick={(e) => { e.stopPropagation(); handleDownloadGroup(group); }} 
+                                                className="text-zinc-500 hover:text-cine-accent"
+                                                title="下载为文本"
+                                             >
+                                                <Download size={12} />
+                                             </button>
+                                             <button 
+                                                onClick={(e) => { e.stopPropagation(); handleDeleteGroup(group.id); }} 
+                                                className="text-zinc-500 hover:text-red-500"
+                                                title="删除记录"
+                                             >
+                                                <Trash2 size={12} />
+                                             </button>
+                                         </div>
+                                     )}
                                  </div>
                                  <p className="text-[8px] text-zinc-500 font-mono line-clamp-2 leading-relaxed">{group.summary || '无梗概'}</p>
                              </div>
