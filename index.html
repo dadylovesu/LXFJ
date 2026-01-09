@@ -15,26 +15,27 @@
               'cine-panel': '#121212',
               'cine-border': '#222222',
               'cine-accent': '#FF7A00',
-              'cine-text-muted': '#F4F4F5', // 显著提升，改为亮白色 (Zinc-100)
+              'cine-text-muted': '#F4F4F5', // 提升为白色系
               'cine-gold': '#d4af37',
             },
             fontFamily: {
-              mono: ['JetBrains Mono', 'monospace'],
-              sans: ['"Microsoft YaHei"', '"PingFang SC"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+              mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+              sans: ['"Microsoft YaHei"', '微软雅黑', 'Inter', 'system-ui', 'sans-serif'], // 首选微软雅黑
             }
           }
         }
       }
     </script>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
       body {
         background-color: #050505;
-        color: #ffffff; /* 基础色设为纯白 */
-        font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+        color: #FFFFFF; /* 全局文字变亮 */
+        font-family: "Microsoft YaHei", sans-serif;
         -webkit-font-smoothing: antialiased;
         margin: 0;
         overflow: hidden;
+        font-size: 14px;
       }
       /* Custom Scrollbar */
       ::-webkit-scrollbar {
@@ -53,7 +54,7 @@
       }
       
       .glass-panel {
-        background: rgba(18, 18, 18, 0.7);
+        background: rgba(18, 18, 18, 0.85);
         backdrop-filter: blur(12px);
         -webkit-backdrop-filter: blur(12px);
       }
