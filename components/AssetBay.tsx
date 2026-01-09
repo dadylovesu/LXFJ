@@ -43,22 +43,22 @@ export const AssetBay: React.FC<AssetBayProps> = ({
 
   const renderSection = (title: string, icon: React.ReactNode, category: AssetCategory, list: Asset[], inputRef: React.RefObject<HTMLInputElement>) => (
     <div 
-        className={`space-y-3 p-3 rounded-md transition-all duration-300 ${dragOverCategory === category ? 'bg-cine-accent/10 ring-2 ring-cine-accent/50' : ''}`}
+        className={`space-y-3 p-2 rounded-md transition-all duration-300 ${dragOverCategory === category ? 'bg-cine-accent/5 ring-1 ring-cine-accent/30' : ''}`}
         onDragOver={(e) => handleDragOver(e, category)}
         onDragLeave={() => setDragOverCategory(null)}
         onDrop={(e) => handleDrop(e, category)}
     >
         <div className="flex items-center justify-between px-1">
-            <span className="text-white text-[11px] uppercase tracking-[0.15em] font-black flex items-center gap-2">
+            <span className="text-zinc-300 text-[9px] uppercase tracking-[0.2em] font-mono font-bold flex items-center gap-2">
                 {icon}
                 {title}
             </span>
-            <span className="text-[10px] font-bold text-zinc-300">{list.length} REF</span>
+            <span className="text-[8px] font-mono text-zinc-500">{list.length} REF</span>
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 gap-2">
             <div 
-                className="aspect-square border-2 border-dashed border-zinc-700 bg-zinc-900/40 rounded-sm hover:border-cine-accent hover:bg-cine-accent/5 transition-all cursor-pointer flex items-center justify-center group"
+                className="aspect-square border border-dashed border-zinc-800 bg-zinc-900/20 rounded-sm hover:border-cine-accent/50 hover:bg-cine-accent/5 transition-all cursor-pointer flex items-center justify-center group"
                 onClick={() => inputRef.current?.click()}
             >
                 <input 
@@ -72,43 +72,43 @@ export const AssetBay: React.FC<AssetBayProps> = ({
                         e.target.value = '';
                     }}
                 />
-                <Plus className="w-6 h-6 text-zinc-400 group-hover:text-cine-accent group-hover:scale-110 transition-all" />
+                <Plus className="w-4 h-4 text-zinc-600 group-hover:text-cine-accent group-hover:scale-110 transition-all" />
             </div>
 
             {list.map((asset) => (
                 <div 
                     key={asset.id} 
                     onClick={() => onSelectAsset(asset)}
-                    className={`relative group aspect-square bg-zinc-950 border-2 rounded-sm overflow-hidden cursor-pointer transition-all ${
+                    className={`relative group aspect-square bg-zinc-950 border rounded-sm overflow-hidden cursor-pointer transition-all ${
                         selectedAssetId === asset.id 
-                        ? 'border-cine-accent ring-2 ring-cine-accent/50 z-10 scale-105' 
-                        : 'border-zinc-800 hover:border-zinc-500'
+                        ? 'border-cine-accent ring-1 ring-cine-accent/40 z-10' 
+                        : 'border-zinc-800/80 hover:border-zinc-600'
                     }`}
                 >
-                    <img src={asset.previewUrl} alt="asset" className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-all" />
+                    <img src={asset.previewUrl} alt="asset" className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-all" />
                     
                     {/* Badge */}
                     {category === 'role' && (
-                        <div className="absolute top-1.5 left-1.5 bg-cine-accent text-black text-[9px] font-black px-1.5 py-0.5 rounded-[1px] shadow-lg">
+                        <div className="absolute top-1 left-1 bg-cine-accent text-black text-[7px] font-bold px-1 py-0.5 rounded-[1px] shadow-sm">
                             R{asset.index}
                         </div>
                     )}
                     {category === 'prop' && (
-                        <div className="absolute top-1.5 left-1.5 bg-blue-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-[1px] shadow-lg">
+                        <div className="absolute top-1 left-1 bg-blue-600 text-white text-[7px] font-bold px-1 py-0.5 rounded-[1px] shadow-sm">
                             P{asset.index}
                         </div>
                     )}
                     {category === 'background' && (
-                        <div className="absolute top-1.5 left-1.5 bg-zinc-200 text-black text-[9px] font-black px-1.5 py-0.5 rounded-[1px] shadow-lg">
+                        <div className="absolute top-1 left-1 bg-zinc-700 text-white text-[7px] font-bold px-1 py-0.5 rounded-[1px] shadow-sm">
                             BG
                         </div>
                     )}
 
                     <button 
                         onClick={(e) => { e.stopPropagation(); onRemoveAsset(asset.id); }} 
-                        className="absolute top-1 right-1 p-1 bg-black/60 text-white hover:text-red-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="absolute top-1 right-1 p-0.5 text-zinc-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
                     >
-                        <X size={12} />
+                        <X size={10} />
                     </button>
                 </div>
             ))}
@@ -117,27 +117,27 @@ export const AssetBay: React.FC<AssetBayProps> = ({
   );
 
   return (
-    <div className="flex flex-col space-y-6">
+    <div className="flex flex-col space-y-4">
       <div className="flex items-center justify-between px-1">
-          <div className="flex items-center gap-2 text-white">
-             <Database size={14} className="text-cine-accent" />
-             <span className="text-[11px] uppercase tracking-[0.2em] font-black">01. 核心资产库 (ASSETS)</span>
+          <div className="flex items-center gap-2 text-zinc-300">
+             <Database size={10} />
+             <span className="text-[10px] uppercase tracking-[0.25em] font-mono font-bold">01. 核心资产库 (ASSETS)</span>
           </div>
           <button 
             onClick={onOpenCollage}
-            className="flex items-center gap-1.5 px-4 py-2 bg-cine-accent text-black text-[11px] font-black tracking-widest rounded-[2px] shadow-[0_0_15px_rgba(255,122,0,0.4)] hover:brightness-110 active:scale-95 transition-all"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-cine-accent text-black text-[10px] font-bold font-mono tracking-widest rounded-[2px] shadow-[0_0_15px_rgba(255,122,0,0.3)] hover:brightness-110 active:scale-95 transition-all"
           >
-             <LayoutGrid size={14} />
+             <LayoutGrid size={12} />
              COLLAGE
           </button>
       </div>
 
       <div className="space-y-4">
-          {renderSection("角色/演员 (ROLES)", <UserSquare2 size={14} />, 'role', roles, roleInputRef)}
-          <div className="h-[1px] bg-zinc-700/50 mx-2"></div>
-          {renderSection("关键道具 (PROPS)", <Box size={14} />, 'prop', props, propInputRef)}
-          <div className="h-[1px] bg-zinc-700/50 mx-2"></div>
-          {renderSection("环境/场景 (BACKGROUNDS)", <Mountain size={14} />, 'background', bgs, bgInputRef)}
+          {renderSection("角色/演员 (ROLES)", <UserSquare2 size={10} />, 'role', roles, roleInputRef)}
+          <div className="h-[1px] bg-zinc-800/50 mx-2"></div>
+          {renderSection("关键道具 (PROPS)", <Box size={10} />, 'prop', props, propInputRef)}
+          <div className="h-[1px] bg-zinc-800/50 mx-2"></div>
+          {renderSection("环境/场景 (BACKGROUNDS)", <Mountain size={10} />, 'background', bgs, bgInputRef)}
       </div>
     </div>
   );

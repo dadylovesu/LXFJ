@@ -14,13 +14,13 @@
               'cine-dark': '#0d0d0d',
               'cine-panel': '#121212',
               'cine-border': '#222222',
-              'cine-accent': '#FF7A00',
-              'cine-text-muted': '#F4F4F5', // 提升为白色系
+              'cine-accent': '#FF7A00', // Changed to vibrant orange
+              'cine-text-muted': '#A1A1AA', // Brightened from #666666 to zinc-400
               'cine-gold': '#d4af37',
             },
             fontFamily: {
               mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
-              sans: ['"Microsoft YaHei"', '微软雅黑', 'Inter', 'system-ui', 'sans-serif'], // 首选微软雅黑
+              sans: ['Inter', 'system-ui', 'sans-serif'],
             }
           }
         }
@@ -30,31 +30,30 @@
     <style>
       body {
         background-color: #050505;
-        color: #FFFFFF; /* 全局文字变亮 */
-        font-family: "Microsoft YaHei", sans-serif;
+        color: #e5e5e5;
+        font-family: 'Inter', sans-serif;
         -webkit-font-smoothing: antialiased;
         margin: 0;
         overflow: hidden;
-        font-size: 14px;
       }
       /* Custom Scrollbar */
       ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
+        width: 6px;
+        height: 6px;
       }
       ::-webkit-scrollbar-track {
         background: transparent; 
       }
       ::-webkit-scrollbar-thumb {
-        background: #333; 
+        background: #222; 
         border-radius: 10px;
       }
       ::-webkit-scrollbar-thumb:hover {
-        background: #444; 
+        background: #333; 
       }
       
       .glass-panel {
-        background: rgba(18, 18, 18, 0.85);
+        background: rgba(18, 18, 18, 0.7);
         backdrop-filter: blur(12px);
         -webkit-backdrop-filter: blur(12px);
       }
