@@ -105,9 +105,9 @@ const Node = memo(({ image, selected, onSelect, onDelete, onMouseDown, allAssets
         >
             {/* Node Header */}
             <div className={`px-3 py-2 border-b flex justify-between items-center rounded-t-md cursor-grab active:cursor-grabbing ${getHeaderColor()}`}>
-                 <div className="flex items-center gap-2 text-zinc-200 pointer-events-none">
+                 <div className="flex items-center gap-2 text-zinc-100 pointer-events-none">
                      {getIcon()}
-                     <span className="text-[9px] font-mono uppercase tracking-wider font-bold">
+                     <span className="text-[12px] font-mono uppercase tracking-wider font-bold">
                          {getLabel()}
                      </span>
                  </div>
@@ -119,7 +119,7 @@ const Node = memo(({ image, selected, onSelect, onDelete, onMouseDown, allAssets
                      )}
                     <button 
                         onClick={(e) => { e.stopPropagation(); onDelete(); }}
-                        className="text-zinc-500 hover:text-red-500 transition-colors"
+                        className="text-zinc-400 hover:text-red-500 transition-colors"
                     >
                         <Trash2 size={12} />
                     </button>
@@ -129,7 +129,7 @@ const Node = memo(({ image, selected, onSelect, onDelete, onMouseDown, allAssets
             {/* Content Body */}
             <div className="p-2 bg-black/80 pointer-events-none">
                 {image.nodeType === 'prompt' && (
-                    <div className="p-3 text-zinc-200 text-xs font-mono leading-relaxed bg-zinc-900 rounded-sm border border-zinc-800 min-h-[80px]">
+                    <div className="p-3 text-zinc-100 text-xs font-mono leading-relaxed bg-zinc-900 rounded-sm border border-zinc-800 min-h-[80px]">
                         "{image.textData}"
                     </div>
                 )}
@@ -154,11 +154,11 @@ const Node = memo(({ image, selected, onSelect, onDelete, onMouseDown, allAssets
                              <div className="p-2 bg-zinc-900/50 rounded-sm border border-zinc-800/50">
                                  <div className="flex items-center gap-1.5 mb-1 opacity-50">
                                      {image.nodeType === 'lens_lab' ? <Camera size={8} /> : <Type size={8} />}
-                                     <span className="text-[8px] font-mono uppercase tracking-wider">
+                                     <span className="text-[10px] font-mono uppercase tracking-wider">
                                          {image.nodeType === 'lens_lab' ? 'Lab Parameters' : 'Director Prompt'}
                                      </span>
                                  </div>
-                                 <p className="text-[10px] text-zinc-200 font-mono leading-relaxed line-clamp-4">
+                                 <p className="text-[13px] text-zinc-100 font-mono leading-relaxed line-clamp-4">
                                      {image.textData}
                                  </p>
                              </div>
@@ -211,15 +211,7 @@ const Node = memo(({ image, selected, onSelect, onDelete, onMouseDown, allAssets
                                 )
                             )}
                         </div>
-
-                        {image.cameraDescription && (
-                            <div className="flex items-start gap-2 p-2 bg-cine-accent/5 border border-cine-accent/20 rounded-[2px]">
-                                <Video size={12} className="text-cine-accent mt-0.5 flex-shrink-0" />
-                                <p className="text-[9px] text-zinc-200 font-mono leading-relaxed">
-                                    <span className="text-cine-accent/70 uppercase">Camera:</span> {image.cameraDescription}
-                                </p>
-                            </div>
-                        )}
+                        {/* CAMERA DESCRIPTION REMOVED FROM NODE TO SAVE SPACE AS REQUESTED */}
                     </div>
                 )}
             </div>
@@ -279,7 +271,7 @@ const DetailViewOverlay: React.FC<{ image: GeneratedImage; onClose: () => void }
         <div className="absolute inset-0 bg-black/95 z-50 flex flex-col animate-in fade-in zoom-in-95 duration-200">
             <div className="h-14 px-6 flex items-center justify-between border-b border-zinc-800 bg-zinc-900/50">
                 <div className="flex items-center gap-4">
-                     <button onClick={onClose} className="flex items-center gap-2 text-zinc-300 hover:text-white transition-colors text-xs font-mono uppercase tracking-wider">
+                     <button onClick={onClose} className="flex items-center gap-2 text-zinc-200 hover:text-white transition-colors text-xs font-mono uppercase tracking-wider">
                         <ArrowLeft size={16} />
                         返回 (Back)
                     </button>
@@ -317,7 +309,7 @@ const DetailViewOverlay: React.FC<{ image: GeneratedImage; onClose: () => void }
                                                 <Maximize2 className="text-white drop-shadow-md" size={32} />
                                             </div>
                                             {image.sliceHistory?.[idx] && image.sliceHistory[idx].length > 0 && (
-                                                <div className="absolute top-4 left-4 flex items-center gap-2 bg-cine-accent/90 text-black px-2 py-1 rounded-sm text-[10px] font-bold font-mono tracking-widest shadow-lg animate-pulse">
+                                                <div className="absolute top-4 left-4 flex items-center gap-2 bg-cine-accent/90 text-black px-2 py-1 rounded-sm text-[13px] font-bold font-mono tracking-widest shadow-lg animate-pulse">
                                                     <History size={12} />
                                                     v.{image.sliceHistory[idx].length + 1}
                                                 </div>
@@ -436,25 +428,25 @@ export const Canvas: React.FC<CanvasProps> = ({ images, assets, onSelect, select
       {detailViewItem && <DetailViewOverlay image={detailViewItem} onClose={() => setDetailViewItem(null)} />}
       <div className="absolute top-0 left-0 right-0 h-14 px-6 flex items-center justify-between z-20 bg-gradient-to-b from-black via-black/90 to-transparent pointer-events-none">
          <div className="flex items-center gap-4 pointer-events-auto">
-             <span className="text-zinc-300 text-[10px] uppercase tracking-[0.2em] font-mono font-bold">
+             <span className="text-zinc-200 text-[13px] uppercase tracking-[0.2em] font-mono font-bold">
                画布 CANVAS / {images.filter(i => i.nodeType === 'render' || i.nodeType === 'lens_lab').length} TASKS
              </span>
          </div>
          <div className="flex items-center gap-2 pointer-events-auto">
              <div className="flex bg-zinc-900/80 rounded-sm p-0.5 border border-zinc-800 backdrop-blur-sm mr-4">
-                 <button onClick={() => setViewMode('workflow')} className={`p-1.5 rounded-[1px] transition-all flex items-center gap-1.5 px-2 ${viewMode === 'workflow' ? 'bg-zinc-700 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}>
+                 <button onClick={() => setViewMode('workflow')} className={`p-1.5 rounded-[1px] transition-all flex items-center gap-1.5 px-2 ${viewMode === 'workflow' ? 'bg-zinc-700 text-white shadow-sm' : 'text-zinc-300 hover:text-zinc-100'}`}>
                      <Workflow size={14} />
-                     {viewMode === 'workflow' && <span className="text-[10px] font-mono uppercase">Node Graph</span>}
+                     {viewMode === 'workflow' && <span className="text-[13px] font-mono uppercase">Node Graph</span>}
                  </button>
-                 <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded-[1px] transition-all ${viewMode === 'grid' ? 'bg-zinc-700 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}>
+                 <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded-[1px] transition-all ${viewMode === 'grid' ? 'bg-zinc-700 text-white shadow-sm' : 'text-zinc-300 hover:text-zinc-100'}`}>
                      <LayoutGrid size={14} />
                  </button>
-                 <button onClick={() => setViewMode('table')} className={`p-1.5 rounded-[1px] transition-all ${viewMode === 'table' ? 'bg-zinc-700 text-white shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`}>
+                 <button onClick={() => setViewMode('table')} className={`p-1.5 rounded-[1px] transition-all ${viewMode === 'table' ? 'bg-zinc-700 text-white shadow-sm' : 'text-zinc-300 hover:text-zinc-100'}`}>
                      <List size={14} />
                  </button>
              </div>
              {images.length > 0 && (
-                 <Button variant="ghost" size="sm" onClick={onDownloadAll} className="flex items-center gap-2 border border-zinc-800 bg-black/50 backdrop-blur hover:bg-zinc-800 text-[10px] h-7">
+                 <Button variant="ghost" size="sm" onClick={onDownloadAll} className="flex items-center gap-2 border border-zinc-800 bg-black/50 backdrop-blur hover:bg-zinc-800 text-[13px] h-7">
                      <Archive size={12} />
                      <span className="uppercase tracking-wider">下载 ZIP</span>
                  </Button>
@@ -470,7 +462,7 @@ export const Canvas: React.FC<CanvasProps> = ({ images, assets, onSelect, select
                         <div className="w-3 h-3 bg-cine-accent rounded-sm shadow-[0_0_15px_rgba(255,122,0,0.6)]"></div>
                         OrangeStudio 橙意机构
                     </h1>
-                    <p className="text-zinc-400 text-sm max-w-md mx-auto leading-relaxed">
+                    <p className="text-zinc-300 text-sm max-w-md mx-auto leading-relaxed">
                         专业的连续分镜创作器。现支持 <span className="text-cine-accent">无缝宫格渲染</span>，以及 <span className="text-white">分镜局部 AI 重绘</span>。
                     </p>
                 </div>
@@ -521,14 +513,14 @@ export const Canvas: React.FC<CanvasProps> = ({ images, assets, onSelect, select
                                 <div key={img.id} className={`group relative bg-zinc-900 border transition-all duration-200 cursor-pointer overflow-hidden ${selectedId === img.id ? 'border-cine-accent ring-1 ring-cine-accent/50' : 'border-zinc-800 hover:border-zinc-600'} ${viewMode === 'table' ? 'flex flex-row gap-4 p-4' : ''}`} onClick={() => handleItemClick(img)}>
                                     <div className={`${viewMode === 'table' ? 'w-48' : 'w-full'} relative aspect-video pointer-events-none`}>
                                         <img src={img.url} alt="node" className="w-full h-full object-cover" />
-                                        <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded-[2px] text-[8px] font-bold font-mono tracking-wider border backdrop-blur-sm bg-cine-accent text-black border-cine-accent">
+                                        <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded-[2px] text-[10px] font-bold font-mono tracking-wider border backdrop-blur-sm bg-cine-accent text-black border-cine-accent">
                                             {img.nodeType.toUpperCase()}
                                         </div>
                                     </div>
                                     {viewMode === 'table' && (
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-zinc-200 text-xs font-mono mb-2">{img.prompt}</p>
-                                            <p className="text-zinc-500 text-[10px]">ID: {img.id}</p>
+                                            <p className="text-zinc-100 text-xs font-mono mb-2">{img.prompt}</p>
+                                            <p className="text-zinc-400 text-[13px]">ID: {img.id}</p>
                                         </div>
                                     )}
                                 </div>

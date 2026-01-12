@@ -5,6 +5,7 @@ import { Button } from './Button';
 import { ScriptItem, SavedPrompt, ScriptGroup } from '../types';
 import { generateScriptLines, generateDirectorSummary, analyzeVideoToScript, fileToBase64 } from '../services/geminiService';
 import { saveToStorage, loadFromStorage } from '../services/persistenceService';
+import { generateUUID } from '../utils/uuid';
 
 interface ScriptEditorProps {
   isOpen: boolean;
@@ -97,7 +98,7 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
         setIsGenerating(true);
         try {
             const lines = await generateScriptLines(instruction, panelCount, attachmentContent || undefined);
-            const newItems = lines.map(l => ({ id: crypto.randomUUID(), content: l, selected: false }));
+            const newItems = lines.map(l => ({ id: generateUUID(), content: l, selected: false }));
             setScriptItems(newItems);
             saveAutoGroup(lines);
         } catch (err) { console.error(err); } finally { setIsGenerating(false); }
@@ -106,7 +107,7 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
         setIsGenerating(true);
         try {
             const lines = await analyzeVideoToScript(videoBase64, videoMimeType);
-            const newItems = lines.map(l => ({ id: crypto.randomUUID(), content: l, selected: false }));
+            const newItems = lines.map(l => ({ id: generateUUID(), content: l, selected: false }));
             setScriptItems(newItems);
             saveAutoGroup(lines);
         } catch (err) { alert(err instanceof Error ? err.message : "反推失败"); } finally { setIsGenerating(false); }
@@ -115,7 +116,7 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
 
   const saveAutoGroup = async (lines: string[]) => {
       const newGroup: ScriptGroup = {
-          id: crypto.randomUUID(),
+          id: generateUUID(),
           name: `${activeMode === 'text' ? '智能拆解' : '视频反推'} ${scriptGroups.length + 1}`,
           scripts: lines,
           summary: activeMode === 'text' ? (instruction.slice(0, 50) || "文本拆解结果") : "从视频反推的分镜脚本",
@@ -157,7 +158,7 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
   };
 
   const handleLoadGroup = (group: ScriptGroup) => {
-      setScriptItems(group.scripts.map(s => ({ id: crypto.randomUUID(), content: s, selected: true })));
+      setScriptItems(group.scripts.map(s => ({ id: generateUUID(), content: s, selected: true })));
       if (activeMode === 'text') setInstruction(group.summary || "");
       setActiveTab('input');
   };
@@ -165,7 +166,7 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
   const handleSavePrompt = async () => {
     if (!instruction.trim()) return;
     const newPrompt: SavedPrompt = {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       title: instruction.slice(0, 20) + (instruction.length > 20 ? "..." : ""),
       content: instruction,
       timestamp: Date.now()
@@ -214,12 +215,12 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
               <h2 className="text-white font-mono uppercase tracking-[0.25em] text-sm font-bold">
                 智能脚本专家 (AI SCRIPT EXPERT)
               </h2>
-              <p className="text-[10px] text-zinc-300 font-mono mt-0.5 uppercase tracking-widest">
+              <p className="text-[13px] text-zinc-200 font-mono mt-0.5 uppercase tracking-widest">
                 支持文本拆解或视频分镜反推，自动同步至导演控制台
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="text-zinc-500 hover:text-white transition-all hover:rotate-90">
+          <button onClick={onClose} className="text-zinc-400 hover:text-white transition-all hover:rotate-90">
             <X size={20} />
           </button>
         </div>
@@ -230,13 +231,13 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
             <div className="flex border-b border-zinc-800">
                 <button 
                     onClick={() => setActiveTab('input')}
-                    className={`flex-1 py-4 text-[10px] font-mono uppercase tracking-widest font-bold transition-all ${activeTab === 'input' ? 'text-cine-accent bg-cine-accent/5' : 'text-zinc-500 hover:text-zinc-300'}`}
+                    className={`flex-1 py-4 text-[13px] font-mono uppercase tracking-widest font-bold transition-all ${activeTab === 'input' ? 'text-cine-accent bg-cine-accent/5' : 'text-zinc-400 hover:text-zinc-200'}`}
                 >
                     核心输入区
                 </button>
                 <button 
                     onClick={() => setActiveTab('history')}
-                    className={`flex-1 py-4 text-[10px] font-mono uppercase tracking-widest font-bold transition-all ${activeTab === 'history' ? 'text-cine-accent bg-cine-accent/5' : 'text-zinc-500 hover:text-zinc-300'}`}
+                    className={`flex-1 py-4 text-[13px] font-mono uppercase tracking-widest font-bold transition-all ${activeTab === 'history' ? 'text-cine-accent bg-cine-accent/5' : 'text-zinc-400 hover:text-zinc-200'}`}
                 >
                     脚本历史
                 </button>
@@ -249,13 +250,13 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
                         <div className="flex bg-black/40 p-1 rounded-sm border border-zinc-800">
                             <button 
                                 onClick={() => setActiveMode('text')}
-                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-[2px] text-[10px] font-mono font-bold transition-all ${activeMode === 'text' ? 'bg-zinc-700 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-[2px] text-[13px] font-mono font-bold transition-all ${activeMode === 'text' ? 'bg-zinc-700 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
                             >
                                 <FileText size={12} /> 文本拆解
                             </button>
                             <button 
                                 onClick={() => setActiveMode('video')}
-                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-[2px] text-[10px] font-mono font-bold transition-all ${activeMode === 'video' ? 'bg-cine-accent text-black' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-[2px] text-[13px] font-mono font-bold transition-all ${activeMode === 'video' ? 'bg-cine-accent text-black' : 'text-zinc-400 hover:text-zinc-200'}`}
                             >
                                 <Film size={12} /> 视频反推
                             </button>
@@ -264,17 +265,17 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
                         {activeMode === 'text' ? (
                             <div className="space-y-6 animate-in fade-in duration-300">
                                 <div className="space-y-4">
-                                    <label className="text-[10px] uppercase text-zinc-300 font-bold tracking-[0.2em] flex items-center gap-2">
+                                    <label className="text-[13px] uppercase text-zinc-200 font-bold tracking-[0.2em] flex items-center gap-2">
                                         指令输入 (PROMPT)
                                     </label>
                                     <textarea 
                                         value={instruction}
                                         onChange={(e) => setInstruction(e.target.value)}
                                         placeholder="输入故事梗概，系统将为您拆解分镜..."
-                                        className="w-full bg-black/40 border border-zinc-800 rounded-sm p-4 text-[12px] text-zinc-200 font-mono min-h-[160px] focus:border-cine-accent focus:ring-0 resize-none leading-relaxed"
+                                        className="w-full bg-black/40 border border-zinc-800 rounded-sm p-4 text-[12px] text-zinc-100 font-mono min-h-[160px] focus:border-cine-accent focus:ring-0 resize-none leading-relaxed"
                                     />
                                     <div className="flex gap-2">
-                                        <Button variant="primary" size="sm" className="flex-1 text-[9px]" onClick={() => fileInputRef.current?.click()}>
+                                        <Button variant="primary" size="sm" className="flex-1 text-[12px]" onClick={() => fileInputRef.current?.click()}>
                                             <FileUp size={12} className="mr-2" /> {fileName ? fileName.slice(0, 15) : '上传文档 (.txt)'}
                                         </Button>
                                         <input type="file" ref={fileInputRef} className="hidden" accept=".txt" onChange={handleFileUpload} />
@@ -285,7 +286,7 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
                                 </div>
 
                                 <div className="space-y-4">
-                                    <label className="text-[10px] uppercase text-zinc-300 font-bold tracking-[0.2em]">拆解条数</label>
+                                    <label className="text-[13px] uppercase text-zinc-200 font-bold tracking-[0.2em]">拆解条数</label>
                                     <input 
                                         type="number" 
                                         value={panelCount} 
@@ -295,10 +296,10 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
                                 </div>
 
                                 <div className="space-y-4">
-                                    <label className="text-[10px] uppercase text-zinc-500 font-bold tracking-[0.2em]">常用指令</label>
+                                    <label className="text-[13px] uppercase text-zinc-400 font-bold tracking-[0.2em]">常用指令</label>
                                     <div className="space-y-2">
                                         {savedPrompts.map(p => (
-                                            <div key={p.id} className="bg-black/40 border border-zinc-800 p-2 text-[9px] font-mono text-zinc-400 truncate cursor-pointer hover:border-zinc-600" onClick={() => setInstruction(p.content)}>
+                                            <div key={p.id} className="bg-black/40 border border-zinc-800 p-2 text-[12px] font-mono text-zinc-300 truncate cursor-pointer hover:border-zinc-600" onClick={() => setInstruction(p.content)}>
                                                 {p.title}
                                             </div>
                                         ))}
@@ -308,7 +309,7 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
                         ) : (
                             <div className="space-y-6 animate-in fade-in duration-300">
                                 <div className="space-y-4">
-                                    <label className="text-[10px] uppercase text-zinc-300 font-bold tracking-[0.2em] flex items-center gap-2">
+                                    <label className="text-[13px] uppercase text-zinc-200 font-bold tracking-[0.2em] flex items-center gap-2">
                                         视频源文件 (VIDEO SOURCE)
                                     </label>
                                     {!videoPreviewUrl ? (
@@ -316,9 +317,9 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
                                             onClick={() => videoInputRef.current?.click()}
                                             className="aspect-video border border-dashed border-zinc-800 rounded-sm flex flex-col items-center justify-center gap-3 hover:border-cine-accent/50 hover:bg-cine-accent/5 cursor-pointer transition-all"
                                         >
-                                            <Film size={24} className="text-zinc-600" />
-                                            <span className="text-[10px] font-mono text-zinc-600 uppercase">点击上传视频文件</span>
-                                            <span className="text-[8px] text-zinc-700">SUPPORTED: MP4, WEBM</span>
+                                            <Film size={24} className="text-zinc-500" />
+                                            <span className="text-[13px] font-mono text-zinc-500 uppercase">点击上传视频文件</span>
+                                            <span className="text-[10px] text-zinc-600">SUPPORTED: MP4, WEBM</span>
                                         </div>
                                     ) : (
                                         <div className="space-y-3">
@@ -330,7 +331,7 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
                                             </div>
                                             <div className="p-3 bg-cine-accent/5 border border-cine-accent/20 rounded-sm flex items-start gap-3">
                                                 <Sparkles size={14} className="text-cine-accent mt-0.5" />
-                                                <p className="text-[9px] text-zinc-400 font-mono leading-relaxed">
+                                                <p className="text-[12px] text-zinc-300 font-mono leading-relaxed">
                                                     视频反推将自动识别镜头切换点（Shot Cuts），并按导演视角反向推导出专业的景别、构图及动态描述。
                                                 </p>
                                             </div>
@@ -353,34 +354,34 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
                                                 value={tempName}
                                                 onChange={e => setTempName(e.target.value)}
                                                 onKeyDown={e => e.key === 'Enter' && handleRenameGroup(group.id, tempName)}
-                                                className="bg-black border border-cine-accent text-zinc-200 text-[10px] font-mono px-2 py-1 w-full rounded-sm"
+                                                className="bg-black border border-cine-accent text-zinc-100 text-[13px] font-mono px-2 py-1 w-full rounded-sm"
                                              />
                                              <button onClick={() => handleRenameGroup(group.id, tempName)} className="text-cine-accent"><Check size={14} /></button>
-                                             <button onClick={() => setEditingGroupId(null)} className="text-zinc-500"><X size={14} /></button>
+                                             <button onClick={() => setEditingGroupId(null)} className="text-zinc-400"><X size={14} /></button>
                                          </div>
                                      ) : (
-                                         <span className="text-[10px] text-zinc-200 font-bold font-mono truncate">{group.name}</span>
+                                         <span className="text-[13px] text-zinc-100 font-bold font-mono truncate">{group.name}</span>
                                      )}
                                      
                                      {editingGroupId !== group.id && (
                                          <div className="flex items-center gap-2 opacity-0 group-hover/card:opacity-100 transition-opacity">
                                              <button 
                                                 onClick={(e) => { e.stopPropagation(); setEditingGroupId(group.id); setTempName(group.name); }} 
-                                                className="text-zinc-500 hover:text-white"
+                                                className="text-zinc-400 hover:text-white"
                                                 title="重命名"
                                              >
                                                 <Edit3 size={12} />
                                              </button>
                                              <button 
                                                 onClick={(e) => { e.stopPropagation(); handleDownloadGroup(group); }} 
-                                                className="text-zinc-500 hover:text-cine-accent"
+                                                className="text-zinc-400 hover:text-cine-accent"
                                                 title="下载为文本"
                                              >
                                                 <Download size={12} />
                                              </button>
                                              <button 
                                                 onClick={(e) => { e.stopPropagation(); handleDeleteGroup(group.id); }} 
-                                                className="text-zinc-500 hover:text-red-500"
+                                                className="text-zinc-400 hover:text-red-500"
                                                 title="删除记录"
                                              >
                                                 <Trash2 size={12} />
@@ -388,7 +389,7 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
                                          </div>
                                      )}
                                  </div>
-                                 <p className="text-[8px] text-zinc-500 font-mono line-clamp-2 leading-relaxed">{group.summary || '无梗概'}</p>
+                                 <p className="text-[10px] text-zinc-400 font-mono line-clamp-2 leading-relaxed">{group.summary || '无梗概'}</p>
                              </div>
                          ))}
                     </div>
@@ -413,12 +414,12 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
           {/* Right: Preview Area */}
           <div className="flex-1 bg-black/60 p-8 flex flex-col">
             <div className="flex items-center justify-between mb-6">
-              <label className="text-[10px] uppercase text-zinc-300 font-bold tracking-[0.2em] flex items-center gap-2">
+              <label className="text-[13px] uppercase text-zinc-200 font-bold tracking-[0.2em] flex items-center gap-2">
                 <Layers size={14} /> 逻辑反推结果 (SHOT LIST)
               </label>
               <div className="flex gap-4">
-                <button onClick={() => setScriptItems(s => s.map(i => ({...i, selected: true})))} className="text-[9px] text-zinc-500 hover:text-white font-mono uppercase tracking-widest transition-all">全选</button>
-                <button onClick={() => setScriptItems(s => s.map(i => ({...i, selected: false})))} className="text-[9px] text-zinc-500 hover:text-white font-mono uppercase tracking-widest transition-all">清除</button>
+                <button onClick={() => setScriptItems(s => s.map(i => ({...i, selected: true})))} className="text-[12px] text-zinc-400 hover:text-white font-mono uppercase tracking-widest transition-all">全选</button>
+                <button onClick={() => setScriptItems(s => s.map(i => ({...i, selected: false})))} className="text-[12px] text-zinc-400 hover:text-white font-mono uppercase tracking-widest transition-all">清除</button>
               </div>
             </div>
 
@@ -426,26 +427,26 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
                <div className="space-y-4">
                  {scriptItems.map((item, idx) => (
                    <div key={item.id} className={`flex gap-4 p-4 border rounded-sm transition-all ${item.selected ? 'border-cine-accent/50 bg-cine-accent/5' : 'border-zinc-800 bg-zinc-900/40'}`}>
-                      <div className={`w-8 h-8 rounded-full border flex items-center justify-center text-[10px] font-bold font-mono ${item.selected ? 'bg-cine-accent text-black border-cine-accent' : 'bg-zinc-800 text-zinc-500 border-zinc-700'}`}>
+                      <div className={`w-8 h-8 rounded-full border flex items-center justify-center text-[13px] font-bold font-mono ${item.selected ? 'bg-cine-accent text-black border-cine-accent' : 'bg-zinc-800 text-zinc-400 border-zinc-700'}`}>
                         {idx + 1}
                       </div>
                       <textarea 
                         value={item.content}
                         onChange={(e) => updateScriptContent(item.id, e.target.value)}
-                        className="flex-1 bg-transparent border-none p-0 text-[12px] text-zinc-200 font-mono focus:ring-0 resize-none min-h-[60px] leading-relaxed"
+                        className="flex-1 bg-transparent border-none p-0 text-[12px] text-zinc-100 font-mono focus:ring-0 resize-none min-h-[60px] leading-relaxed"
                       />
                       <button 
                         onClick={() => toggleSelection(item.id)}
-                        className={`px-4 h-9 rounded-sm transition-all border text-[9px] font-mono font-bold ${item.selected ? 'bg-cine-accent text-black border-cine-accent' : 'bg-black/40 text-zinc-500 border-zinc-800'}`}
+                        className={`px-4 h-9 rounded-sm transition-all border text-[12px] font-mono font-bold ${item.selected ? 'bg-cine-accent text-black border-cine-accent' : 'bg-black/40 text-zinc-400 border-zinc-800'}`}
                       >
                         {item.selected ? '已选用' : '选用'}
                       </button>
                    </div>
                  ))}
                  {!isGenerating && scriptItems.length === 0 && (
-                   <div className="h-full flex flex-col items-center justify-center text-zinc-700 gap-4 py-20">
+                   <div className="h-full flex flex-col items-center justify-center text-zinc-600 gap-4 py-20">
                      <Sparkles size={32} className="opacity-20" />
-                     <p className="font-mono text-[10px] uppercase tracking-[0.3em]">等待输入指令或上传视频素材...</p>
+                     <p className="font-mono text-[13px] uppercase tracking-[0.3em]">等待输入指令或上传视频素材...</p>
                    </div>
                  )}
                </div>

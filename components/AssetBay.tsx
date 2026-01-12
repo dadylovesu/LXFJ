@@ -49,11 +49,11 @@ export const AssetBay: React.FC<AssetBayProps> = ({
         onDrop={(e) => handleDrop(e, category)}
     >
         <div className="flex items-center justify-between px-1">
-            <span className="text-zinc-300 text-[9px] uppercase tracking-[0.2em] font-mono font-bold flex items-center gap-2">
+            <span className="text-zinc-200 text-[12px] uppercase tracking-[0.2em] font-mono font-bold flex items-center gap-2">
                 {icon}
                 {title}
             </span>
-            <span className="text-[8px] font-mono text-zinc-500">{list.length} REF</span>
+            <span className="text-[10px] font-mono text-zinc-400">{list.length} REF</span>
         </div>
 
         <div className="grid grid-cols-3 gap-2">
@@ -72,7 +72,7 @@ export const AssetBay: React.FC<AssetBayProps> = ({
                         e.target.value = '';
                     }}
                 />
-                <Plus className="w-4 h-4 text-zinc-600 group-hover:text-cine-accent group-hover:scale-110 transition-all" />
+                <Plus className="w-4 h-4 text-zinc-500 group-hover:text-cine-accent group-hover:scale-110 transition-all" />
             </div>
 
             {list.map((asset) => (
@@ -89,24 +89,24 @@ export const AssetBay: React.FC<AssetBayProps> = ({
                     
                     {/* Badge */}
                     {category === 'role' && (
-                        <div className="absolute top-1 left-1 bg-cine-accent text-black text-[7px] font-bold px-1 py-0.5 rounded-[1px] shadow-sm">
+                        <div className="absolute top-1 left-1 bg-cine-accent text-black text-[9px] font-bold px-1 py-0.5 rounded-[1px] shadow-sm">
                             R{asset.index}
                         </div>
                     )}
                     {category === 'prop' && (
-                        <div className="absolute top-1 left-1 bg-blue-600 text-white text-[7px] font-bold px-1 py-0.5 rounded-[1px] shadow-sm">
+                        <div className="absolute top-1 left-1 bg-blue-600 text-white text-[9px] font-bold px-1 py-0.5 rounded-[1px] shadow-sm">
                             P{asset.index}
                         </div>
                     )}
                     {category === 'background' && (
-                        <div className="absolute top-1 left-1 bg-zinc-700 text-white text-[7px] font-bold px-1 py-0.5 rounded-[1px] shadow-sm">
+                        <div className="absolute top-1 left-1 bg-zinc-700 text-white text-[9px] font-bold px-1 py-0.5 rounded-[1px] shadow-sm">
                             BG
                         </div>
                     )}
 
                     <button 
                         onClick={(e) => { e.stopPropagation(); onRemoveAsset(asset.id); }} 
-                        className="absolute top-1 right-1 p-0.5 text-zinc-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="absolute top-1 right-1 p-0.5 text-zinc-400 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
                     >
                         <X size={10} />
                     </button>
@@ -119,13 +119,13 @@ export const AssetBay: React.FC<AssetBayProps> = ({
   return (
     <div className="flex flex-col space-y-4">
       <div className="flex items-center justify-between px-1">
-          <div className="flex items-center gap-2 text-zinc-300">
+          <div className="flex items-center gap-2 text-zinc-200">
              <Database size={10} />
-             <span className="text-[10px] uppercase tracking-[0.25em] font-mono font-bold">01. 核心资产库 (ASSETS)</span>
+             <span className="text-[13px] uppercase tracking-[0.25em] font-mono font-bold">01. 核心资产库 (ASSETS)</span>
           </div>
           <button 
             onClick={onOpenCollage}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-cine-accent text-black text-[10px] font-bold font-mono tracking-widest rounded-[2px] shadow-[0_0_15px_rgba(255,122,0,0.3)] hover:brightness-110 active:scale-95 transition-all"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-cine-accent text-black text-[13px] font-bold font-mono tracking-widest rounded-[2px] shadow-[0_0_15px_rgba(255,122,0,0.3)] hover:brightness-110 active:scale-95 transition-all"
           >
              <LayoutGrid size={12} />
              COLLAGE

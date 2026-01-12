@@ -92,12 +92,12 @@ export const CameraEditor: React.FC<CameraEditorProps> = ({
               <h2 className="text-white font-mono uppercase tracking-[0.2em] text-sm font-bold">
                 分镜镜头逻辑编辑器 (CAM-LOGIC)
               </h2>
-              <p className="text-[10px] text-zinc-300 font-mono mt-0.5 uppercase tracking-widest">
+              <p className="text-[13px] text-zinc-200 font-mono mt-0.5 uppercase tracking-widest">
                 当前设定: {rows}x{cols} 宫格 {selectedImage ? `| 续写自节点: ${selectedImage.id.slice(0,8)}` : ''}
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="text-zinc-300 hover:text-white transition-all hover:rotate-90">
+          <button onClick={onClose} className="text-zinc-200 hover:text-white transition-all hover:rotate-90">
             <X size={20} />
           </button>
         </div>
@@ -112,7 +112,7 @@ export const CameraEditor: React.FC<CameraEditorProps> = ({
                 >
                   {panelPrompts.map((val, idx) => (
                     <div key={idx} className="relative group flex flex-col space-y-2">
-                      <div className="absolute -top-2 -left-2 w-6 h-6 bg-cine-accent text-black rounded-full flex items-center justify-center text-[10px] font-bold z-20 shadow-lg border-2 border-black">
+                      <div className="absolute -top-2 -left-2 w-6 h-6 bg-cine-accent text-black rounded-full flex items-center justify-center text-[13px] font-bold z-20 shadow-lg border-2 border-black">
                         {idx + 1}
                       </div>
                       
@@ -138,7 +138,7 @@ export const CameraEditor: React.FC<CameraEditorProps> = ({
                           value={val}
                           onChange={(e) => handleUpdatePanel(idx, e.target.value)}
                           placeholder={`// 描述第 ${idx + 1} 格的构图、角度、光影...`}
-                          className="flex-1 bg-transparent p-4 text-[11px] text-zinc-200 font-mono resize-none focus:ring-0 placeholder:text-zinc-700 leading-relaxed custom-scrollbar"
+                          className="flex-1 bg-transparent p-4 text-[11px] text-zinc-100 font-mono resize-none focus:ring-0 placeholder:text-zinc-600 leading-relaxed custom-scrollbar"
                         />
                       </div>
                     </div>
@@ -149,7 +149,7 @@ export const CameraEditor: React.FC<CameraEditorProps> = ({
                     <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
                         <div className="flex items-center gap-3">
                             <History size={16} className="text-cine-accent" />
-                            <span className="text-xs font-mono font-bold text-zinc-200 uppercase tracking-widest">选中节点的历史脚本 (HISTORY SCRIPTS)</span>
+                            <span className="text-xs font-mono font-bold text-zinc-100 uppercase tracking-widest">选中节点的历史脚本 (HISTORY SCRIPTS)</span>
                         </div>
                         <Button variant="accent" size="sm" onClick={handleLoadHistory}>
                             载入历史脚本至当前配置
@@ -159,12 +159,12 @@ export const CameraEditor: React.FC<CameraEditorProps> = ({
                     <div className="grid grid-cols-2 gap-4">
                         {selectedImage?.panelPrompts?.map((p, idx) => (
                             <div key={idx} className="p-4 bg-zinc-900 border border-zinc-800 rounded-sm">
-                                <div className="text-[9px] text-zinc-500 font-bold mb-2 uppercase">PANEL {idx + 1}</div>
-                                <p className="text-[11px] text-zinc-300 font-mono leading-relaxed italic">"{p}"</p>
+                                <div className="text-[12px] text-zinc-400 font-bold mb-2 uppercase">PANEL {idx + 1}</div>
+                                <p className="text-[11px] text-zinc-200 font-mono leading-relaxed italic">"{p}"</p>
                             </div>
                         ))}
                         {(!selectedImage?.panelPrompts || selectedImage.panelPrompts.length === 0) && (
-                            <div className="col-span-2 py-20 text-center text-zinc-600 font-mono text-xs uppercase tracking-widest">
+                            <div className="col-span-2 py-20 text-center text-zinc-500 font-mono text-xs uppercase tracking-widest">
                                 该节点没有存储分镜脚本数据
                             </div>
                         )}
@@ -178,18 +178,18 @@ export const CameraEditor: React.FC<CameraEditorProps> = ({
             <div className="space-y-2">
                 <button 
                     onClick={() => setActiveTab('current')}
-                    className={`w-full flex items-center gap-3 p-3 rounded-sm border transition-all ${activeTab === 'current' ? 'bg-cine-accent/10 border-cine-accent text-cine-accent shadow-[0_0_10px_rgba(255,122,0,0.1)]' : 'bg-black/40 border-zinc-800 text-zinc-500 hover:border-zinc-700 hover:text-zinc-300'}`}
+                    className={`w-full flex items-center gap-3 p-3 rounded-sm border transition-all ${activeTab === 'current' ? 'bg-cine-accent/10 border-cine-accent text-cine-accent shadow-[0_0_10px_rgba(255,122,0,0.1)]' : 'bg-black/40 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'}`}
                 >
                     <FileText size={14} />
-                    <span className="text-[10px] font-mono font-bold uppercase tracking-widest">当前脚本配置</span>
+                    <span className="text-[13px] font-mono font-bold uppercase tracking-widest">当前脚本配置</span>
                 </button>
                 {selectedImage && (
                     <button 
                         onClick={() => setActiveTab('history')}
-                        className={`w-full flex items-center gap-3 p-3 rounded-sm border transition-all ${activeTab === 'history' ? 'bg-cine-accent/10 border-cine-accent text-cine-accent shadow-[0_0_10px_rgba(255,122,0,0.1)]' : 'bg-black/40 border-zinc-800 text-zinc-500 hover:border-zinc-700 hover:text-zinc-300'}`}
+                        className={`w-full flex items-center gap-3 p-3 rounded-sm border transition-all ${activeTab === 'history' ? 'bg-cine-accent/10 border-cine-accent text-cine-accent shadow-[0_0_10px_rgba(255,122,0,0.1)]' : 'bg-black/40 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'}`}
                     >
                         <History size={14} />
-                        <span className="text-[10px] font-mono font-bold uppercase tracking-widest">查看历史脚本</span>
+                        <span className="text-[13px] font-mono font-bold uppercase tracking-widest">查看历史脚本</span>
                     </button>
                 )}
             </div>
@@ -197,11 +197,11 @@ export const CameraEditor: React.FC<CameraEditorProps> = ({
             <div className="h-[1px] bg-zinc-800/50"></div>
 
             <div className="space-y-4">
-               <h3 className="text-[10px] text-zinc-300 uppercase font-bold tracking-widest flex items-center gap-2">
+               <h3 className="text-[13px] text-zinc-200 uppercase font-bold tracking-widest flex items-center gap-2">
                  <Sparkles size={12} className="text-cine-accent" />
                  智能生成建议
                </h3>
-               <p className="text-[10px] text-zinc-400 font-mono leading-relaxed">
+               <p className="text-[13px] text-zinc-300 font-mono leading-relaxed">
                  AI 将基于当前的“创作指令”自动规划整个序列的视觉动线和镜头切分。
                </p>
                <Button 
@@ -219,11 +219,11 @@ export const CameraEditor: React.FC<CameraEditorProps> = ({
             <div className="h-[1px] bg-zinc-800/50"></div>
 
             <div className="space-y-4">
-               <h3 className="text-[10px] text-zinc-300 uppercase font-bold tracking-widest flex items-center gap-2">
+               <h3 className="text-[13px] text-zinc-200 uppercase font-bold tracking-widest flex items-center gap-2">
                  <Info size={12} />
                  重绘提示 (REGEN)
                </h3>
-               <p className="text-[9px] text-zinc-400 font-mono leading-relaxed bg-black/40 p-3 rounded-sm border border-zinc-800/50">
+               <p className="text-[12px] text-zinc-300 font-mono leading-relaxed bg-black/40 p-3 rounded-sm border border-zinc-800/50">
                  针对续写节点，点击 <Wand2 size={10} className="inline mx-1" /> 可以基于该单格的历史画面进行独立渲染。
                </p>
             </div>
@@ -231,7 +231,7 @@ export const CameraEditor: React.FC<CameraEditorProps> = ({
             <div className="pt-4">
               <button 
                 onClick={handleClear}
-                className="text-[10px] text-zinc-400 hover:text-red-400 font-mono uppercase tracking-widest flex items-center gap-2 transition-colors w-full justify-center"
+                className="text-[13px] text-zinc-300 hover:text-red-400 font-mono uppercase tracking-widest flex items-center gap-2 transition-colors w-full justify-center"
               >
                 <Trash2 size={12} /> 清空所有配置
               </button>
@@ -247,7 +247,7 @@ export const CameraEditor: React.FC<CameraEditorProps> = ({
                   <div key={i} className={`w-1.5 h-1.5 rounded-full ${p.trim() ? 'bg-cine-accent shadow-[0_0_5px_#FF7A00]' : 'bg-zinc-800'}`}></div>
                 ))}
               </div>
-              <span className="text-[9px] text-zinc-400 font-mono uppercase tracking-widest">已配置 {panelPrompts.filter(p => p.trim()).length} / {panelCount} 个镜头</span>
+              <span className="text-[12px] text-zinc-300 font-mono uppercase tracking-widest">已配置 {panelPrompts.filter(p => p.trim()).length} / {panelCount} 个镜头</span>
            </div>
            <div className="flex gap-3">
               <Button variant="secondary" onClick={onClose} size="md" className="px-6 h-10">取消</Button>

@@ -10,6 +10,7 @@ import { CollageEditor } from './components/CollageEditor';
 import { ScriptEditor } from './components/ScriptEditor';
 import { FeatureGuide } from './components/FeatureGuide'; 
 import { ProjectManager } from './components/ProjectManager';
+import { generateUUID } from './utils/uuid';
 import { Asset, GeneratedImage, AspectRatio, PanelAspectRatio, ImageSize, AssetCategory, CollageData, LensLabParams, ProjectState } from './types';
 import { generateMultiViewGrid, fileToBase64, enhancePrompt, analyzeAsset, ReferenceImageData, generateCameraMovement, editImage, generateLensLabSequence } from './services/geminiService';
 import { saveToStorage, loadFromStorage, clearStorage } from './services/persistenceService';
@@ -76,7 +77,7 @@ const App: React.FC = () => {
 
   // 2. State Mapping logic
   const createEmptyProject = (name: string): ProjectState => ({
-    id: crypto.randomUUID(),
+    id:generateUUID(),
     name,
     images: [],
     assets: [],
@@ -285,7 +286,7 @@ const App: React.FC = () => {
       const base64 = `data:${file.type};base64,${await fileToBase64(file)}`;
       const categoryCount = assets.filter(a => a.category === category).length;
       const newAsset: Asset = {
-        id: crypto.randomUUID(),
+        id:generateUUID(),
         previewUrl: base64,
         type: 'image',
         category,
@@ -347,7 +348,7 @@ const App: React.FC = () => {
       ]);
 
       const finalNode: GeneratedImage = {
-          id: crypto.randomUUID(),
+          id:generateUUID(),
           url: finalResult.fullImage,
           fullGridUrl: finalResult.fullImage,
           prompt,
@@ -399,7 +400,7 @@ const App: React.FC = () => {
         );
 
         const node: GeneratedImage = {
-            id: crypto.randomUUID(),
+            id:generateUUID(),
             url: result.fullImage,
             fullGridUrl: result.fullImage,
             prompt: "Lens Lab Sequence Render",
@@ -531,7 +532,7 @@ const App: React.FC = () => {
   const selectedImage = images.find(i => i.id === selectedImageId) || null;
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-cine-black text-zinc-400 font-sans">
+    <div className="flex h-screen w-screen overflow-hidden bg-cine-black text-zinc-300 font-sans">
       <aside className="w-[340px] flex flex-col border-r border-cine-border bg-cine-dark z-20 shadow-2xl">
         <ProjectManager 
             projects={projects}
@@ -546,13 +547,13 @@ const App: React.FC = () => {
         />
 
         <div className="p-4 border-b border-cine-border bg-cine-black/50 flex justify-between items-center">
-            <h1 className="text-white text-[10px] font-bold tracking-[0.15em] uppercase font-mono flex items-center gap-2.5">
+            <h1 className="text-white text-[13px] font-bold tracking-[0.15em] uppercase font-mono flex items-center gap-2.5">
                 <span className="w-2 h-2 bg-cine-accent rounded-[1px]"></span>
                 创作中心 (WORKSPACE)
             </h1>
             <button 
                 onClick={() => setIsFeatureGuideOpen(true)}
-                className="p-1 text-zinc-500 hover:text-cine-accent"
+                className="p-1 text-zinc-400 hover:text-cine-accent"
             >
                 <HelpCircle size={16} />
             </button>
@@ -569,7 +570,7 @@ const App: React.FC = () => {
                 {activeCollage ? (
                   <div className="p-3 bg-cine-accent/10 border border-cine-accent/30 rounded-sm space-y-2">
                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-cine-accent font-bold uppercase tracking-widest flex items-center gap-2">
+                        <span className="text-[13px] text-cine-accent font-bold uppercase tracking-widest flex items-center gap-2">
                            <LayoutGrid size={12} /> 镜头组参考 (ACTIVE)
                         </span>
                         <button onClick={() => setActiveCollage(null)} className="text-cine-accent hover:text-white"><XIcon size={12} /></button>
@@ -578,7 +579,7 @@ const App: React.FC = () => {
                   </div>
                 ) : (
                   <div className="p-3 bg-zinc-900/40 border border-zinc-800/40 border-dashed rounded-sm text-center">
-                     <p className="text-[9px] text-zinc-400 font-mono">未激活镜头组参考</p>
+                     <p className="text-[12px] text-zinc-300 font-mono">未激活镜头组参考</p>
                   </div>
                 )}
             </div>

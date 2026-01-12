@@ -157,10 +157,10 @@ export const CollageEditor: React.FC<CollageEditorProps> = ({
                   <h2 className="text-white font-mono uppercase tracking-[0.25em] text-sm font-bold">
                     镜头组参考编辑器 (SHOT GROUP EDITOR)
                   </h2>
-                  <p className="text-[10px] text-zinc-500 font-mono mt-0.5 uppercase tracking-widest">Create structural references to guide camera angles</p>
+                  <p className="text-[13px] text-zinc-400 font-mono mt-0.5 uppercase tracking-widest">Create structural references to guide camera angles</p>
                </div>
             </div>
-            <button onClick={onClose} className="text-zinc-600 hover:text-white transition-all hover:rotate-90 duration-300">
+            <button onClick={onClose} className="text-zinc-500 hover:text-white transition-all hover:rotate-90 duration-300">
                 <X size={20} />
             </button>
         </div>
@@ -170,7 +170,7 @@ export const CollageEditor: React.FC<CollageEditorProps> = ({
                 
                 {/* Layout Select */}
                 <div className="space-y-4">
-                    <label className="text-[10px] uppercase text-zinc-500 font-bold tracking-[0.2em] flex items-center gap-2">
+                    <label className="text-[13px] uppercase text-zinc-400 font-bold tracking-[0.2em] flex items-center gap-2">
                        <span className="w-1.5 h-1.5 bg-cine-accent rounded-full"></span>
                        网格布局 (GRID LAYOUT)
                     </label>
@@ -179,8 +179,8 @@ export const CollageEditor: React.FC<CollageEditorProps> = ({
                             onClick={() => { setRows(2); setCols(2); }}
                             className={`flex flex-col items-center gap-2 p-3 border rounded-sm transition-all ${rows === 2 && cols === 2 ? 'border-cine-accent bg-cine-accent/5' : 'border-zinc-800 bg-black/40 hover:border-zinc-700'}`}
                         >
-                            <LayoutGrid size={20} className={rows === 2 && cols === 2 ? 'text-cine-accent' : 'text-zinc-700'} />
-                            <span className={`text-[10px] font-mono ${rows === 2 && cols === 2 ? 'text-cine-accent' : 'text-zinc-600'}`}>2x2 (4图)</span>
+                            <LayoutGrid size={20} className={rows === 2 && cols === 2 ? 'text-cine-accent' : 'text-zinc-600'} />
+                            <span className={`text-[13px] font-mono ${rows === 2 && cols === 2 ? 'text-cine-accent' : 'text-zinc-500'}`}>2x2 (4图)</span>
                         </button>
                         <button 
                             onClick={() => { setRows(3); setCols(3); }}
@@ -189,18 +189,18 @@ export const CollageEditor: React.FC<CollageEditorProps> = ({
                             <div className="grid grid-cols-3 gap-0.5">
                                 {[...Array(9)].map((_, i) => <div key={i} className={`w-1.5 h-1.5 rounded-[1px] ${rows === 3 && cols === 3 ? 'bg-cine-accent' : 'bg-zinc-700'}`}></div>)}
                             </div>
-                            <span className={`text-[10px] font-mono ${rows === 3 && cols === 3 ? 'text-cine-accent' : 'text-zinc-600'}`}>3x3 (9图)</span>
+                            <span className={`text-[13px] font-mono ${rows === 3 && cols === 3 ? 'text-cine-accent' : 'text-zinc-500'}`}>3x3 (9图)</span>
                         </button>
                     </div>
                 </div>
 
                 {/* Info Text */}
                 <div className="space-y-4">
-                    <label className="text-[10px] uppercase text-zinc-500 font-bold tracking-[0.2em] flex items-center gap-2">
+                    <label className="text-[13px] uppercase text-zinc-400 font-bold tracking-[0.2em] flex items-center gap-2">
                        <span className="w-1.5 h-1.5 bg-cine-accent rounded-full"></span>
                        注意事项 (NOTICE)
                     </label>
-                    <p className="text-[9px] text-zinc-500 font-mono leading-relaxed bg-black/40 p-3 rounded-sm border border-zinc-800">
+                    <p className="text-[12px] text-zinc-400 font-mono leading-relaxed bg-black/40 p-3 rounded-sm border border-zinc-800">
                         编辑器将保留参考图的完整比例（不裁剪），帮助 AI 准确识别每一帧的景别和构图。
                     </p>
                 </div>
@@ -209,11 +209,11 @@ export const CollageEditor: React.FC<CollageEditorProps> = ({
                 <div className="pt-6 border-t border-zinc-800 space-y-4">
                     <button 
                         onClick={() => fileInputRef.current?.click()}
-                        className="w-full py-4 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-sm text-[11px] font-mono font-bold flex items-center justify-center gap-3 transition-all uppercase tracking-widest shadow-lg"
+                        className="w-full py-4 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 border border-zinc-700 rounded-sm text-[11px] font-mono font-bold flex items-center justify-center gap-3 transition-all uppercase tracking-widest shadow-lg"
                     >
                         <Plus size={16} /> 添加参考图
                     </button>
-                    <p className="text-[9px] text-zinc-600 font-mono text-center leading-relaxed">
+                    <p className="text-[12px] text-zinc-500 font-mono text-center leading-relaxed">
                         支持拖拽排序。
                     </p>
                     <input type="file" ref={fileInputRef} className="hidden" multiple accept="image/*" onChange={handleFileSelect} />
@@ -251,14 +251,14 @@ export const CollageEditor: React.FC<CollageEditorProps> = ({
                                               <Trash2 size={16} />
                                             </button>
                                         </div>
-                                        <div className="absolute top-2 left-2 px-2 py-0.5 bg-black/80 rounded-[1px] text-white font-mono text-[9px] font-bold tracking-widest pointer-events-none">
+                                        <div className="absolute top-2 left-2 px-2 py-0.5 bg-black/80 rounded-[1px] text-white font-mono text-[12px] font-bold tracking-widest pointer-events-none">
                                             REF {String(index + 1).padStart(2, '0')}
                                         </div>
                                     </>
                                 ) : (
-                                    <div className="flex flex-col items-center gap-2 text-zinc-800 group-hover:text-zinc-600 transition-colors">
+                                    <div className="flex flex-col items-center gap-2 text-zinc-700 group-hover:text-zinc-500 transition-colors">
                                         <ImageIcon size={24} strokeWidth={1} />
-                                        <span className="text-[10px] font-mono uppercase tracking-[0.2em]">{String(index + 1).padStart(2, '0')}</span>
+                                        <span className="text-[13px] font-mono uppercase tracking-[0.2em]">{String(index + 1).padStart(2, '0')}</span>
                                     </div>
                                 )}
                             </div>
@@ -272,7 +272,7 @@ export const CollageEditor: React.FC<CollageEditorProps> = ({
         <div className="p-6 border-t border-zinc-800 bg-zinc-900/60 flex justify-between items-center backdrop-blur-md">
             <div className="flex items-center gap-4">
                 <div className={`w-2 h-2 rounded-full ${slots.filter(s => s !== null).length === slots.length ? 'bg-green-500' : 'bg-zinc-700'}`}></div>
-                <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">
+                <span className="text-[13px] font-mono text-zinc-400 uppercase tracking-widest">
                     ACTIVE: {slots.filter(s => s !== null).length} / {slots.length} REF SLOTS
                 </span>
             </div>
@@ -280,7 +280,7 @@ export const CollageEditor: React.FC<CollageEditorProps> = ({
                 <Button 
                     variant="ghost" 
                     onClick={onClose} 
-                    className="px-8 h-12 text-[11px] font-bold text-zinc-400 hover:text-white border border-zinc-800"
+                    className="px-8 h-12 text-[11px] font-bold text-zinc-300 hover:text-white border border-zinc-800"
                 >
                     取消 (CANCEL)
                 </Button>
