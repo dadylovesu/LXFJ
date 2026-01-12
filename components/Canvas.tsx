@@ -211,15 +211,7 @@ const Node = memo(({ image, selected, onSelect, onDelete, onMouseDown, allAssets
                                 )
                             )}
                         </div>
-
-                        {image.cameraDescription && (
-                            <div className="flex items-start gap-2 p-2 bg-cine-accent/5 border border-cine-accent/20 rounded-[2px]">
-                                <Video size={12} className="text-cine-accent mt-0.5 flex-shrink-0" />
-                                <p className="text-[9px] text-zinc-200 font-mono leading-relaxed">
-                                    <span className="text-cine-accent/70 uppercase">Camera:</span> {image.cameraDescription}
-                                </p>
-                            </div>
-                        )}
+                        {/* CAMERA DESCRIPTION REMOVED FROM NODE TO SAVE SPACE AS REQUESTED */}
                     </div>
                 )}
             </div>
