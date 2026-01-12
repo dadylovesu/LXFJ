@@ -3,6 +3,15 @@ import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { AspectRatio, ImageSize, Asset, CollageData, PanelAspectRatio, LensLabParams } from "../types";
 
 export const ensureApiKey = async () => {
+  // 首先检查用户是否已登录
+  const token = localStorage.getItem("cine_auth_token");
+  if (!token) {
+    setTimeout(() => {
+      window.location.reload();
+    }, 2500);
+
+    throw new Error("请重新登录");
+  }
   // @ts-ignore
   if (window.aistudio && window.aistudio.hasSelectedApiKey) {
     // @ts-ignore
@@ -78,14 +87,11 @@ export interface ReferenceImageData {
   roleIndex?: number;
 }
 
-// 定义统一的五维度脚本指南
-const FIVE_DIMENSION_SCRIPT_GUIDE = `
-每一个分镜必须严格按照以下 5 维度格式输出（必须使用中文）：
-1. [环境信息]：描述场景发生的时间、光效氛围、环境核心色调及建筑/自然特征。
-2. [镜头语言]：明确镜头的景别（如：特写 CU、中景 MCU、远景 WS、大远景 VWS）以及具体的构图逻辑（如：三分法、对称式、黄金分割）。
-3. [镜头视角与焦段]：设定摄像机的视角（平视/俯视/仰视/倾斜）以及模拟焦段（如：24mm广角、35mm标准、85mm人像、200mm长焦）。
-4. [动态状态]：描述镜头的运镜方式（推拉摇移、手持震颤、跟随拍摄）或画面中主体的动态趋势。
-5. [角色构图元素]：描述角色在画面中的相对坐标（如：(0.3, 0.5)）、角色在画面中的占比描述、角色朝向、视线焦点以及具体的动作细节描述。
+// 优化后的七项分镜脚本指南 - 新增角色方位与正背面朝向描述
+const COMPACT_SCRIPT_GUIDE = `
+每个分镜描述必须采用紧凑格式，严禁包含标题词，格式如下：
+[环境影调, 景别构图, 视角焦段, 镜头倾斜度, 纵深空间关系, 位置/朝向, 叙事(角色动作/表情姿态)]
+示例：[午后侧逆光, LS/对角线构图, 平视/35mm, 倾斜5°, 纵深(右前侧船舷遮挡/角色卧于中景), 画面偏左/左后侧背对镜头, 叙事(男主角正悠闲地闭目养神，右手搭在额头)]
 `;
 
 export const generateLensLabSequence = async (
@@ -100,17 +106,20 @@ export const generateLensLabSequence = async (
 ): Promise<{ fullImage: string, slices: string[], panelPrompts: string[] }> => {
   await ensureApiKey();
   const panelPrompts = params.map((p, i) => {
-    let pitchDesc = p.pitch > 0 ? `俯视角 ${p.pitch}度` : (p.pitch < 0 ? `仰角 ${Math.abs(p.pitch)}度` : "水平视角");
-    let yawDesc = p.yaw > 0 ? `向右旋转 ${p.yaw}度视角` : (p.yaw < 0 ? `向左旋转 ${Math.abs(p.yaw)}度视角` : "正前方视角");
-    return `使用 ${p.focalLength}mm 镜头拍摄。镜头角度：${pitchDesc}，${yawDesc}。画面内容必须基于参考图进行视角转换，保持角色和环境一致。`;
+    let pitchDesc = p.pitch > 0 ? `俯角${p.pitch}°` : (p.pitch < 0 ? `仰角${Math.abs(p.pitch)}°` : "平视");
+    let yawDesc = p.yaw > 0 ? `右偏${p.yaw}°` : (p.yaw < 0 ? `左偏${Math.abs(p.yaw)}°` : "正面");
+    return `[参考锚点, 视角转换, ${p.focalLength}mm 焦段/${pitchDesc}/${yawDesc}, 镜头倾斜0°, 纵深(一致), 画面中心/跟随锚点, 叙事(保持锚点图动作的一致性延续)]`;
   });
-  const panelDescriptionsText = panelPrompts.map((p, i) => `分镜 ${i + 1}: ${p}`).join("\n");
-  let styleInstruction = stylePrompt && stylePrompt.trim() ? `[视觉风格核心指令]: 严格锁定风格为: "${stylePrompt}"。` : "[视觉风格]: 高级电影质感，35mm 胶片摄影风格。";
-  if (styleRefImage) styleInstruction += " [绝对风格参照]: 提供的‘风格参考图’是唯一的视觉准则。必须1:1复刻其调色方案、光影对比度、影调氛围、画面颗粒感和艺术质感。";
-  const systemPrompt = `[核心任务]: 3D 多角度一致性重绘。[参考基准]: 你将获得一张名为“锚点”的参考图。[任务逻辑]: 保持锚点图中的角色、环境、光影不变。仅根据焦段、俯仰角、旋转角重新渲染每一格画面。\n\n${styleInstruction}\n\n[布局]: ${gridSize}x${gridSize} 宫格。[比例]: 容器比例 ${containerAspectRatio}, 单格比例 ${panelAspectRatio}。\n\n[分镜指令]:\n${panelDescriptionsText}`;
+  const panelDescriptionsText = panelPrompts.map((p, i) => `格${i + 1}: ${p}`).join("\n");
+  let styleInstruction = stylePrompt && stylePrompt.trim() ? `[风格]: ${stylePrompt}。` : "[风格]: 电影质感。";
+  if (styleRefImage) styleInstruction += " [参考图]: 严格复刻参考图影调。";
+  
+  const systemPrompt = `[任务]: 3D一致性重绘。[逻辑]: 锁定参考图角色。布局: ${gridSize}x${gridSize}宫格。单格比例: ${panelAspectRatio}。\n${styleInstruction}\n指令:\n${panelDescriptionsText}`;
+  
   const parts: any[] = [{ inlineData: { mimeType: 'image/png', data: anchorImageBase64 } }];
   if (styleRefImage) parts.push({ inlineData: { mimeType: 'image/png', data: styleRefImage.split(',')[1] } });
   parts.push({ text: systemPrompt });
+  
   try {
     const response = await withRetry<GenerateContentResponse>(() => {
         const ai = getFreshClient();
@@ -128,45 +137,27 @@ export const generateMultiViewGrid = async (
   prompt: string, gridSize: number, panelAspectRatio: PanelAspectRatio, containerAspectRatio: AspectRatio, imageSize: ImageSize, categorizedRefs: ReferenceImageData[] = [], contextImage?: string, panelInstructions?: string[], collageRef?: CollageData, stylePrompt?: string, styleRefImage?: string
 ): Promise<{ fullImage: string, slices: string[] }> => {
   await ensureApiKey();
-  const bgs = categorizedRefs.filter(r => r.category === 'background');
   const roles = categorizedRefs.filter(r => r.category === 'role');
-  const props = categorizedRefs.filter(r => r.category === 'prop');
+  const bgs = categorizedRefs.filter(r => r.category === 'background');
   
-  const hasBgRef = bgs.length > 0;
-  const hasPanelScripts = panelInstructions && panelInstructions.length > 0;
-
-  // 核心逻辑升级：处理环境参考图与脚本的融合
-  let environmentFusionInstruction = "";
-  if (hasBgRef && hasPanelScripts) {
-    environmentFusionInstruction = `
-[ENVIRONMENT FUSION - CRITICAL]: 
-1. 检测到已提供“环境参考图”。该图定义了分镜的唯一物理舞台（Stage）。
-2. 下方[分镜详细指令]中的“[环境信息]”必须服从于“环境参考图”。
-3. 严禁生成参考图之外的新环境结构。如果脚本描述了“夜晚”，则在参考图的物理结构基础上进行夜间光效渲染，而不是更换场景。
-4. 保持所有宫格在视觉空间上的绝对连贯，所有的镜头切换都发生在这个确定的物理空间内。`;
-  } else if (hasBgRef) {
-    environmentFusionInstruction = `[ENVIRONMENT]: 严格复刻提供的环境参考图作为场景背景。`;
-  }
-
   const isVertical = panelAspectRatio === PanelAspectRatio.P9_16 || panelAspectRatio === PanelAspectRatio.P3_4;
-  let compositionInstruction = isVertical ? `MANDATORY: Use EDGE-TO-EDGE VERTICAL COMPOSITION.` : "MANDATORY: Use CINEMATIC WIDESCREEN with ZERO LETTERBOXING.";
-  
-  let styleInstruction = stylePrompt && stylePrompt.trim() ? `[MANDATORY STYLE]: "${stylePrompt}".` : `[STYLE]: Hyper-realistic cinematic film.`;
-  if (styleRefImage) styleInstruction = `[VISUAL ANCHOR]: Match EXACT color/lighting of style reference.`;
+  let arInstruction = `[PHYSICAL ASPECT RATIO]: Every single panel MUST be exactly ${panelAspectRatio}.`;
+  if (isVertical) arInstruction += ` CRITICAL: Use EDGE-TO-EDGE VERTICAL COMPOSITION. DO NOT GENERATE HORIZONTAL SHOTS.`;
 
-  let systemPrompt = `[CORE TASK]: GENERATE A SEAMLESS ${gridSize}x${gridSize} STORYBOARD GRID.
-[FORMAT]: ${panelAspectRatio}. CANVAS: ${containerAspectRatio}. ${compositionInstruction}
-${styleInstruction}
-${environmentFusionInstruction}
+  let charInstruction = "[CHARACTER CONSISTENCY]: STRICTLY lock the morphology, features, and colors of the characters from the provided 'role' references. Every panel must feature the EXACT SAME character models.";
 
-[SCENE BASE PROMPT]: "${prompt}"
-
-${hasPanelScripts && !collageRef ? `\n[PANEL DETAILED SCRIPTS]:\n${panelInstructions.map((instr, idx) => `Panel ${idx + 1}: ${instr}`).join('\n')}` : ''}`;
+  let systemPrompt = `[TASK]: GENERATE A ${gridSize}x${gridSize} STORYBOARD GRID.
+${arInstruction}
+${charInstruction}
+[STYLE]: ${stylePrompt || 'Cinematic, hyper-realistic'}.
+[SCENE]: ${prompt}
+[SPATIAL GUIDELINE]: 每一格必须体现明显的纵深层次感、精准的画面位置排布及角色的叙事动态。
+${panelInstructions && panelInstructions.length > 0 ? `\n[PANEL INSTRUCTIONS]:\n${panelInstructions.map((instr, idx) => `Grid ${idx + 1}: ${instr}`).join('\n')}` : ''}
+FINAL CHECK: Ensure all panels are ${panelAspectRatio} vertical aspect ratio.`;
 
   const parts: any[] = [];
   roles.forEach(r => parts.push({ inlineData: { mimeType: r.mimeType, data: r.data } }));
   bgs.forEach(b => parts.push({ inlineData: { mimeType: b.mimeType, data: b.data } }));
-  props.forEach(p => parts.push({ inlineData: { mimeType: p.mimeType, data: p.data } }));
   if (styleRefImage) parts.push({ inlineData: { mimeType: 'image/png', data: styleRefImage.split(',')[1] } });
   if (collageRef) parts.push({ inlineData: { mimeType: 'image/png', data: collageRef.url.split(',')[1] } });
   if (contextImage) parts.push({ inlineData: { mimeType: 'image/png', data: contextImage.split(',')[1] } });
@@ -193,7 +184,7 @@ export const editImage = async (
   const parts: any[] = [{ inlineData: { mimeType: 'image/png', data: cleanBase64 } }];
   if (refImageBase64) parts.push({ inlineData: { mimeType: 'image/png', data: refImageBase64.split(',')[1] } });
   if (styleRefImage) parts.push({ inlineData: { mimeType: 'image/png', data: styleRefImage.split(',')[1] } });
-  parts.push({ text: `EDIT TASK: Modify this ${aspectRatio} shot. REQUEST: "${editPrompt}". PRESERVE morphology. NO BORDERS.` });
+  parts.push({ text: `EDIT TASK: Modify this ${aspectRatio} shot. REQUEST: "${editPrompt}". 保持专业分镜纵深、构图位置规范以及角色的叙事动态。` });
   try {
     const response = await withRetry<GenerateContentResponse>(() => {
         const ai = getFreshClient();
@@ -211,21 +202,21 @@ export const generateCameraSuggestions = async (prompt: string, panelCount: numb
             const ai = getFreshClient();
             return ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
-                contents: { parts: [{ text: `你是一个世界级的电影摄影指导。请基于场景描述，规划 ${panelCount} 个具备极高专业深度的电影级分镜脚本。
+                contents: { parts: [{ text: `你是一个世界级的电影摄影指导。请规划 ${panelCount} 个精简的分镜。
                 
 场景背景：${prompt}
 
-${FIVE_DIMENSION_SCRIPT_GUIDE}
+${COMPACT_SCRIPT_GUIDE}
 
 输出要求：
-- 请输出恰好 ${panelCount} 行纯文本。
-- 每一行代表一个独立的分镜描述。
-- 严禁输出任何序号、前导词或多余的解释。` }] }
+- 每行必须严格遵循七项简写格式。
+- 位置/朝向模块：请明确描述角色的画面占位（偏左/偏右/居中等）及正背面朝向（正对/侧对/背向镜头等）。
+- 叙事模块：请丰富描述角色具体的肢体动作和面部表情。` }] }
             });
         });
         const rawText = response.text || "";
-        return rawText.split('\n').map(line => line.replace(/^[0-9]+[.\-、\s]*/, '').trim()).filter(line => line.length > 10).slice(0, panelCount);
-    } catch (error) { return new Array(panelCount).fill("[环境信息]：电影级光影。[镜头语言]：MCU。[镜头视角与焦段]：平视，35mm。[动态状态]：固定镜头。[角色构图元素]：角色位于中心(0.5, 0.5)，动作待命。"); }
+        return rawText.split('\n').map(line => line.replace(/^[0-9]+[.\-、\s]*/, '').trim()).filter(line => line.length > 5).slice(0, panelCount);
+    } catch (error) { return new Array(panelCount).fill("[自然光, MCU, 平视/35mm, 镜头倾斜0°, 纵深(无前景), 画面中心/正对镜头, 叙事(角色保持静态，表情平和)]"); }
 };
 
 export const generateCameraMovement = async (prompt: string): Promise<string> => {
@@ -233,10 +224,10 @@ export const generateCameraMovement = async (prompt: string): Promise<string> =>
     try {
         const response = await withRetry<GenerateContentResponse>(() => {
             const ai = getFreshClient();
-            return ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: { parts: [{ text: `场景: ${prompt}` }] }, config: { systemInstruction: "Output a camera movement description (Chinese). Max 10 words." } });
+            return ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: { parts: [{ text: `场景: ${prompt}` }] }, config: { systemInstruction: "输出精简的摄影动线（中文）。必须包含纵深调度逻辑、位置关系与角色的朝向动作描述。" } });
         });
-        return response.text || "固定镜头。";
-    } catch { return "电影动效。"; }
+        return response.text || "固定镜头，纵深构图。";
+    } catch { return "电影级纵深调度。"; }
 };
 
 export const generateScriptLines = async (instruction: string, count: number, attachmentText?: string): Promise<string[]> => {
@@ -248,25 +239,23 @@ export const generateScriptLines = async (instruction: string, count: number, at
                 model: 'gemini-3-flash-preview',
                 contents: { 
                   parts: [{ 
-                    text: `你是一个世界级电影分镜脚本专家。请将以下输入内容拆解为恰好 ${count} 个独立的、具备极高视觉冲击力的电影级分镜描述。
+                    text: `你是一个影视分镜专家。请将内容拆解为 ${count} 个精简的分镜。
 
-${FIVE_DIMENSION_SCRIPT_GUIDE}
+${COMPACT_SCRIPT_GUIDE}
 
 输入内容：${attachmentText || ''}
 附加指令：${instruction}
 
 输出要求：
-- 每一行代表一个独立的镜头。
-- 严禁输出任何多余的解释、序号或前导词。
-- 确保这 ${count} 个分镜在视觉叙事上具备连贯性。` 
+- 严格执行七项简写格式。
+- 特别强化位置与朝向描述：对于每一个分镜，明确角色在画面中偏向哪一侧，是正对、侧对还是背对镜头。` 
                   }] 
                 }
             });
         });
         return (response.text || "").split('\n').filter(l => l.trim() && l.includes('[')).slice(0, count);
     } catch (e) {
-        console.error("Script decomposition failed:", e);
-        return new Array(count).fill("[环境信息]：日间，室内。[镜头语言]：中景。[镜头视角与焦段]：平视，35mm。[动态状态]：固定镜头。[角色构图元素]：角色位于中心，正在待命。");
+        return new Array(count).fill("[自然光, 中景, 平视/35mm, 镜头倾斜0°, 纵深(无), 画面中心/正对, 叙事(角色执行基本待机动作)]");
     }
 };
 
@@ -280,15 +269,8 @@ export const analyzeVideoToScript = async (videoBase64: string, mimeType: string
                 contents: { 
                   parts: [
                     { inlineData: { mimeType, data: videoBase64 } },
-                    { text: `你是一个世界顶尖的电影分析专家。
-请仔细观察这段视频，识别视频中的所有镜头切换点（Shot Cuts）。
-
-对每一个识别出的独立镜头，请按照以下标准分镜脚本格式进行反推描述：
-${FIVE_DIMENSION_SCRIPT_GUIDE}
-
-输出要求：
-- 每一行代表一个独立的镜头分镜描述。
-- 严禁输出多余的解释，仅输出分镜脚本内容。` }
+                    { text: `分析这段视频，识别镜头切换点。对每个镜头按以下七项简写格式描述，重点捕捉角色的实际画面位置、正背面朝向、姿态细节：
+${COMPACT_SCRIPT_GUIDE}` }
                   ]
                 }
             });
@@ -296,18 +278,42 @@ ${FIVE_DIMENSION_SCRIPT_GUIDE}
         return (response.text || "").split('\n').filter(l => l.trim() && l.includes('['));
     } catch (e) {
         console.error("Video analysis failed:", e);
-        throw new Error("视频反推失败，请检查视频格式或稍后重试。");
+        throw new Error("视频反推失败。");
     }
 };
 
+/**
+ * 优化后的梗概生成：极其精简，不含 Markdown 标题和元解释。
+ */
 export const generateDirectorSummary = async (scripts: string[]): Promise<string> => {
     await ensureApiKey();
     try {
         const response = await withRetry<GenerateContentResponse>(() => {
             const ai = getFreshClient();
-            return ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: { parts: [{ text: `根据以下分镜总结成简洁梗概：\n${scripts.join('\n')}` }] } });
+            return ai.models.generateContent({ 
+                model: 'gemini-3-flash-preview', 
+                contents: { 
+                    parts: [{ 
+                        text: `你是一个资深电影导演。请将以下分镜脚本内容提炼为一段极其精炼的“创作指令”（梗概）。
+                        
+要求：
+1. 严禁使用任何 Markdown 标题（如 ###）、列表或解释性文字。
+2. 只要 1-2 句简洁的核心叙事总结。
+3. 重点突出分镜串联后的视觉逻辑，不需要总结处理手法。
+4. 长度控制在 80 字以内。
+
+分镜列表：
+${scripts.join('\n')}` 
+                    }] 
+                } 
+            });
         });
-        return response.text?.trim() || "选中的分镜场景。";
+        
+        let result = response.text?.trim() || "空间叙事。";
+        result = result.replace(/^[\s\S]*?(总结如下|摘要|梗概|提炼)[:：]\s*/, '');
+        result = result.replace(/^[#\s\-*]+/, '');
+        
+        return result;
     } catch { return "无法生成梗概。"; }
 };
 
@@ -316,7 +322,7 @@ export const enhancePrompt = async (rawPrompt: string): Promise<string> => {
   try {
     const response = await withRetry<GenerateContentResponse>(() => {
         const ai = getFreshClient();
-        return ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: `Enhance cinematic prompt: "${rawPrompt}"` });
+        return ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: `Enhance cinematic prompt with depth, position-based composition, and character orientation: "${rawPrompt}"` });
     });
     return response.text || rawPrompt;
   } catch { return rawPrompt; }
