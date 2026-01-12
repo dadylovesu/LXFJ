@@ -19,8 +19,8 @@
               'cine-gold': '#d4af37',
             },
             fontFamily: {
-              mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
-              sans: ['Inter', 'system-ui', 'sans-serif'],
+              mono: ['-apple-system', 'BlinkMacSystemFont', 'PingFang SC', '苹方-简', 'Microsoft YaHei', '微软雅黑', 'Segoe UI', 'Helvetica Neue', 'Helvetica', 'Arial', 'sans-serif'],
+              sans: ['-apple-system', 'BlinkMacSystemFont', 'PingFang SC', '苹方-简', 'Microsoft YaHei', '微软雅黑', 'Segoe UI', 'Helvetica Neue', 'Helvetica', 'Arial', 'sans-serif'],
             }
           }
         }
@@ -31,8 +31,9 @@
       body {
         background-color: #050505;
         color: #e5e5e5;
-        font-family: 'Inter', sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "苹方-简", "Microsoft YaHei", "微软雅黑", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
         -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
         margin: 0;
         overflow: hidden;
       }
@@ -46,7 +47,7 @@
       }
       ::-webkit-scrollbar-thumb {
         background: #222; 
-        border-radius: 10px;
+        border-radius: 14px;
       }
       ::-webkit-scrollbar-thumb:hover {
         background: #333; 
