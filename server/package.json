@@ -1,0 +1,19 @@
+{
+  "name": "cine-ai-proxy-server",
+  "version": "1.0.0",
+  "description": "AI代理服务器 - 支持VPN代理访问Google Gemini API",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "axios": "^1.6.0",
+    "@google/genai": "^0.3.0",
+    "undici": "^5.28.3"
+  }
+}
