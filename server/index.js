@@ -170,7 +170,7 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`\n========================================`);
   console.log(`🚀 代理服务器已启动`);
   console.log(`📡 监听地址: http://0.0.0.0:${PORT}`);
-  console.log(`🌐 局域网访问: http://192.168.10.123:${PORT}`);
+  console.log(`🌐 局域网访问: http://192.168.10.48:${PORT}`);
   console.log(`✅ CORS: 已启用（允许所有来源）`);
   console.log(`🔑 Gemini API: ${process.env.GEMINI_API_KEY ? '已配置' : '未配置'}`);
   console.log(`🔑 RunningHub API: ${process.env.RUNNINGHUB_API_KEY ? '已配置' : '未配置'}`);

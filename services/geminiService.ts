@@ -1,8 +1,9 @@
 
 import { AspectRatio, ImageSize, Asset, CollageData, PanelAspectRatio, LensLabParams } from "../types";
 
-// 后端代理服务器地址 - 从环境变量读取
-const PROXY_SERVER = import.meta.env.VITE_PROXY_SERVER || 'http://192.168.10.123:3001';
+// 环境判断：仅开发环境使用代理
+const IS_DEVELOPMENT = import.meta.env.MODE === 'development';
+const PROXY_SERVER = IS_DEVELOPMENT ? 'http://192.168.10.48:3001' : '';
 
 export const ensureApiKey = async () => {
   // 首先检查用户是否已登录
@@ -14,12 +15,16 @@ export const ensureApiKey = async () => {
 
     throw new Error("请重新登录");
   }
-  // 使用后端代理，无需客户端API密钥
+  // 开发环境：使用后端代理，无需客户端API密钥
 };
 
-// 通过后端代理调用 Gemini API
+// 通过后端代理调用 Gemini API（开发环境）或直接调用（生产环境）
 const callGeminiProxy = async (model: string, contents: any, config?: any) => {
-  const response = await fetch(`${PROXY_SERVER}/api/gemini/generate`, {
+  const endpoint = IS_DEVELOPMENT 
+    ? `${PROXY_SERVER}/api/gemini/generate`
+    : '/api/gemini/generate'; // 生产环境需要配置服务端路由
+
+  const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
