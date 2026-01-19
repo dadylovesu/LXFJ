@@ -1,20 +1,43 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# 通过VPN代理部署，让**你开启VPN**，其他用户**无需VPN**即可正常使用AI功能。
 
-# Run and deploy your AI Studio app
+### 手动启动
+```bash
+# 终端1：启动前端
+npm run dev
 
-This contains everything you need to run your app locally.
+# 终端2：启动后端
+cd server
+npm start
+```
 
-View your app in AI Studio: https://ai.studio/apps/drive/1e-SqutaTxkbvsyBfWJ73Ny9TaN_QpLWf
+### 代理配置 (server/env.config)
 
-## Run Locally
+根据你的VPN/代理软件修改端口：
 
-**Prerequisites:**  Node.js
+```env
+# Clash 默认端口 (推荐)
+HTTP_PROXY=http://127.0.0.1:7890
+HTTPS_PROXY=http://127.0.0.1:7890
+
+# V2Ray 默认端口
+HTTP_PROXY=http://127.0.0.1:10809
+HTTPS_PROXY=http://127.0.0.1:10809
+
+# 系统VPN（全局模式）
+# 如果开启全局VPN，注释掉上面的两行
+```
+
+### 端口配置
+
+- **前端**: `http://192.168.10.48:3000` (已配置)
+- **后端**: `http://192.168.10.48:3001` (已配置)
 
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+### 分享给其他用户
+其他用户直接访问 `http://192.168.10.48:3000` 即可使用，无需开启VPN。
+
+
+### 网络连接问题
+- 确保防火墙允许3000和3001端口
+- 检查本地网络设置
+- 验证IP地址 `192.168.10.48` 是否正确
