@@ -1,9 +1,6 @@
 
+import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { AspectRatio, ImageSize, Asset, CollageData, PanelAspectRatio, LensLabParams } from "../types";
-
-// 环境判断：仅开发环境使用代理
-const IS_DEVELOPMENT = import.meta.env.MODE === 'development';
-const PROXY_SERVER = IS_DEVELOPMENT ? 'http://192.168.10.48:3001' : '';
 
 export const ensureApiKey = async () => {
   // 首先检查用户是否已登录
@@ -15,33 +12,19 @@ export const ensureApiKey = async () => {
 
     throw new Error("请重新登录");
   }
-  // 开发环境：使用后端代理，无需客户端API密钥
+  // @ts-ignore
+  if (window.aistudio && window.aistudio.hasSelectedApiKey) {
+    // @ts-ignore
+    const hasKey = await window.aistudio.hasSelectedApiKey();
+    if (!hasKey) {
+      // @ts-ignore
+      await window.aistudio.openSelectKey();
+    }
+  }
 };
 
-// 通过后端代理调用 Gemini API（开发环境）或直接调用（生产环境）
-const callGeminiProxy = async (model: string, contents: any, config?: any) => {
-  const endpoint = IS_DEVELOPMENT 
-    ? `${PROXY_SERVER}/api/gemini/generate`
-    : '/api/gemini/generate'; // 生产环境需要配置服务端路由
-
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      contents,
-      config
-    })
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Gemini API 调用失败');
-  }
-
-  return response.json();
+const getFreshClient = () => {
+  return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
 async function withRetry<T>(operation: () => Promise<T>, maxRetries = 4): Promise<T> {
@@ -138,14 +121,12 @@ export const generateLensLabSequence = async (
   parts.push({ text: systemPrompt });
   
   try {
-    const response = await withRetry(() => 
-      callGeminiProxy('gemini-3-pro-image-preview', { parts }, { imageConfig: { aspectRatio: containerAspectRatio, imageSize: imageSize } })
-    );
-    
+    const response = await withRetry<GenerateContentResponse>(() => {
+        const ai = getFreshClient();
+        return ai.models.generateContent({ model: 'gemini-3-pro-image-preview', contents: { parts }, config: { imageConfig: { aspectRatio: containerAspectRatio as any, imageSize: imageSize as any } } });
+    });
     let fullImageBase64 = '';
-    for (const part of response.candidates?.[0]?.content?.parts || []) { 
-      if (part.inlineData) fullImageBase64 = `data:image/png;base64,${part.inlineData.data}`; 
-    }
+    for (const part of response.candidates?.[0]?.content?.parts || []) { if (part.inlineData) fullImageBase64 = `data:image/png;base64,${part.inlineData.data}`; }
     if (!fullImageBase64) throw new Error("No image generated.");
     const panels = await sliceImageGrid(fullImageBase64, gridSize, gridSize);
     return { fullImage: fullImageBase64, slices: panels, panelPrompts };
@@ -183,14 +164,12 @@ FINAL CHECK: Ensure all panels are ${panelAspectRatio} vertical aspect ratio.`;
   parts.push({ text: systemPrompt });
 
   try {
-    const response = await withRetry(() => 
-      callGeminiProxy('gemini-3-pro-image-preview', { parts }, { imageConfig: { aspectRatio: containerAspectRatio, imageSize: imageSize } })
-    );
-    
+    const response = await withRetry<GenerateContentResponse>(() => {
+        const ai = getFreshClient();
+        return ai.models.generateContent({ model: 'gemini-3-pro-image-preview', contents: { parts }, config: { imageConfig: { aspectRatio: containerAspectRatio as any, imageSize: imageSize as any } } });
+    });
     let fullImageBase64 = '';
-    for (const part of response.candidates?.[0]?.content?.parts || []) { 
-      if (part.inlineData) fullImageBase64 = `data:image/png;base64,${part.inlineData.data}`; 
-    }
+    for (const part of response.candidates?.[0]?.content?.parts || []) { if (part.inlineData) fullImageBase64 = `data:image/png;base64,${part.inlineData.data}`; }
     if (!fullImageBase64) throw new Error("No image generated.");
     const panels = await sliceImageGrid(fullImageBase64, gridSize, gridSize);
     return { fullImage: fullImageBase64, slices: panels };
@@ -206,15 +185,12 @@ export const editImage = async (
   if (refImageBase64) parts.push({ inlineData: { mimeType: 'image/png', data: refImageBase64.split(',')[1] } });
   if (styleRefImage) parts.push({ inlineData: { mimeType: 'image/png', data: styleRefImage.split(',')[1] } });
   parts.push({ text: `EDIT TASK: Modify this ${aspectRatio} shot. REQUEST: "${editPrompt}". 保持专业分镜纵深、构图位置规范以及角色的叙事动态。` });
-  
   try {
-    const response = await withRetry(() => 
-      callGeminiProxy(modelName, { parts }, { imageConfig: { aspectRatio: aspectRatio, imageSize: modelName === 'gemini-3-pro-image-preview' ? imageSize : undefined } })
-    );
-    
-    for (const part of response.candidates?.[0]?.content?.parts || []) { 
-      if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`; 
-    }
+    const response = await withRetry<GenerateContentResponse>(() => {
+        const ai = getFreshClient();
+        return ai.models.generateContent({ model: modelName, contents: { parts }, config: { imageConfig: { aspectRatio: aspectRatio as any, imageSize: modelName === 'gemini-3-pro-image-preview' ? imageSize as any : undefined } } });
+    });
+    for (const part of response.candidates?.[0]?.content?.parts || []) { if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`; }
     throw new Error("No image data returned.");
   } catch (error: any) { throw error; }
 };
@@ -222,8 +198,11 @@ export const editImage = async (
 export const generateCameraSuggestions = async (prompt: string, panelCount: number): Promise<string[]> => {
     await ensureApiKey();
     try {
-        const response = await withRetry(() => 
-          callGeminiProxy('gemini-3-flash-preview', { parts: [{ text: `你是一个世界级的电影摄影指导。请规划 ${panelCount} 个精简的分镜。
+        const response = await withRetry<GenerateContentResponse>(() => {
+            const ai = getFreshClient();
+            return ai.models.generateContent({
+                model: 'gemini-3-flash-preview',
+                contents: { parts: [{ text: `你是一个世界级的电影摄影指导。请规划 ${panelCount} 个精简的分镜。
                 
 场景背景：${prompt}
 
@@ -232,23 +211,21 @@ ${COMPACT_SCRIPT_GUIDE}
 输出要求：
 - 每行必须严格遵循七项简写格式。
 - 位置/朝向模块：请明确描述角色的画面占位（偏左/偏右/居中等）及正背面朝向（正对/侧对/背向镜头等）。
-- 叙事模块：请丰富描述角色具体的肢体动作和面部表情。` }] })
-        );
-        
+- 叙事模块：请丰富描述角色具体的肢体动作和面部表情。` }] }
+            });
+        });
         const rawText = response.text || "";
         return rawText.split('\n').map(line => line.replace(/^[0-9]+[.\-、\s]*/, '').trim()).filter(line => line.length > 5).slice(0, panelCount);
-    } catch (error) { 
-      return new Array(panelCount).fill("[自然光, MCU, 平视/35mm, 镜头倾斜0°, 纵深(无前景), 画面中心/正对镜头, 叙事(角色保持静态，表情平和)]"); 
-    }
+    } catch (error) { return new Array(panelCount).fill("[自然光, MCU, 平视/35mm, 镜头倾斜0°, 纵深(无前景), 画面中心/正对镜头, 叙事(角色保持静态，表情平和)]"); }
 };
 
 export const generateCameraMovement = async (prompt: string): Promise<string> => {
     await ensureApiKey();
     try {
-        const response = await withRetry(() => 
-          callGeminiProxy('gemini-3-flash-preview', { parts: [{ text: `场景: ${prompt}` }] }, { systemInstruction: "输出精简的摄影动线（中文）。必须包含纵深调度逻辑、位置关系与角色的朝向动作描述。" })
-        );
-        
+        const response = await withRetry<GenerateContentResponse>(() => {
+            const ai = getFreshClient();
+            return ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: { parts: [{ text: `场景: ${prompt}` }] }, config: { systemInstruction: "输出精简的摄影动线（中文）。必须包含纵深调度逻辑、位置关系与角色的朝向动作描述。" } });
+        });
         return response.text || "固定镜头，纵深构图。";
     } catch { return "电影级纵深调度。"; }
 };
@@ -256,8 +233,13 @@ export const generateCameraMovement = async (prompt: string): Promise<string> =>
 export const generateScriptLines = async (instruction: string, count: number, attachmentText?: string): Promise<string[]> => {
     await ensureApiKey();
     try {
-        const response = await withRetry(() => 
-          callGeminiProxy('gemini-3-flash-preview', { parts: [{ text: `你是一个影视分镜专家。请将内容拆解为 ${count} 个精简的分镜。
+        const response = await withRetry<GenerateContentResponse>(() => {
+            const ai = getFreshClient();
+            return ai.models.generateContent({
+                model: 'gemini-3-flash-preview',
+                contents: { 
+                  parts: [{ 
+                    text: `你是一个影视分镜专家。请将内容拆解为 ${count} 个精简的分镜。
 
 ${COMPACT_SCRIPT_GUIDE}
 
@@ -266,9 +248,11 @@ ${COMPACT_SCRIPT_GUIDE}
 
 输出要求：
 - 严格执行七项简写格式。
-- 特别强化位置与朝向描述：对于每一个分镜，明确角色在画面中偏向哪一侧，是正对、侧对还是背对镜头。` }] })
-        );
-        
+- 特别强化位置与朝向描述：对于每一个分镜，明确角色在画面中偏向哪一侧，是正对、侧对还是背对镜头。` 
+                  }] 
+                }
+            });
+        });
         return (response.text || "").split('\n').filter(l => l.trim() && l.includes('[')).slice(0, count);
     } catch (e) {
         return new Array(count).fill("[自然光, 中景, 平视/35mm, 镜头倾斜0°, 纵深(无), 画面中心/正对, 叙事(角色执行基本待机动作)]");
@@ -278,14 +262,19 @@ ${COMPACT_SCRIPT_GUIDE}
 export const analyzeVideoToScript = async (videoBase64: string, mimeType: string): Promise<string[]> => {
     await ensureApiKey();
     try {
-        const response = await withRetry(() => 
-          callGeminiProxy('gemini-3-pro-preview', { parts: [
-            { inlineData: { mimeType, data: videoBase64 } },
-            { text: `分析这段视频，识别镜头切换点。对每个镜头按以下七项简写格式描述，重点捕捉角色的实际画面位置、正背面朝向、姿态细节：
+        const response = await withRetry<GenerateContentResponse>(() => {
+            const ai = getFreshClient();
+            return ai.models.generateContent({
+                model: 'gemini-3-pro-preview',
+                contents: { 
+                  parts: [
+                    { inlineData: { mimeType, data: videoBase64 } },
+                    { text: `分析这段视频，识别镜头切换点。对每个镜头按以下七项简写格式描述，重点捕捉角色的实际画面位置、正背面朝向、姿态细节：
 ${COMPACT_SCRIPT_GUIDE}` }
-          ] })
-        );
-        
+                  ]
+                }
+            });
+        });
         return (response.text || "").split('\n').filter(l => l.trim() && l.includes('['));
     } catch (e) {
         console.error("Video analysis failed:", e);
@@ -299,8 +288,13 @@ ${COMPACT_SCRIPT_GUIDE}` }
 export const generateDirectorSummary = async (scripts: string[]): Promise<string> => {
     await ensureApiKey();
     try {
-        const response = await withRetry(() => 
-          callGeminiProxy('gemini-3-flash-preview', { parts: [{ text: `你是一个资深电影导演。请将以下分镜脚本内容提炼为一段极其精炼的"创作指令"（梗概）。
+        const response = await withRetry<GenerateContentResponse>(() => {
+            const ai = getFreshClient();
+            return ai.models.generateContent({ 
+                model: 'gemini-3-flash-preview', 
+                contents: { 
+                    parts: [{ 
+                        text: `你是一个资深电影导演。请将以下分镜脚本内容提炼为一段极其精炼的“创作指令”（梗概）。
                         
 要求：
 1. 严禁使用任何 Markdown 标题（如 ###）、列表或解释性文字。
@@ -309,8 +303,11 @@ export const generateDirectorSummary = async (scripts: string[]): Promise<string
 4. 长度控制在 80 字以内。
 
 分镜列表：
-${scripts.join('\n')}` }] })
-        );
+${scripts.join('\n')}` 
+                    }] 
+                } 
+            });
+        });
         
         let result = response.text?.trim() || "空间叙事。";
         result = result.replace(/^[\s\S]*?(总结如下|摘要|梗概|提炼)[:：]\s*/, '');
@@ -323,10 +320,10 @@ ${scripts.join('\n')}` }] })
 export const enhancePrompt = async (rawPrompt: string): Promise<string> => {
   await ensureApiKey();
   try {
-    const response = await withRetry(() => 
-      callGeminiProxy('gemini-3-flash-preview', { parts: [{ text: `Enhance cinematic prompt with depth, position-based composition, and character orientation: "${rawPrompt}"` }] })
-    );
-    
+    const response = await withRetry<GenerateContentResponse>(() => {
+        const ai = getFreshClient();
+        return ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: `Enhance cinematic prompt with depth, position-based composition, and character orientation: "${rawPrompt}"` });
+    });
     return response.text || rawPrompt;
   } catch { return rawPrompt; }
 };
@@ -334,13 +331,10 @@ export const enhancePrompt = async (rawPrompt: string): Promise<string> => {
 export const analyzeAsset = async (fileBase64: string, mimeType: string, prompt: string): Promise<string> => {
   await ensureApiKey();
   try {
-    const response = await withRetry(() => 
-      callGeminiProxy('gemini-3-pro-preview', { parts: [
-        { inlineData: { mimeType, data: fileBase64 } }, 
-        { text: prompt }
-      ] })
-    );
-    
+    const response = await withRetry<GenerateContentResponse>(() => {
+        const ai = getFreshClient();
+        return ai.models.generateContent({ model: 'gemini-3-pro-preview', contents: { parts: [{ inlineData: { mimeType, data: fileBase64 } }, { text: prompt }] } });
+    });
     return response.text || "No analysis.";
   } catch { return "Failed."; }
 };
