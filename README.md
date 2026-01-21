@@ -10,7 +10,7 @@
 npm run dev
 
 # 终端2：启动后端
-cd server
+cd server 
 npm start
 ```
 
