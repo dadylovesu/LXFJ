@@ -52,7 +52,7 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({
                     <span className="text-[11px] font-mono font-bold uppercase tracking-widest text-zinc-100">
                         {activeProject?.name || "未命名工程"}
                     </span>
-                    <ChevronDown size={12} className={`text-zinc-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                    <ChevronDown size={12} className={`text-zinc-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                 </button>
             </div>
         </div>
@@ -60,14 +60,14 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({
         <div className="flex items-center gap-2">
             <button 
               onClick={onSaveIncremental}
-              className="p-2 text-zinc-400 hover:text-cine-accent hover:bg-zinc-800 rounded-md transition-all group"
+              className="p-2 text-zinc-500 hover:text-cine-accent hover:bg-zinc-800 rounded-md transition-all group"
               title="保存工程脚本 (Ctrl+S)"
             >
                 <Save size={16} />
             </button>
             <button 
               onClick={onExportFull}
-              className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 text-zinc-200 text-[12px] font-bold font-mono tracking-widest rounded-[2px] border border-zinc-700 hover:bg-zinc-700 transition-all"
+              className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 text-zinc-300 text-[9px] font-bold font-mono tracking-widest rounded-[2px] border border-zinc-700 hover:bg-zinc-700 transition-all"
             >
                 <Package size={12} />
                 导出完整工程
@@ -79,9 +79,9 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({
       {isOpen && (
         <div className="absolute top-full left-5 right-5 mt-2 bg-cine-dark border border-zinc-800 rounded-sm shadow-2xl animate-in slide-in-from-top-2 duration-200">
             <div className="p-4 border-b border-zinc-800 flex justify-between items-center">
-                <span className="text-[12px] font-mono font-bold text-zinc-400 uppercase tracking-widest">工程库 (PROJECTS)</span>
+                <span className="text-[9px] font-mono font-bold text-zinc-500 uppercase tracking-widest">工程库 (PROJECTS)</span>
                 <div className="flex gap-2">
-                    <button onClick={() => importRef.current?.click()} className="text-[12px] text-cine-accent hover:underline font-mono">导入脚本</button>
+                    <button onClick={() => importRef.current?.click()} className="text-[9px] text-cine-accent hover:underline font-mono">导入脚本</button>
                     <input type="file" ref={importRef} className="hidden" accept=".json" onChange={(e) => e.target.files && onImportProject(e.target.files[0])} />
                 </div>
             </div>
@@ -98,7 +98,7 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({
                             {editingId === p.id ? (
                                 <input 
                                     autoFocus
-                                    className="bg-black border border-cine-accent text-zinc-100 font-mono text-[13px] px-2 py-1 rounded"
+                                    className="bg-black border border-cine-accent text-zinc-200 font-mono text-[10px] px-2 py-1 rounded"
                                     defaultValue={p.name}
                                     onClick={e => e.stopPropagation()}
                                     onBlur={e => { onRenameProject(p.id, e.target.value); setEditingId(null); }}
@@ -107,7 +107,7 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({
                                     }}
                                 />
                             ) : (
-                                <span className={`text-[13px] font-mono font-bold tracking-wider ${p.id === activeProjectId ? 'text-cine-accent' : 'text-zinc-300'}`}>
+                                <span className={`text-[10px] font-mono font-bold tracking-wider ${p.id === activeProjectId ? 'text-cine-accent' : 'text-zinc-400'}`}>
                                     {p.name}
                                 </span>
                             )}
@@ -115,13 +115,13 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button 
                                 onClick={(e) => { e.stopPropagation(); setEditingId(p.id); }}
-                                className="p-1.5 text-zinc-400 hover:text-white"
+                                className="p-1.5 text-zinc-500 hover:text-white"
                             >
                                 <Edit3 size={12} />
                             </button>
                             <button 
                                 onClick={(e) => { e.stopPropagation(); onDeleteProject(p.id); }}
-                                className="p-1.5 text-zinc-400 hover:text-red-500"
+                                className="p-1.5 text-zinc-500 hover:text-red-500"
                             >
                                 <Trash2 size={12} />
                             </button>
@@ -133,7 +133,7 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({
             <div className="p-4 bg-zinc-900/50">
                 <Button 
                     variant="primary" 
-                    className="w-full text-[12px] h-9 border-dashed border-zinc-700"
+                    className="w-full text-[9px] h-9 border-dashed border-zinc-700"
                     onClick={() => { onNewProject(); setIsOpen(false); }}
                 >
                     <FilePlus size={12} className="mr-2" />

@@ -74,22 +74,6 @@ export interface CollageData {
   aspectRatio: string;
 }
 
-export interface ProjectState {
-  id: string;
-  name: string;
-  images: GeneratedImage[];
-  assets: Asset[];
-  gridSize: number;
-  panelAspectRatio: PanelAspectRatio;
-  imageSize: ImageSize;
-  prompt: string;
-  stylePrompt: string;
-  styleRefImage: string | null;
-  panelPrompts: string[];
-  activeCollage: CollageData | null;
-  lastExportTimestamp?: number;
-}
-
 export interface ScriptItem {
   id: string;
   content: string;
@@ -109,4 +93,21 @@ export interface ScriptGroup {
   scripts: string[];
   summary: string;
   timestamp: number;
+}
+
+export interface ProjectState {
+  id: string;
+  name: string;
+  images: GeneratedImage[];
+  assets: Asset[];
+  gridSize: number;
+  panelAspectRatio: PanelAspectRatio;
+  imageSize: ImageSize;
+  prompt: string;
+  stylePrompt: string;
+  styleRefImage: string | null;
+  panelPrompts: string[];
+  activeCollage: CollageData | null;
+  lastExportTimestamp?: number;
+  scriptGroups?: ScriptGroup[]; // 新增：脚本拆解历史记录
 }

@@ -79,19 +79,19 @@ export const OmniViewLensLab: React.FC<OmniViewLensLabProps> = ({
         className="w-full px-4 py-3 flex items-center justify-between hover:bg-zinc-800/50 transition-colors group"
       >
         <div className="flex items-center gap-3">
-          <Camera size={14} className={`${isOpen ? 'text-cine-accent' : 'text-zinc-400'}`} />
-          <span className={`text-[13px] font-mono font-bold uppercase tracking-[0.2em] ${isOpen ? 'text-zinc-100' : 'text-zinc-400'}`}>
+          <Camera size={14} className={`${isOpen ? 'text-cine-accent' : 'text-zinc-500'}`} />
+          <span className={`text-[10px] font-mono font-bold uppercase tracking-[0.2em] ${isOpen ? 'text-zinc-200' : 'text-zinc-500'}`}>
             全方位镜头实验室 (OMNI-VIEW LENS LAB)
           </span>
         </div>
-        {isOpen ? <ChevronUp size={14} className="text-zinc-500" /> : <ChevronDown size={14} className="text-zinc-500" />}
+        {isOpen ? <ChevronUp size={14} className="text-zinc-600" /> : <ChevronDown size={14} className="text-zinc-600" />}
       </button>
 
       {isOpen && (
         <div className="p-4 space-y-5 border-t border-zinc-800/50 animate-in fade-in slide-in-from-top-2">
           {/* Anchor Image Input */}
           <div className="space-y-3">
-            <label className="text-[12px] text-zinc-400 font-mono uppercase tracking-widest flex items-center justify-between">
+            <label className="text-[9px] text-zinc-500 font-mono uppercase tracking-widest flex items-center justify-between">
               锚点基准图 (ANCHOR IMAGE)
               {anchorImage && <button onClick={() => setAnchorImage(null)} className="text-red-500 hover:underline">移除</button>}
             </label>
@@ -100,14 +100,14 @@ export const OmniViewLensLab: React.FC<OmniViewLensLabProps> = ({
                 onClick={() => fileInputRef.current?.click()}
                 className="aspect-video border border-dashed border-zinc-800 rounded-sm flex flex-col items-center justify-center gap-2 hover:border-cine-accent/50 hover:bg-cine-accent/5 cursor-pointer transition-all"
               >
-                <Upload size={18} className="text-zinc-500" />
-                <span className="text-[12px] font-mono text-zinc-500">点击上传锚点图像</span>
+                <Upload size={18} className="text-zinc-600" />
+                <span className="text-[9px] font-mono text-zinc-600">点击上传锚点图像</span>
                 <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileUpload} />
               </div>
             ) : (
               <div className="aspect-video relative rounded-sm overflow-hidden border border-zinc-700">
                 <img src={anchorImage} className="w-full h-full object-cover" />
-                <div className="absolute top-2 left-2 px-1.5 py-0.5 bg-cine-accent text-black text-[10px] font-bold font-mono rounded-[1px]">ANCHOR</div>
+                <div className="absolute top-2 left-2 px-1.5 py-0.5 bg-cine-accent text-black text-[8px] font-bold font-mono rounded-[1px]">ANCHOR</div>
               </div>
             )}
           </div>
@@ -117,8 +117,8 @@ export const OmniViewLensLab: React.FC<OmniViewLensLabProps> = ({
              {/* Focal Length */}
              <div className="space-y-2">
                 <div className="flex justify-between items-center">
-                   <span className="text-[10px] text-zinc-400 font-mono uppercase tracking-widest">Focal Length (焦段)</span>
-                   <span className="text-[13px] text-cine-accent font-mono font-bold">{currentParams.focalLength}mm</span>
+                   <span className="text-[8px] text-zinc-500 font-mono uppercase tracking-widest">Focal Length (焦段)</span>
+                   <span className="text-[10px] text-cine-accent font-mono font-bold">{currentParams.focalLength}mm</span>
                 </div>
                 <input 
                   type="range" min="15" max="250" step="1" 
@@ -131,8 +131,8 @@ export const OmniViewLensLab: React.FC<OmniViewLensLabProps> = ({
              {/* Pitch */}
              <div className="space-y-2">
                 <div className="flex justify-between items-center">
-                   <span className="text-[10px] text-zinc-400 font-mono uppercase tracking-widest">Camera Pitch (俯仰角)</span>
-                   <span className="text-[13px] text-cine-accent font-mono font-bold">{getPitchLabel(currentParams.pitch)}</span>
+                   <span className="text-[8px] text-zinc-500 font-mono uppercase tracking-widest">Camera Pitch (俯仰角)</span>
+                   <span className="text-[10px] text-cine-accent font-mono font-bold">{getPitchLabel(currentParams.pitch)}</span>
                 </div>
                 <input 
                   type="range" min="-90" max="90" step="1" 
@@ -145,8 +145,8 @@ export const OmniViewLensLab: React.FC<OmniViewLensLabProps> = ({
              {/* Yaw */}
              <div className="space-y-2">
                 <div className="flex justify-between items-center">
-                   <span className="text-[10px] text-zinc-400 font-mono uppercase tracking-widest">Camera Yaw (环绕角)</span>
-                   <span className="text-[13px] text-cine-accent font-mono font-bold">{getYawLabel(currentParams.yaw)}</span>
+                   <span className="text-[8px] text-zinc-500 font-mono uppercase tracking-widest">Camera Yaw (环绕角)</span>
+                   <span className="text-[10px] text-cine-accent font-mono font-bold">{getYawLabel(currentParams.yaw)}</span>
                 </div>
                 <input 
                   type="range" min="-180" max="180" step="1" 
@@ -160,8 +160,8 @@ export const OmniViewLensLab: React.FC<OmniViewLensLabProps> = ({
           {/* Queue Status */}
           <div className="space-y-3 pt-2">
             <div className="flex justify-between items-end">
-               <span className="text-[12px] text-zinc-400 font-mono uppercase tracking-widest">装填进度 (QUEUE)</span>
-               <span className="text-[13px] text-zinc-200 font-mono font-bold">{queue.length} / {totalSlots}</span>
+               <span className="text-[9px] text-zinc-500 font-mono uppercase tracking-widest">装填进度 (QUEUE)</span>
+               <span className="text-[10px] text-zinc-300 font-mono font-bold">{queue.length} / {totalSlots}</span>
             </div>
             <div className="flex gap-1 h-1">
                {[...Array(totalSlots)].map((_, i) => (
@@ -191,15 +191,15 @@ export const OmniViewLensLab: React.FC<OmniViewLensLabProps> = ({
              </Button>
              
              {queue.length > 0 && (
-               <button onClick={handleClear} className="w-full text-center text-[12px] text-zinc-500 hover:text-red-500 font-mono uppercase py-2 flex items-center justify-center gap-2">
+               <button onClick={handleClear} className="w-full text-center text-[9px] text-zinc-600 hover:text-red-500 font-mono uppercase py-2 flex items-center justify-center gap-2">
                  <Trash2 size={10} /> 重置实验参数
                </button>
              )}
           </div>
 
           <div className="p-3 bg-black/40 rounded-sm border border-zinc-800 flex items-start gap-3">
-             <Info size={14} className="text-zinc-500 mt-0.5" />
-             <p className="text-[12px] text-zinc-500 font-mono leading-relaxed">
+             <Info size={14} className="text-zinc-600 mt-0.5" />
+             <p className="text-[9px] text-zinc-600 font-mono leading-relaxed">
                镜头参数已锁定。向左滑动俯仰角为仰拍，向右为俯拍；环绕角向左旋转模拟左侧视角。
              </p>
           </div>

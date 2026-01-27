@@ -57,12 +57,12 @@ export const FeatureGuide: React.FC<FeatureGuideProps> = ({ isOpen, onClose }) =
               <h2 className="text-white font-mono uppercase tracking-[0.25em] text-sm font-bold">
                 功能操作指南 (SYSTEM GUIDE)
               </h2>
-              <p className="text-[13px] text-zinc-300 font-mono mt-0.5 uppercase tracking-widest">
+              <p className="text-[10px] text-zinc-400 font-mono mt-0.5 uppercase tracking-widest">
                 专业电影分镜创作 Agent - 全图标与功能逻辑解析
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="text-zinc-400 hover:text-white transition-all hover:rotate-90">
+          <button onClick={onClose} className="text-zinc-500 hover:text-white transition-all hover:rotate-90">
             <X size={20} />
           </button>
         </div>
@@ -78,12 +78,12 @@ export const FeatureGuide: React.FC<FeatureGuideProps> = ({ isOpen, onClose }) =
                 <div className="space-y-4">
                   {section.items.map((item, iIdx) => (
                     <div key={iIdx} className="flex gap-4 group">
-                      <div className="w-10 h-10 rounded-sm bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300 group-hover:text-cine-accent group-hover:border-cine-accent/50 transition-all flex-shrink-0">
+                      <div className="w-10 h-10 rounded-sm bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400 group-hover:text-cine-accent group-hover:border-cine-accent/50 transition-all flex-shrink-0">
                         {item.icon}
                       </div>
                       <div className="space-y-1">
-                        <h4 className="text-zinc-100 text-[13px] font-bold font-mono uppercase tracking-wider">{item.name}</h4>
-                        <p className="text-[11px] text-zinc-400 leading-relaxed font-sans">{item.desc}</p>
+                        <h4 className="text-zinc-200 text-[10px] font-bold font-mono uppercase tracking-wider">{item.name}</h4>
+                        <p className="text-[11px] text-zinc-500 leading-relaxed font-sans">{item.desc}</p>
                       </div>
                     </div>
                   ))}

@@ -13,9 +13,7 @@
     "react-dom": "^19.2.0",
     "@google/genai": "^1.30.0",
     "lucide-react": "^0.555.0",
-    "jszip": "latest",
-    "axios": "^1.13.2"
-
+    "jszip": "latest"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

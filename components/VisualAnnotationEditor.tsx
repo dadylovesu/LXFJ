@@ -2,7 +2,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { X, Square, Circle, Pencil, MoveUpRight, Check, Palette, Type, MousePointer2, Eraser, Trash2, ArrowRight } from 'lucide-react';
 import { Button } from './Button';
-import { generateUUID } from '../utils/uuid';
 
 interface Shape {
   id: string;
@@ -94,7 +93,7 @@ export const VisualAnnotationEditor: React.FC<VisualAnnotationEditorProps> = ({ 
     const minPoints = (tool === 'path') ? 1 : 2;
     if (currentPoints.length >= minPoints) {
       const newShape: Shape = {
-        id: generateUUID(),
+        id: crypto.randomUUID(),
         type: tool,
         points: [...currentPoints],
         color,
@@ -242,7 +241,7 @@ export const VisualAnnotationEditor: React.FC<VisualAnnotationEditorProps> = ({ 
       {/* Top Toolbar */}
       <div className="h-16 px-6 flex items-center justify-between border-b border-zinc-800 bg-zinc-900/60 backdrop-blur-md">
         <div className="flex items-center gap-6">
-          <button onClick={onClose} className="text-zinc-300 hover:text-white transition-colors flex items-center gap-2 font-mono text-xs uppercase tracking-widest">
+          <button onClick={onClose} className="text-zinc-400 hover:text-white transition-colors flex items-center gap-2 font-mono text-xs uppercase tracking-widest">
             <X size={18} /> 返回监视器
           </button>
           <div className="h-6 w-[1px] bg-zinc-700"></div>
@@ -256,7 +255,7 @@ export const VisualAnnotationEditor: React.FC<VisualAnnotationEditorProps> = ({ 
 
         <div className="flex items-center gap-8">
           <div className="flex items-center gap-3">
-             <span className="text-[12px] text-zinc-400 font-mono font-bold uppercase tracking-widest">粗细</span>
+             <span className="text-[9px] text-zinc-500 font-mono font-bold uppercase tracking-widest">粗细</span>
              <input type="range" min="1" max="10" step="1" value={strokeWidth} onChange={(e) => setStrokeWidth(parseInt(e.target.value))} className="w-24 accent-cine-accent" />
           </div>
           <div className="flex gap-2">
@@ -270,7 +269,7 @@ export const VisualAnnotationEditor: React.FC<VisualAnnotationEditorProps> = ({ 
             ))}
           </div>
           <div className="h-6 w-[1px] bg-zinc-700"></div>
-          <button onClick={() => setShapes([])} className="text-zinc-400 hover:text-red-400 p-2"><Trash2 size={18} /></button>
+          <button onClick={() => setShapes([])} className="text-zinc-500 hover:text-red-400 p-2"><Trash2 size={18} /></button>
           <Button variant="accent" size="sm" onClick={handleFlattenAndConfirm} className="gap-2 px-6">
             <Check size={16} /> 确定标注并重绘
           </Button>
@@ -306,7 +305,7 @@ export const VisualAnnotationEditor: React.FC<VisualAnnotationEditorProps> = ({ 
         )}
       </div>
 
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-md px-4 py-2 rounded-full border border-zinc-800 text-[13px] text-zinc-400 font-mono tracking-widest flex items-center gap-3">
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-md px-4 py-2 rounded-full border border-zinc-800 text-[10px] text-zinc-500 font-mono tracking-widest flex items-center gap-3">
         <MousePointer2 size={12} className="text-cine-accent" />
         点击并拖动以在分镜中创建视觉引导标注
       </div>
@@ -317,9 +316,9 @@ export const VisualAnnotationEditor: React.FC<VisualAnnotationEditorProps> = ({ 
 const ToolBtn = ({ active, onClick, icon, label }: any) => (
   <button 
     onClick={onClick}
-    className={`flex flex-col items-center gap-1 p-2 rounded-sm transition-all min-w-[48px] ${active ? 'bg-cine-accent text-black shadow-lg' : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'}`}
+    className={`flex flex-col items-center gap-1 p-2 rounded-sm transition-all min-w-[48px] ${active ? 'bg-cine-accent text-black shadow-lg' : 'text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300'}`}
   >
     {icon}
-    <span className="text-[10px] font-bold uppercase font-mono">{label}</span>
+    <span className="text-[8px] font-bold uppercase font-mono">{label}</span>
   </button>
 );

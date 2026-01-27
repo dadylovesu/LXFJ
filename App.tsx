@@ -10,8 +10,7 @@ import { CollageEditor } from './components/CollageEditor';
 import { ScriptEditor } from './components/ScriptEditor';
 import { FeatureGuide } from './components/FeatureGuide'; 
 import { ProjectManager } from './components/ProjectManager';
-import { generateUUID } from './utils/uuid';
-import { Asset, GeneratedImage, AspectRatio, PanelAspectRatio, ImageSize, AssetCategory, CollageData, LensLabParams, ProjectState } from './types';
+import { Asset, GeneratedImage, AspectRatio, PanelAspectRatio, ImageSize, AssetCategory, CollageData, LensLabParams, ProjectState, ScriptGroup } from './types';
 import { generateMultiViewGrid, fileToBase64, enhancePrompt, analyzeAsset, ReferenceImageData, generateCameraMovement, editImage, generateLensLabSequence } from './services/geminiService';
 import { saveToStorage, loadFromStorage, clearStorage } from './services/persistenceService';
 import { exportProjectBundle, parseProjectFile } from './services/projectService';
@@ -38,6 +37,7 @@ const App: React.FC = () => {
   const [styleRefImage, setStyleRefImage] = useState<string | null>(null);
   const [panelPrompts, setPanelPrompts] = useState<string[]>([]);
   const [activeCollage, setActiveCollage] = useState<CollageData | null>(null);
+  const [scriptGroups, setScriptGroups] = useState<ScriptGroup[]>([]); // 新增状态
 
   // --- UI UI UI ---
   const [selectedImageId, setSelectedImageId] = useState<string | undefined>(undefined);
@@ -77,7 +77,7 @@ const App: React.FC = () => {
 
   // 2. State Mapping logic
   const createEmptyProject = (name: string): ProjectState => ({
-    id:generateUUID(),
+    id: crypto.randomUUID(),
     name,
     images: [],
     assets: [],
@@ -88,7 +88,8 @@ const App: React.FC = () => {
     stylePrompt: '',
     styleRefImage: null,
     panelPrompts: [],
-    activeCollage: null
+    activeCollage: null,
+    scriptGroups: []
   });
 
   const loadProjectToState = (p: ProjectState) => {
@@ -102,6 +103,7 @@ const App: React.FC = () => {
     setStyleRefImage(p.styleRefImage || null);
     setPanelPrompts(p.panelPrompts || []);
     setActiveCollage(p.activeCollage || null);
+    setScriptGroups(p.scriptGroups || []);
     setSelectedImageId(undefined);
   };
 
@@ -119,7 +121,8 @@ const App: React.FC = () => {
         stylePrompt,
         styleRefImage,
         panelPrompts,
-        activeCollage
+        activeCollage,
+        scriptGroups
     };
   };
 
@@ -135,7 +138,7 @@ const App: React.FC = () => {
         }
     };
     if (activeProjectId) saveAll();
-  }, [activeProjectId, assets, images, gridSize, panelAspectRatio, imageSize, prompt, stylePrompt, styleRefImage, panelPrompts, activeCollage]);
+  }, [activeProjectId, assets, images, gridSize, panelAspectRatio, imageSize, prompt, stylePrompt, styleRefImage, panelPrompts, activeCollage, scriptGroups]);
 
   // --- Project Actions ---
   const handleNewProject = () => {
@@ -183,7 +186,7 @@ const App: React.FC = () => {
       const current = captureCurrentStateAsProject();
       if (!current) return;
       setIsGenerating(true);
-      setGenerationStep("正在打包完整工程结构...");
+      setGenerationStep("正在打包完整工程结构及脚本历史...");
       try {
           const blob = await exportProjectBundle(current);
           const url = URL.createObjectURL(blob);
@@ -192,9 +195,8 @@ const App: React.FC = () => {
           a.download = `${current.name}_完整工程.zip`;
           a.click();
           
-          // 更新最后导出时间
           setProjects(prev => prev.map(p => p.id === activeProjectId ? { ...p, lastExportTimestamp: Date.now() } : p));
-          setSuccessMsg("工程已完整导出");
+          setSuccessMsg("工程已完整导出（包含脚本历史）");
       } catch (e: any) {
           setError("导出失败: " + e.message);
       } finally {
@@ -202,9 +204,6 @@ const App: React.FC = () => {
       }
   };
 
-  /**
-   * 修正后的保存脚本逻辑：仅导出 JSON 文件，不包含外部素材，不涉及 ZIP 压缩包逻辑。
-   */
   const handleSaveProjectScript = async () => {
       const current = captureCurrentStateAsProject();
       if (!current) return;
@@ -228,7 +227,7 @@ const App: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeProjectId, projects, assets, images]);
+  }, [activeProjectId, projects, assets, images, scriptGroups]);
 
   // --- End Project Logic ---
 
@@ -286,7 +285,7 @@ const App: React.FC = () => {
       const base64 = `data:${file.type};base64,${await fileToBase64(file)}`;
       const categoryCount = assets.filter(a => a.category === category).length;
       const newAsset: Asset = {
-        id:generateUUID(),
+        id: crypto.randomUUID(),
         previewUrl: base64,
         type: 'image',
         category,
@@ -348,7 +347,7 @@ const App: React.FC = () => {
       ]);
 
       const finalNode: GeneratedImage = {
-          id:generateUUID(),
+          id: crypto.randomUUID(),
           url: finalResult.fullImage,
           fullGridUrl: finalResult.fullImage,
           prompt,
@@ -400,7 +399,7 @@ const App: React.FC = () => {
         );
 
         const node: GeneratedImage = {
-            id:generateUUID(),
+            id: crypto.randomUUID(),
             url: result.fullImage,
             fullGridUrl: result.fullImage,
             prompt: "Lens Lab Sequence Render",
@@ -532,7 +531,7 @@ const App: React.FC = () => {
   const selectedImage = images.find(i => i.id === selectedImageId) || null;
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-cine-black text-zinc-300 font-sans">
+    <div className="flex h-screen w-screen overflow-hidden bg-cine-black text-zinc-400 font-sans">
       <aside className="w-[340px] flex flex-col border-r border-cine-border bg-cine-dark z-20 shadow-2xl">
         <ProjectManager 
             projects={projects}
@@ -547,13 +546,13 @@ const App: React.FC = () => {
         />
 
         <div className="p-4 border-b border-cine-border bg-cine-black/50 flex justify-between items-center">
-            <h1 className="text-white text-[13px] font-bold tracking-[0.15em] uppercase font-mono flex items-center gap-2.5">
+            <h1 className="text-white text-[10px] font-bold tracking-[0.15em] uppercase font-mono flex items-center gap-2.5">
                 <span className="w-2 h-2 bg-cine-accent rounded-[1px]"></span>
                 创作中心 (WORKSPACE)
             </h1>
             <button 
                 onClick={() => setIsFeatureGuideOpen(true)}
-                className="p-1 text-zinc-400 hover:text-cine-accent"
+                className="p-1 text-zinc-500 hover:text-cine-accent"
             >
                 <HelpCircle size={16} />
             </button>
@@ -570,7 +569,7 @@ const App: React.FC = () => {
                 {activeCollage ? (
                   <div className="p-3 bg-cine-accent/10 border border-cine-accent/30 rounded-sm space-y-2">
                      <div className="flex items-center justify-between">
-                        <span className="text-[13px] text-cine-accent font-bold uppercase tracking-widest flex items-center gap-2">
+                        <span className="text-[10px] text-cine-accent font-bold uppercase tracking-widest flex items-center gap-2">
                            <LayoutGrid size={12} /> 镜头组参考 (ACTIVE)
                         </span>
                         <button onClick={() => setActiveCollage(null)} className="text-cine-accent hover:text-white"><XIcon size={12} /></button>
@@ -579,7 +578,7 @@ const App: React.FC = () => {
                   </div>
                 ) : (
                   <div className="p-3 bg-zinc-900/40 border border-zinc-800/40 border-dashed rounded-sm text-center">
-                     <p className="text-[12px] text-zinc-300 font-mono">未激活镜头组参考</p>
+                     <p className="text-[9px] text-zinc-400 font-mono">未激活镜头组参考</p>
                   </div>
                 )}
             </div>
@@ -661,7 +660,10 @@ const App: React.FC = () => {
 
         <ScriptEditor 
           isOpen={isScriptEditorOpen} onClose={() => setIsScriptEditorOpen(false)}
-          defaultPanelCount={gridSize * gridSize} onApplyScripts={handleApplyScripts}
+          defaultPanelCount={gridSize * gridSize} 
+          scriptGroups={scriptGroups}
+          onUpdateScriptGroups={setScriptGroups}
+          onApplyScripts={handleApplyScripts}
         />
 
         <FeatureGuide isOpen={isFeatureGuideOpen} onClose={() => setIsFeatureGuideOpen(false)} />
