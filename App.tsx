@@ -37,7 +37,7 @@ const App: React.FC = () => {
   const [styleRefImage, setStyleRefImage] = useState<string | null>(null);
   const [panelPrompts, setPanelPrompts] = useState<string[]>([]);
   const [activeCollage, setActiveCollage] = useState<CollageData | null>(null);
-  const [scriptGroups, setScriptGroups] = useState<ScriptGroup[]>([]); // 新增状态
+  const [scriptGroups, setScriptGroups] = useState<ScriptGroup[]>([]);
 
   // --- UI UI UI ---
   const [selectedImageId, setSelectedImageId] = useState<string | undefined>(undefined);
@@ -52,6 +52,9 @@ const App: React.FC = () => {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const abortControllerRef = useRef<AbortController | null>(null);
+  // Fix: replaced NodeJS.Timeout with any to avoid "Cannot find namespace 'NodeJS'" error in browser-only environments
+  const saveTimeoutRef = useRef<any>(null);
+  const isSavingRef = useRef(false);
 
   // 1. Initialize DB and Load Projects
   useEffect(() => {
@@ -65,7 +68,6 @@ const App: React.FC = () => {
             setActiveProjectId(initialId);
             loadProjectToState(savedProjects.find(p => p.id === initialId)!);
         } else {
-            // Create default first project
             const defaultProject: ProjectState = createEmptyProject("我的第一个分镜工程");
             setProjects([defaultProject]);
             setActiveProjectId(defaultProject.id);
@@ -75,7 +77,6 @@ const App: React.FC = () => {
     init();
   }, []);
 
-  // 2. State Mapping logic
   const createEmptyProject = (name: string): ProjectState => ({
     id: crypto.randomUUID(),
     name,
@@ -107,7 +108,7 @@ const App: React.FC = () => {
     setSelectedImageId(undefined);
   };
 
-  const captureCurrentStateAsProject = (): ProjectState | null => {
+  const captureCurrentStateAsProject = useCallback((): ProjectState | null => {
     const current = projects.find(p => p.id === activeProjectId);
     if (!current) return null;
     return {
@@ -124,26 +125,48 @@ const App: React.FC = () => {
         activeCollage,
         scriptGroups
     };
-  };
+  }, [projects, activeProjectId, assets, images, gridSize, panelAspectRatio, imageSize, prompt, stylePrompt, styleRefImage, panelPrompts, activeCollage, scriptGroups]);
 
-  // 3. Persistent Save Loop
+  // 2. Optimized Debounced Save Loop
+  // This avoids freezing the UI while typing prompt or adding images.
   useEffect(() => {
-    const saveAll = async () => {
-        const updatedState = captureCurrentStateAsProject();
-        if (updatedState) {
-            const updatedList = projects.map(p => p.id === activeProjectId ? updatedState : p);
-            setProjects(updatedList);
-            await saveToStorage('cine_projects_list', updatedList);
-            await saveToStorage('cine_active_project_id', activeProjectId);
+    if (!activeProjectId) return;
+
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+
+    saveTimeoutRef.current = setTimeout(async () => {
+        if (isSavingRef.current) return; // Basic lock to prevent concurrent writes
+        isSavingRef.current = true;
+        
+        try {
+            const updatedState = captureCurrentStateAsProject();
+            if (updatedState) {
+                // Update projects list in memory
+                const updatedList = projects.map(p => p.id === activeProjectId ? updatedState : p);
+                
+                // Only write to IndexedDB if something actually meaningful changed
+                // This is a heavy operation for 4K images, so we debounce it heavily.
+                await saveToStorage('cine_projects_list', updatedList);
+                await saveToStorage('cine_active_project_id', activeProjectId);
+                setProjects(updatedList);
+            }
+        } catch (err) {
+            console.error("Autosave failed:", err);
+        } finally {
+            isSavingRef.current = false;
         }
+    }, 2000); // 2 second delay after last change
+
+    return () => {
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-    if (activeProjectId) saveAll();
   }, [activeProjectId, assets, images, gridSize, panelAspectRatio, imageSize, prompt, stylePrompt, styleRefImage, panelPrompts, activeCollage, scriptGroups]);
 
   // --- Project Actions ---
   const handleNewProject = () => {
       const p = createEmptyProject(`未命名工程 ${projects.length + 1}`);
-      setProjects([...projects, p]);
+      const newList = [...projects, p];
+      setProjects(newList);
       setActiveProjectId(p.id);
       loadProjectToState(p);
   };
@@ -207,7 +230,6 @@ const App: React.FC = () => {
   const handleSaveProjectScript = async () => {
       const current = captureCurrentStateAsProject();
       if (!current) return;
-
       const blob = new Blob([JSON.stringify(current, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -217,7 +239,6 @@ const App: React.FC = () => {
       setSuccessMsg("分镜脚本已导出 (JSON)");
   };
 
-  // Keyboard Ctrl+S
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
         if ((e.ctrlKey || e.metaKey) && e.key === 's') {
@@ -227,9 +248,7 @@ const App: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeProjectId, projects, assets, images, scriptGroups]);
-
-  // --- End Project Logic ---
+  }, [captureCurrentStateAsProject]);
 
   useEffect(() => {
     switch (panelAspectRatio) {
@@ -489,7 +508,6 @@ const App: React.FC = () => {
     
     try {
       const zip = new JSZip();
-      
       const renderNodes = images.filter(i => i.nodeType === 'render' || i.nodeType === 'lens_lab');
       const sortedNodes = [...renderNodes].sort((a, b) => a.timestamp - b.timestamp);
       const shotIndex = sortedNodes.findIndex(n => n.id === selected.id) + 1;
@@ -662,6 +680,7 @@ const App: React.FC = () => {
           isOpen={isScriptEditorOpen} onClose={() => setIsScriptEditorOpen(false)}
           defaultPanelCount={gridSize * gridSize} 
           scriptGroups={scriptGroups}
+          // Fix: replaced undefined variable onUpdateScriptGroups with state setter setScriptGroups
           onUpdateScriptGroups={setScriptGroups}
           onApplyScripts={handleApplyScripts}
         />
