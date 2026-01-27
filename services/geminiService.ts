@@ -78,7 +78,6 @@ export interface ReferenceImageData {
   roleIndex?: number;
 }
 
-// 优化后的七项分镜脚本指南 - 新增角色方位与正背面朝向描述
 const COMPACT_SCRIPT_GUIDE = `
 每个分镜描述必须采用紧凑格式，严禁包含标题词，格式如下：
 [环境影调, 景别构图, 视角焦段, 镜头倾斜度, 纵深空间关系, 位置/朝向, 叙事(角色动作/表情姿态)]
@@ -105,7 +104,10 @@ export const generateLensLabSequence = async (
   let styleInstruction = stylePrompt && stylePrompt.trim() ? `[风格]: ${stylePrompt}。` : "[风格]: 电影质感。";
   if (styleRefImage) styleInstruction += " [参考图]: 严格复刻参考图影调。";
   
-  const systemPrompt = `[任务]: 3D一致性重绘。[逻辑]: 锁定参考图角色。布局: ${gridSize}x${gridSize}宫格。单格比例: ${panelAspectRatio}。\n${styleInstruction}\n指令:\n${panelDescriptionsText}`;
+  // 注入物理隔离指令
+  const gridIsolation = `[GRID ISOLATION]: This is a ${gridSize}x${gridSize} matrix of individual camera shots. Each cell MUST be a separate image. DO NOT bleed or overlap subjects across grid boundaries. Each panel must have its own distinct and isolated composition.`;
+
+  const systemPrompt = `[TASK]: 3D一致性重绘宫格布局。\n${gridIsolation}\n布局: ${gridSize}x${gridSize}宫格。单格比例: ${panelAspectRatio}。\n${styleInstruction}\n指令:\n${panelDescriptionsText}`;
   
   const parts: any[] = [{ inlineData: { mimeType: 'image/png', data: anchorImageBase64 } }];
   if (styleRefImage) parts.push({ inlineData: { mimeType: 'image/png', data: styleRefImage.split(',')[1] } });
@@ -135,16 +137,24 @@ export const generateMultiViewGrid = async (
   let arInstruction = `[PHYSICAL ASPECT RATIO]: Every single panel MUST be exactly ${panelAspectRatio}.`;
   if (isVertical) arInstruction += ` CRITICAL: Use EDGE-TO-EDGE VERTICAL COMPOSITION. DO NOT GENERATE HORIZONTAL SHOTS.`;
 
+  // 引入强制物理隔离指令，防止模型将多个格融合成一张图
+  let gridIsolation = `[GRID ISOLATION & NO-BLEED]: CRITICAL! This is a grid of ${gridSize}x${gridSize} INDEPENDENT cells. 
+  1. Each cell MUST contain a complete, self-contained cinematic shot.
+  2. STRICTLY NO OVERLAPPING: Subjects, characters, or backgrounds MUST NOT span across the grid lines. 
+  3. No visual bleed: If a character is in Cell 1, they cannot have their arm or shadow in Cell 2.
+  4. Use clear internal gutters/borders to separate shots. Treat this as ${gridSize * gridSize} separate photographs assembled together.`;
+
   let charInstruction = "[CHARACTER CONSISTENCY]: STRICTLY lock the morphology, features, and colors of the characters from the provided 'role' references. Every panel must feature the EXACT SAME character models.";
 
   let systemPrompt = `[TASK]: GENERATE A ${gridSize}x${gridSize} STORYBOARD GRID.
+${gridIsolation}
 ${arInstruction}
 ${charInstruction}
 [STYLE]: ${stylePrompt || 'Cinematic, hyper-realistic'}.
 [SCENE]: ${prompt}
-[SPATIAL GUIDELINE]: 每一格必须体现明显的纵深层次感、精准的画面位置排布及角色的叙事动态。
+[SPATIAL GUIDELINE]: 每一格必须体现明显的纵深层次感、精准的画面位置排布及角色的叙事动态。每一格都是独立的机位。
 ${panelInstructions && panelInstructions.length > 0 ? `\n[PANEL INSTRUCTIONS]:\n${panelInstructions.map((instr, idx) => `Grid ${idx + 1}: ${instr}`).join('\n')}` : ''}
-FINAL CHECK: Ensure all panels are ${panelAspectRatio} vertical aspect ratio.`;
+FINAL CHECK: Ensure all panels are isolated and non-merged ${panelAspectRatio} vertical aspect ratio.`;
 
   const parts: any[] = [];
   roles.forEach(r => parts.push({ inlineData: { mimeType: r.mimeType, data: r.data } }));
@@ -288,7 +298,7 @@ export const generateDirectorSummary = async (scripts: string[]): Promise<string
                         text: `你是一个资深电影导演。请将以下分镜脚本内容提炼为一段极其精炼的“创作指令”（梗概）。
                         
 要求：
-1. 严禁使用任何 Markdown 标题（如 ###）、列表或解释性文字。
+1. 严禁使用任何 Markdown 标题（如 ###）、列表 or 解释性文字。
 2. 只要 1-2 句简洁的核心叙事总结。
 3. 重点突出分镜串联后的视觉逻辑，不需要总结处理手法。
 4. 长度控制在 80 字以内。
