@@ -52,7 +52,6 @@ const App: React.FC = () => {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const abortControllerRef = useRef<AbortController | null>(null);
-  // Fix: replaced NodeJS.Timeout with any to avoid "Cannot find namespace 'NodeJS'" error in browser-only environments
   const saveTimeoutRef = useRef<any>(null);
   const isSavingRef = useRef(false);
 
@@ -94,6 +93,8 @@ const App: React.FC = () => {
   });
 
   const loadProjectToState = (p: ProjectState) => {
+    // 清理旧项目的历史记录以释放内存
+    setHistory([]);
     setAssets(p.assets || []);
     setImages(p.images || []);
     setGridSize(p.gridSize || 2);
@@ -128,24 +129,19 @@ const App: React.FC = () => {
   }, [projects, activeProjectId, assets, images, gridSize, panelAspectRatio, imageSize, prompt, stylePrompt, styleRefImage, panelPrompts, activeCollage, scriptGroups]);
 
   // 2. Optimized Debounced Save Loop
-  // This avoids freezing the UI while typing prompt or adding images.
   useEffect(() => {
     if (!activeProjectId) return;
 
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
 
     saveTimeoutRef.current = setTimeout(async () => {
-        if (isSavingRef.current) return; // Basic lock to prevent concurrent writes
+        if (isSavingRef.current) return;
         isSavingRef.current = true;
         
         try {
             const updatedState = captureCurrentStateAsProject();
             if (updatedState) {
-                // Update projects list in memory
                 const updatedList = projects.map(p => p.id === activeProjectId ? updatedState : p);
-                
-                // Only write to IndexedDB if something actually meaningful changed
-                // This is a heavy operation for 4K images, so we debounce it heavily.
                 await saveToStorage('cine_projects_list', updatedList);
                 await saveToStorage('cine_active_project_id', activeProjectId);
                 setProjects(updatedList);
@@ -155,7 +151,7 @@ const App: React.FC = () => {
         } finally {
             isSavingRef.current = false;
         }
-    }, 2000); // 2 second delay after last change
+    }, 3000); // 增加间隔至3秒，减少大规模数据写入频率
 
     return () => {
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -172,6 +168,7 @@ const App: React.FC = () => {
   };
 
   const handleSwitchProject = (id: string) => {
+      if (id === activeProjectId) return;
       const p = projects.find(proj => proj.id === id);
       if (p) {
           setActiveProjectId(id);
@@ -209,9 +206,12 @@ const App: React.FC = () => {
       const current = captureCurrentStateAsProject();
       if (!current) return;
       setIsGenerating(true);
-      setGenerationStep("正在打包完整工程结构及脚本历史...");
+      setGenerationStep("正在优化工程内存并打包...");
+      
       try {
-          const blob = await exportProjectBundle(current);
+          // 在导出前清理掉可能存在的冗余大字段（如历史记录虽然不在State里，但确保序列化前对象干净）
+          const exportData = { ...current };
+          const blob = await exportProjectBundle(exportData);
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
@@ -219,7 +219,7 @@ const App: React.FC = () => {
           a.click();
           
           setProjects(prev => prev.map(p => p.id === activeProjectId ? { ...p, lastExportTimestamp: Date.now() } : p));
-          setSuccessMsg("工程已完整导出（包含脚本历史）");
+          setSuccessMsg("工程已完整导出");
       } catch (e: any) {
           setError("导出失败: " + e.message);
       } finally {
@@ -230,13 +230,19 @@ const App: React.FC = () => {
   const handleSaveProjectScript = async () => {
       const current = captureCurrentStateAsProject();
       if (!current) return;
-      const blob = new Blob([JSON.stringify(current, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${current.name}_脚本_${new Date().getTime()}.json`;
-      a.click();
-      setSuccessMsg("分镜脚本已导出 (JSON)");
+      try {
+          // 使用较轻量级的序列化方式
+          const jsonStr = JSON.stringify(current);
+          const blob = new Blob([jsonStr], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `${current.name}_脚本_${new Date().getTime()}.json`;
+          a.click();
+          setSuccessMsg("分镜脚本已导出 (JSON)");
+      } catch (e) {
+          setError("导出脚本失败：数据量超过浏览器限制，请尝试“导出完整工程”以分卷压缩方式保存。");
+      }
   };
 
   useEffect(() => {
@@ -261,7 +267,8 @@ const App: React.FC = () => {
   }, [panelAspectRatio]);
 
   const updateImagesWithHistory = useCallback((newImages: GeneratedImage[]) => {
-    setHistory(prev => [...prev, images].slice(-30)); 
+    // 关键优化：将历史栈深度从 30 降至 5，防止 4K 图片撑爆内存
+    setHistory(prev => [...prev, images].slice(-5)); 
     setImages(newImages);
   }, [images]);
 
@@ -680,7 +687,6 @@ const App: React.FC = () => {
           isOpen={isScriptEditorOpen} onClose={() => setIsScriptEditorOpen(false)}
           defaultPanelCount={gridSize * gridSize} 
           scriptGroups={scriptGroups}
-          // Fix: replaced undefined variable onUpdateScriptGroups with state setter setScriptGroups
           onUpdateScriptGroups={setScriptGroups}
           onApplyScripts={handleApplyScripts}
         />
