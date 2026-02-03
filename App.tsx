@@ -93,7 +93,6 @@ const App: React.FC = () => {
   });
 
   const loadProjectToState = (p: ProjectState) => {
-    // 清理旧项目的历史记录以释放内存
     setHistory([]);
     setAssets(p.assets || []);
     setImages(p.images || []);
@@ -128,16 +127,12 @@ const App: React.FC = () => {
     };
   }, [projects, activeProjectId, assets, images, gridSize, panelAspectRatio, imageSize, prompt, stylePrompt, styleRefImage, panelPrompts, activeCollage, scriptGroups]);
 
-  // 2. Optimized Debounced Save Loop
   useEffect(() => {
     if (!activeProjectId) return;
-
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-
     saveTimeoutRef.current = setTimeout(async () => {
         if (isSavingRef.current) return;
         isSavingRef.current = true;
-        
         try {
             const updatedState = captureCurrentStateAsProject();
             if (updatedState) {
@@ -151,14 +146,92 @@ const App: React.FC = () => {
         } finally {
             isSavingRef.current = false;
         }
-    }, 3000); // 增加间隔至3秒，减少大规模数据写入频率
-
+    }, 3000);
     return () => {
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
   }, [activeProjectId, assets, images, gridSize, panelAspectRatio, imageSize, prompt, stylePrompt, styleRefImage, panelPrompts, activeCollage, scriptGroups]);
 
-  // --- Project Actions ---
+  // --- Grid Rebuild Helper ---
+  const rebuildGridImage = async (slices: string[], rows: number, cols: number): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const canvas = document.createElement('canvas');
+      const tempImg = new Image();
+      tempImg.onload = () => {
+        const sliceWidth = tempImg.width;
+        const sliceHeight = tempImg.height;
+        canvas.width = sliceWidth * cols;
+        canvas.height = sliceHeight * rows;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return reject("Canvas context error");
+        
+        let loadedCount = 0;
+        slices.forEach((sliceUrl, index) => {
+          const img = new Image();
+          img.onload = () => {
+            const r = Math.floor(index / cols);
+            const c = index % cols;
+            ctx.drawImage(img, c * sliceWidth, r * sliceHeight);
+            loadedCount++;
+            if (loadedCount === slices.length) {
+              resolve(canvas.toDataURL('image/png'));
+            }
+          };
+          img.onerror = reject;
+          img.src = sliceUrl;
+        });
+      };
+      tempImg.onerror = reject;
+      tempImg.src = slices[0];
+    });
+  };
+
+  const handleSwapSlices = async (sourceId: string, sourceIdx: number, targetId: string, targetIdx: number) => {
+    const sourceNode = images.find(i => i.id === sourceId);
+    const targetNode = images.find(i => i.id === targetId);
+    if (!sourceNode?.slices || !targetNode?.slices) return;
+
+    setGenerationStep("正在重新合成互换后的分镜组...");
+    setIsGenerating(true);
+
+    try {
+      const nextImages = [...images];
+      const sourceSlices = [...sourceNode.slices];
+      const targetSlices = [...targetNode.slices];
+
+      if (sourceId === targetId) {
+        // Same node swap
+        [sourceSlices[sourceIdx], sourceSlices[targetIdx]] = [sourceSlices[targetIdx], sourceSlices[sourceIdx]];
+        const newFullUrl = await rebuildGridImage(sourceSlices, sourceNode.gridRows || 2, sourceNode.gridCols || 2);
+        const idx = nextImages.findIndex(i => i.id === sourceId);
+        nextImages[idx] = { ...sourceNode, slices: sourceSlices, url: newFullUrl, fullGridUrl: newFullUrl };
+      } else {
+        // Cross node swap
+        const temp = sourceSlices[sourceIdx];
+        sourceSlices[sourceIdx] = targetSlices[targetIdx];
+        targetSlices[targetIdx] = temp;
+
+        const newSourceFullUrl = await rebuildGridImage(sourceSlices, sourceNode.gridRows || 2, sourceNode.gridCols || 2);
+        const newTargetFullUrl = await rebuildGridImage(targetSlices, targetNode.gridRows || 2, targetNode.gridCols || 2);
+
+        const sIdx = nextImages.findIndex(i => i.id === sourceId);
+        const tIdx = nextImages.findIndex(i => i.id === targetId);
+        
+        nextImages[sIdx] = { ...sourceNode, slices: sourceSlices, url: newSourceFullUrl, fullGridUrl: newSourceFullUrl };
+        nextImages[tIdx] = { ...targetNode, slices: targetSlices, url: newTargetFullUrl, fullGridUrl: newTargetFullUrl };
+      }
+
+      updateImagesWithHistory(nextImages);
+      setSuccessMsg("分镜互换成功，已更新合成图");
+    } catch (e) {
+      setError("互换失败，无法重新合成宫格图");
+    } finally {
+      setIsGenerating(false);
+      setGenerationStep("");
+    }
+  };
+
+  // --- Existing Logic ---
   const handleNewProject = () => {
       const p = createEmptyProject(`未命名工程 ${projects.length + 1}`);
       const newList = [...projects, p];
@@ -207,17 +280,13 @@ const App: React.FC = () => {
       if (!current) return;
       setIsGenerating(true);
       setGenerationStep("正在优化工程内存并打包...");
-      
       try {
-          // 在导出前清理掉可能存在的冗余大字段（如历史记录虽然不在State里，但确保序列化前对象干净）
-          const exportData = { ...current };
-          const blob = await exportProjectBundle(exportData);
+          const blob = await exportProjectBundle({ ...current });
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
           a.download = `${current.name}_完整工程.zip`;
           a.click();
-          
           setProjects(prev => prev.map(p => p.id === activeProjectId ? { ...p, lastExportTimestamp: Date.now() } : p));
           setSuccessMsg("工程已完整导出");
       } catch (e: any) {
@@ -231,7 +300,6 @@ const App: React.FC = () => {
       const current = captureCurrentStateAsProject();
       if (!current) return;
       try {
-          // 使用较轻量级的序列化方式
           const jsonStr = JSON.stringify(current);
           const blob = new Blob([jsonStr], { type: 'application/json' });
           const url = URL.createObjectURL(blob);
@@ -241,16 +309,13 @@ const App: React.FC = () => {
           a.click();
           setSuccessMsg("分镜脚本已导出 (JSON)");
       } catch (e) {
-          setError("导出脚本失败：数据量超过浏览器限制，请尝试“导出完整工程”以分卷压缩方式保存。");
+          setError("导出脚本失败：数据量超过限制。");
       }
   };
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-        if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-            e.preventDefault();
-            handleSaveProjectScript();
-        }
+        if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); handleSaveProjectScript(); }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -267,7 +332,6 @@ const App: React.FC = () => {
   }, [panelAspectRatio]);
 
   const updateImagesWithHistory = useCallback((newImages: GeneratedImage[]) => {
-    // 关键优化：将历史栈深度从 30 降至 5，防止 4K 图片撑爆内存
     setHistory(prev => [...prev, images].slice(-5)); 
     setImages(newImages);
   }, [images]);
@@ -339,11 +403,9 @@ const App: React.FC = () => {
     setIsGenerating(true);
     setGenerationStep("正在启动渲染引擎...");
     abortControllerRef.current = new AbortController();
-
     try {
       const parentNode = images.find(i => i.id === selectedImageId && i.nodeType === 'render');
       let startX = 100, startY = 100, previousContextImage = undefined;
-      
       if (parentNode) {
           startX = (parentNode.position?.x || 0); 
           startY = (parentNode.position?.y || 0) + 480; 
@@ -352,7 +414,6 @@ const App: React.FC = () => {
           const rootNodes = images.filter(i => !i.parentId);
           startX = rootNodes.length === 0 ? 100 : (rootNodes[rootNodes.length-1].position?.x || 100) + 420;
       }
-
       setGenerationStep("正在准备多模态资产...");
       const referenceData = assets.map(asset => ({
           data: asset.previewUrl.split(',')[1],
@@ -360,9 +421,7 @@ const App: React.FC = () => {
           category: asset.category as any,
           roleIndex: asset.index
       }));
-
       setGenerationStep("分镜渲染与动线分析同步执行中...");
-      
       const [finalResult, cameraMove] = await Promise.all([
         generateMultiViewGrid(
             prompt, gridSize, panelAspectRatio, aspectRatio, imageSize, 
@@ -371,7 +430,6 @@ const App: React.FC = () => {
         ),
         generateCameraMovement(prompt)
       ]);
-
       const finalNode: GeneratedImage = {
           id: crypto.randomUUID(),
           url: finalResult.fullImage,
@@ -393,7 +451,6 @@ const App: React.FC = () => {
           gridRows: gridSize,
           gridCols: gridSize
       };
-
       updateImagesWithHistory([...images, finalNode]);
       setSelectedImageId(finalNode.id);
     } catch (err: any) {
@@ -408,11 +465,9 @@ const App: React.FC = () => {
       setError(null);
       setIsGenerating(true);
       setGenerationStep("Lens Lab: 正在执行3D多角度一致性模拟...");
-      
       try {
         const rootNodes = images.filter(i => !i.parentId);
         const startX = rootNodes.length === 0 ? 100 : (rootNodes[rootNodes.length-1].position?.x || 100) + 420;
-
         const result = await generateLensLabSequence(
             anchorImage.split(',')[1],
             gridSize,
@@ -423,7 +478,6 @@ const App: React.FC = () => {
             stylePrompt,
             styleRefImage || undefined
         );
-
         const node: GeneratedImage = {
             id: crypto.randomUUID(),
             url: result.fullImage,
@@ -441,7 +495,6 @@ const App: React.FC = () => {
             gridRows: gridSize,
             gridCols: gridSize
         };
-
         updateImagesWithHistory([...images, node]);
         setSelectedImageId(node.id);
       } catch (err: any) {
@@ -459,18 +512,11 @@ const App: React.FC = () => {
       const image = images.find(img => img.id === imageId);
       if (!image || !image.slices) return;
       const model = usePro ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
-      
       const newSliceUrl = await editImage(
-          image.slices[sliceIndex], 
-          editPrompt, 
-          model, 
+          image.slices[sliceIndex], editPrompt, model, 
           image.panelAspectRatio || image.aspectRatio, 
-          refImage, 
-          targetImageSize,
-          stylePrompt,
-          styleRefImage || undefined
+          refImage, targetImageSize, stylePrompt, styleRefImage || undefined
       );
-
       const newImages = images.map(img => {
         if (img.id === imageId) {
           const newSlices = [...(img.slices || [])];
@@ -478,7 +524,6 @@ const App: React.FC = () => {
           if (!newHistory[sliceIndex]) newHistory[sliceIndex] = [];
           newHistory[sliceIndex].push(image.slices![sliceIndex]);
           newSlices[sliceIndex] = newSliceUrl;
-          
           return { ...img, slices: newSlices, sliceHistory: newHistory };
         }
         return img;
@@ -492,9 +537,7 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSaveCameraLogic = (newPrompts: string[]) => {
-      setPanelPrompts(newPrompts);
-  };
+  const handleSaveCameraLogic = (newPrompts: string[]) => { setPanelPrompts(newPrompts); };
 
   const handleApplyScripts = (summary: string, scripts: string[]) => {
       setPrompt(summary);
@@ -509,19 +552,15 @@ const App: React.FC = () => {
   const handleDownloadZip = async () => {
     const selected = images.find(i => i.id === selectedImageId);
     if (!selected) return;
-    
     setIsGenerating(true);
     setGenerationStep("正在准备镜头素材打包...");
-    
     try {
       const zip = new JSZip();
       const renderNodes = images.filter(i => i.nodeType === 'render' || i.nodeType === 'lens_lab');
       const sortedNodes = [...renderNodes].sort((a, b) => a.timestamp - b.timestamp);
       const shotIndex = sortedNodes.findIndex(n => n.id === selected.id) + 1;
-      
       const folderName = `镜头_${shotIndex}_${selected.id.slice(0, 4)}`;
       const folder = zip.folder(folderName);
-      
       const base64ToBlob = (b64: string) => {
         const parts = b64.split(';base64,');
         const byteCharacters = atob(parts[1]);
@@ -529,7 +568,6 @@ const App: React.FC = () => {
         for (let i = 0; i < byteCharacters.length; i++) byteNumbers[i] = byteCharacters.charCodeAt(i);
         return new Blob([new Uint8Array(byteNumbers)], { type: 'image/png' });
       };
-
       if (folder) {
           if (selected.slices) {
             selected.slices.forEach((s, i) => {
@@ -538,7 +576,6 @@ const App: React.FC = () => {
           }
           folder.file(`全景宫格_Shot${shotIndex}.png`, base64ToBlob(selected.fullGridUrl || selected.url));
       }
-      
       const content = await zip.generateAsync({ type: "blob" });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(content);
@@ -559,148 +596,92 @@ const App: React.FC = () => {
     <div className="flex h-screen w-screen overflow-hidden bg-cine-black text-zinc-400 font-sans">
       <aside className="w-[340px] flex flex-col border-r border-cine-border bg-cine-dark z-20 shadow-2xl">
         <ProjectManager 
-            projects={projects}
-            activeProjectId={activeProjectId}
-            onSwitchProject={handleSwitchProject}
-            onNewProject={handleNewProject}
-            onImportProject={handleImportProject}
-            onExportFull={handleExportFull}
-            onSaveIncremental={handleSaveProjectScript}
-            onRenameProject={handleRenameProject}
-            onDeleteProject={handleDeleteProject}
+            projects={projects} activeProjectId={activeProjectId} onSwitchProject={handleSwitchProject}
+            onNewProject={handleNewProject} onImportProject={handleImportProject} onExportFull={handleExportFull}
+            onSaveIncremental={handleSaveProjectScript} onRenameProject={handleRenameProject} onDeleteProject={handleDeleteProject}
         />
-
         <div className="p-4 border-b border-cine-border bg-cine-black/50 flex justify-between items-center">
             <h1 className="text-white text-[10px] font-bold tracking-[0.15em] uppercase font-mono flex items-center gap-2.5">
-                <span className="w-2 h-2 bg-cine-accent rounded-[1px]"></span>
-                创作中心 (WORKSPACE)
+                <span className="w-2 h-2 bg-cine-accent rounded-[1px]"></span>创作中心 (WORKSPACE)
             </h1>
-            <button 
-                onClick={() => setIsFeatureGuideOpen(true)}
-                className="p-1 text-zinc-500 hover:text-cine-accent"
-            >
-                <HelpCircle size={16} />
-            </button>
+            <button onClick={() => setIsFeatureGuideOpen(true)} className="p-1 text-zinc-500 hover:text-cine-accent"><HelpCircle size={16} /></button>
         </div>
-
         <div className="flex-1 flex flex-col p-4 gap-7 overflow-y-auto custom-scrollbar">
             <AssetBay 
                 assets={assets} onAddAsset={handleAddAsset} onRemoveAsset={handleRemoveAsset} 
                 onSelectAsset={(a) => { setSelectedAssetId(a.id); setSelectedImageId(undefined); }}
                 selectedAssetId={selectedAssetId} onOpenCollage={() => setIsCollageEditorOpen(true)}
             />
-
             <div className="px-2">
                 {activeCollage ? (
                   <div className="p-3 bg-cine-accent/10 border border-cine-accent/30 rounded-sm space-y-2">
                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-cine-accent font-bold uppercase tracking-widest flex items-center gap-2">
-                           <LayoutGrid size={12} /> 镜头组参考 (ACTIVE)
-                        </span>
+                        <span className="text-[10px] text-cine-accent font-bold uppercase tracking-widest flex items-center gap-2"><LayoutGrid size={12} /> 镜头组参考 (ACTIVE)</span>
                         <button onClick={() => setActiveCollage(null)} className="text-cine-accent hover:text-white"><XIcon size={12} /></button>
                      </div>
                      <img src={activeCollage.url} className="w-full aspect-video object-contain bg-black rounded-sm border border-cine-accent/20" />
                   </div>
                 ) : (
-                  <div className="p-3 bg-zinc-900/40 border border-zinc-800/40 border-dashed rounded-sm text-center">
-                     <p className="text-[9px] text-zinc-400 font-mono">未激活镜头组参考</p>
-                  </div>
+                  <div className="p-3 bg-zinc-900/40 border border-zinc-800/40 border-dashed rounded-sm text-center"><p className="text-[9px] text-zinc-400 font-mono">未激活镜头组参考</p></div>
                 )}
             </div>
-
             <div className="px-1 space-y-6">
-                <OmniViewLensLab 
-                  gridSize={gridSize}
-                  imageSize={imageSize}
-                  panelAspectRatio={panelAspectRatio}
-                  containerAspectRatio={aspectRatio}
-                  onRenderSequence={handleLensLabRender}
-                  isGenerating={isGenerating}
-                />
-
+                <OmniViewLensLab gridSize={gridSize} imageSize={imageSize} panelAspectRatio={panelAspectRatio} containerAspectRatio={aspectRatio} onRenderSequence={handleLensLabRender} isGenerating={isGenerating} />
                 <DirectorDeck 
-                    gridSize={gridSize} setGridSize={setGridSize}
-                    aspectRatio={aspectRatio} 
-                    panelAspectRatio={panelAspectRatio} setPanelAspectRatio={setPanelAspectRatio}
-                    imageSize={imageSize} setImageSize={setImageSize}
-                    prompt={prompt} setPrompt={setPrompt}
-                    stylePrompt={stylePrompt} setStylePrompt={setStylePrompt} 
-                    styleRefImage={styleRefImage} setStyleRefImage={setStyleRefImage}
-                    onGenerate={handleGenerate}
-                    onStop={() => setIsGenerating(false)}
-                    isGenerating={isGenerating}
-                    onEnhancePrompt={async () => setPrompt(await enhancePrompt(prompt))}
-                    onGenerateCamera={() => setIsCameraEditorOpen(true)}
-                    onOpenScriptDeconstruct={() => setIsScriptEditorOpen(true)}
-                    isContinuing={!!selectedImageId}
-                    selectedImage={selectedImage}
-                    onDeselect={() => { setSelectedImageId(undefined); setSelectedAssetId(undefined); }}
-                    isCollageActive={!!activeCollage}
+                    gridSize={gridSize} setGridSize={setGridSize} aspectRatio={aspectRatio} panelAspectRatio={panelAspectRatio} setPanelAspectRatio={setPanelAspectRatio}
+                    imageSize={imageSize} setImageSize={setImageSize} prompt={prompt} setPrompt={setPrompt}
+                    stylePrompt={stylePrompt} setStylePrompt={setStylePrompt} styleRefImage={styleRefImage} setStyleRefImage={setStyleRefImage}
+                    onGenerate={handleGenerate} onStop={() => setIsGenerating(false)} isGenerating={isGenerating}
+                    onEnhancePrompt={async () => setPrompt(await enhancePrompt(prompt))} onGenerateCamera={() => setIsCameraEditorOpen(true)}
+                    onOpenScriptDeconstruct={() => setIsScriptEditorOpen(true)} isContinuing={!!selectedImageId}
+                    selectedImage={selectedImage} onDeselect={() => { setSelectedImageId(undefined); setSelectedAssetId(undefined); }} isCollageActive={!!activeCollage}
                 />
             </div>
         </div>
       </aside>
-
       <main className="flex-1 relative bg-cine-black">
         <Canvas
             images={images} onSelect={(i) => { setSelectedImageId(i.id); setSelectedAssetId(undefined); }} 
             selectedId={selectedImageId} onDelete={handleDeleteNode} onUpdateNodePosition={handleUpdateNodePosition}
             onDownloadAll={handleDownloadZip} assets={assets} onDeselectAll={() => { setSelectedImageId(undefined); setSelectedAssetId(undefined); }}
+            onSwapSlices={handleSwapSlices}
         />
-        
         {isGenerating && (
             <div className="absolute inset-0 bg-cine-black/90 backdrop-blur-xl z-[150] flex flex-col items-center justify-center space-y-8">
                  <div className="w-16 h-16 border-t-2 border-cine-accent rounded-full animate-spin"></div>
-                 <div className="text-center space-y-2">
-                     <p className="text-white font-mono tracking-[0.3em] text-sm uppercase font-bold">{generationStep}</p>
-                 </div>
+                 <div className="text-center space-y-2"><p className="text-white font-mono tracking-[0.3em] text-sm uppercase font-bold">{generationStep}</p></div>
             </div>
         )}
-
         {error && (
             <div className="absolute bottom-8 left-8 z-50 bg-red-950/80 backdrop-blur border border-red-500/30 text-red-200 p-4 rounded-md text-xs flex gap-3 animate-in slide-in-from-left-4">
                 <AlertCircle size={16} /> <span className="font-mono">{error}</span> <button onClick={() => setError(null)}><XIcon size={14} /></button>
             </div>
         )}
-
         {successMsg && (
             <div className="absolute bottom-8 left-8 z-50 bg-cine-accent/20 backdrop-blur border border-cine-accent/40 text-cine-accent p-4 rounded-md text-xs flex gap-3 animate-in slide-in-from-left-4">
                 <CheckCircle2 size={16} /> <span className="font-mono">{successMsg}</span> <button onClick={() => setSuccessMsg(null)}><XIcon size={14} /></button>
             </div>
         )}
-
         <CameraEditor 
-          isOpen={isCameraEditorOpen} onClose={() => setIsCameraEditorOpen(false)}
-          rows={gridSize} cols={gridSize}
+          isOpen={isCameraEditorOpen} onClose={() => setIsCameraEditorOpen(false)} rows={gridSize} cols={gridSize}
           mainPrompt={prompt} initialPrompts={panelPrompts} onSave={handleSaveCameraLogic}
-          selectedImage={selectedImage || undefined}
-          onRegenSlice={(idx, p) => handleEditSlice(selectedImageId!, idx, p, true)}
-          isGenerating={isGenerating}
+          selectedImage={selectedImage || undefined} onRegenSlice={(idx, p) => handleEditSlice(selectedImageId!, idx, p, true)} isGenerating={isGenerating}
         />
-
         <CollageEditor 
           isOpen={isCollageEditorOpen} onClose={() => setIsCollageEditorOpen(false)}
           onSave={(url, r, c, ar) => { setActiveCollage({ url, rows: r, cols: c, aspectRatio: ar }); setIsCollageEditorOpen(false); }}
         />
-
         <ScriptEditor 
           isOpen={isScriptEditorOpen} onClose={() => setIsScriptEditorOpen(false)}
-          defaultPanelCount={gridSize * gridSize} 
-          scriptGroups={scriptGroups}
-          onUpdateScriptGroups={setScriptGroups}
-          onApplyScripts={handleApplyScripts}
+          defaultPanelCount={gridSize * gridSize} scriptGroups={scriptGroups} onUpdateScriptGroups={setScriptGroups} onApplyScripts={handleApplyScripts}
         />
-
         <FeatureGuide isOpen={isFeatureGuideOpen} onClose={() => setIsFeatureGuideOpen(false)} />
       </main>
-
       <aside className="w-[400px] bg-cine-dark border-l border-cine-border z-20">
          <Inspector 
-            selectedImage={selectedImage}
-            selectedAsset={assets.find(a => a.id === selectedAssetId) || null}
+            selectedImage={selectedImage} selectedAsset={assets.find(a => a.id === selectedAssetId) || null}
             onClose={() => { setSelectedImageId(undefined); setSelectedAssetId(undefined); }}
-            onEditSlice={handleEditSlice} 
-            onRevertSlice={(imgId, sIdx, hIdx) => {
+            onEditSlice={handleEditSlice} onRevertSlice={(imgId, sIdx, hIdx) => {
                 const newImages = images.map(img => {
                   if (img.id === imgId) {
                     const historyList = img.sliceHistory?.[sIdx] || [];
