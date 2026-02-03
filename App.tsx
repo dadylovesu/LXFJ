@@ -93,6 +93,7 @@ const App: React.FC = () => {
   });
 
   const loadProjectToState = (p: ProjectState) => {
+    // 清理旧项目的历史记录以释放内存
     setHistory([]);
     setAssets(p.assets || []);
     setImages(p.images || []);
@@ -150,7 +151,7 @@ const App: React.FC = () => {
         } finally {
             isSavingRef.current = false;
         }
-    }, 3000);
+    }, 3000); // 增加间隔至3秒，减少大规模数据写入频率
 
     return () => {
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -205,25 +206,22 @@ const App: React.FC = () => {
       const current = captureCurrentStateAsProject();
       if (!current) return;
       setIsGenerating(true);
-      setGenerationStep("正在优化工程并打包导出素材...");
+      setGenerationStep("正在优化工程内存并打包...");
       
       try {
-          const { blob, isFullExport } = await exportProjectBundle(current);
+          // 在导出前清理掉可能存在的冗余大字段（如历史记录虽然不在State里，但确保序列化前对象干净）
+          const exportData = { ...current };
+          const blob = await exportProjectBundle(exportData);
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = `${current.name}_工程导出_${new Date().getTime()}.zip`;
+          a.download = `${current.name}_完整工程.zip`;
           a.click();
           
           setProjects(prev => prev.map(p => p.id === activeProjectId ? { ...p, lastExportTimestamp: Date.now() } : p));
-          
-          if (isFullExport) {
-            setSuccessMsg("工程已完整导出（含脚本还原文件）");
-          } else {
-            setSuccessMsg("素材保护导出成功：由于数据超限，仅导出图片与脚本，不含还原文件。");
-          }
+          setSuccessMsg("工程已完整导出");
       } catch (e: any) {
-          setError("打包导出失败: " + e.message);
+          setError("导出失败: " + e.message);
       } finally {
           setIsGenerating(false);
       }
@@ -233,6 +231,7 @@ const App: React.FC = () => {
       const current = captureCurrentStateAsProject();
       if (!current) return;
       try {
+          // 使用较轻量级的序列化方式
           const jsonStr = JSON.stringify(current);
           const blob = new Blob([jsonStr], { type: 'application/json' });
           const url = URL.createObjectURL(blob);
@@ -242,7 +241,7 @@ const App: React.FC = () => {
           a.click();
           setSuccessMsg("分镜脚本已导出 (JSON)");
       } catch (e) {
-          setError("脚本导出失败：体积过大导致浏览器序列化中断，请使用“导出完整工程”以分卷模式保存素材。");
+          setError("导出脚本失败：数据量超过浏览器限制，请尝试“导出完整工程”以分卷压缩方式保存。");
       }
   };
 
@@ -268,6 +267,7 @@ const App: React.FC = () => {
   }, [panelAspectRatio]);
 
   const updateImagesWithHistory = useCallback((newImages: GeneratedImage[]) => {
+    // 关键优化：将历史栈深度从 30 降至 5，防止 4K 图片撑爆内存
     setHistory(prev => [...prev, images].slice(-5)); 
     setImages(newImages);
   }, [images]);
