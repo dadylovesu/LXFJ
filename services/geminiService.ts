@@ -3,7 +3,9 @@ import { AspectRatio, ImageSize, Asset, CollageData, PanelAspectRatio, LensLabPa
 
 // 环境判断：仅开发环境使用代理
 const IS_DEVELOPMENT = import.meta.env.MODE === 'development';
-const PROXY_SERVER = IS_DEVELOPMENT ? 'http://192.168.10.48:3001' : '';
+const PROXY_SERVER =
+  import.meta.env.VITE_PROXY_SERVER ||
+  (IS_DEVELOPMENT ? 'http://localhost:3001' : '');
 
 export const ensureApiKey = async () => {
   // 首先检查用户是否已登录
@@ -20,7 +22,7 @@ export const ensureApiKey = async () => {
 
 // 通过后端代理调用 Gemini API（开发环境）或直接调用（生产环境）
 const callGeminiProxy = async (model: string, contents: any, config?: any) => {
-  const endpoint = IS_DEVELOPMENT 
+  const endpoint = PROXY_SERVER
     ? `${PROXY_SERVER}/api/gemini/generate`
     : '/api/gemini/generate'; // 生产环境需要配置服务端路由
 

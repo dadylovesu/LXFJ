@@ -19,11 +19,23 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // 中间件
+// 中间件
 app.use(cors({
   origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  optionsSuccessStatus: 204
 }));
+// 显式处理预检与响应头，避免代理/内网穿透丢失 CORS 头
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,PATCH,OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+  next();
+});
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
@@ -53,7 +65,9 @@ app.post('/api/gemini/generate', async (req, res) => {
     if (typeof contents === 'string') {
       requestParams.contents = [{ role: 'user', parts: [{ text: contents }] }];
     } else if (contents && contents.parts) {
-      requestParams.contents = [{ role: 'user', parts: contents.parts }];
+      // requestParams.contents = [{ role: 'user', parts: contents.parts }];
+      // 前端直连时使用 { parts: [...] }，这里不要强行包一层 role
+      requestParams.contents = contents;
     } else if (Array.isArray(contents)) {
       requestParams.contents = contents;
     } else {
@@ -62,7 +76,7 @@ app.post('/api/gemini/generate', async (req, res) => {
     
     // 添加配置（如果有）
     if (config) {
-      Object.assign(requestParams, config);
+      requestParams.config = config;
     }
     
     console.log('调用 Gemini API，模型:', model);
@@ -170,7 +184,7 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`\n========================================`);
   console.log(`🚀 代理服务器已启动`);
   console.log(`📡 监听地址: http://0.0.0.0:${PORT}`);
-  console.log(`🌐 局域网访问: http://192.168.10.48:${PORT}`);
+  console.log(`🌐 局域网访问: http://192.168.10.134:${PORT}`);
   console.log(`✅ CORS: 已启用（允许所有来源）`);
   console.log(`🔑 Gemini API: ${process.env.GEMINI_API_KEY ? '已配置' : '未配置'}`);
   console.log(`🔑 RunningHub API: ${process.env.RUNNINGHUB_API_KEY ? '已配置' : '未配置'}`);
