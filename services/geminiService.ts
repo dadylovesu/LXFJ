@@ -104,10 +104,9 @@ export const generateLensLabSequence = async (
   let styleInstruction = stylePrompt && stylePrompt.trim() ? `[风格]: ${stylePrompt}。` : "[风格]: 电影质感。";
   if (styleRefImage) styleInstruction += " [参考图]: 严格复刻参考图影调。";
   
-  // 注入物理隔离指令
-  const gridIsolation = `[GRID ISOLATION]: This is a ${gridSize}x${gridSize} matrix of individual camera shots. Each cell MUST be a separate image. DO NOT bleed or overlap subjects across grid boundaries. Each panel must have its own distinct and isolated composition.`;
+  const gridIsolation = `[GRID ISOLATION]: This is a ${gridSize}x${gridSize} matrix of individual camera shots. SEAMLESS tiling is required. NO GAPS, NO WHITE BORDERS, NO PADDING between cells. Each cell MUST be an independent image touching its neighbors edge-to-edge.`;
 
-  const systemPrompt = `[TASK]: 3D一致性重绘宫格布局。\n${gridIsolation}\n布局: ${gridSize}x${gridSize}宫格。单格比例: ${panelAspectRatio}。\n${styleInstruction}\n指令:\n${panelDescriptionsText}`;
+  const systemPrompt = `[TASK]: 3D一致性重绘宫格布局。\n${gridIsolation}\n布局: ${gridSize}x${gridSize}宫格。\n单格比例: ${panelAspectRatio}。\n${styleInstruction}\n指令:\n${panelDescriptionsText}`;
   
   const parts: any[] = [{ inlineData: { mimeType: 'image/png', data: anchorImageBase64 } }];
   if (styleRefImage) parts.push({ inlineData: { mimeType: 'image/png', data: styleRefImage.split(',')[1] } });
@@ -135,26 +134,25 @@ export const generateMultiViewGrid = async (
   
   const isVertical = panelAspectRatio === PanelAspectRatio.P9_16 || panelAspectRatio === PanelAspectRatio.P3_4;
   let arInstruction = `[PHYSICAL ASPECT RATIO]: Every single panel MUST be exactly ${panelAspectRatio}.`;
-  if (isVertical) arInstruction += ` CRITICAL: Use EDGE-TO-EDGE VERTICAL COMPOSITION. DO NOT GENERATE HORIZONTAL SHOTS.`;
+  if (isVertical) arInstruction += ` CRITICAL: Use EDGE-TO-EDGE VERTICAL COMPOSITION.`;
 
-  // 引入强制物理隔离指令，防止模型将多个格融合成一张图
-  let gridIsolation = `[GRID ISOLATION & NO-BLEED]: CRITICAL! This is a grid of ${gridSize}x${gridSize} INDEPENDENT cells. 
-  1. Each cell MUST contain a complete, self-contained cinematic shot.
-  2. STRICTLY NO OVERLAPPING: Subjects, characters, or backgrounds MUST NOT span across the grid lines. 
-  3. No visual bleed: If a character is in Cell 1, they cannot have their arm or shadow in Cell 2.
-  4. Use clear internal gutters/borders to separate shots. Treat this as ${gridSize * gridSize} separate photographs assembled together.`;
+  let gridIsolation = `[GRID ISOLATION]: CRITICAL! This is a ${gridSize}x${gridSize} grid of INDEPENDENT shots.
+  1. NO BORDERS: Zero white space, gaps, or borders between cells.
+  2. SEAMLESS TILING: Panels must touch edge-to-edge.
+  3. NO GAPS: Form a solid image with no internal margins.`;
 
-  let charInstruction = "[CHARACTER CONSISTENCY]: STRICTLY lock the morphology, features, and colors of the characters from the provided 'role' references. Every panel must feature the EXACT SAME character models.";
+  let charInstruction = "[CHARACTER CONSISTENCY]: Lock the identity, features, and clothing of characters from the 'role' references. Character models MUST remain constant across all panels.";
 
-  let systemPrompt = `[TASK]: GENERATE A ${gridSize}x${gridSize} STORYBOARD GRID.
+  // 强化核心场景指令，防止偏离
+  let systemPrompt = `[CORE NARRATIVE - MANDATORY]: ${prompt}
+[TASK]: Generate a ${gridSize}x${gridSize} storyboard grid based STICKLY on the core narrative above.
 ${gridIsolation}
 ${arInstruction}
 ${charInstruction}
 [STYLE]: ${stylePrompt || 'Cinematic, hyper-realistic'}.
-[SCENE]: ${prompt}
-[SPATIAL GUIDELINE]: 每一格必须体现明显的纵深层次感、精准的画面位置排布及角色的叙事动态。每一格都是独立的机位。
-${panelInstructions && panelInstructions.length > 0 ? `\n[PANEL INSTRUCTIONS]:\n${panelInstructions.map((instr, idx) => `Grid ${idx + 1}: ${instr}`).join('\n')}` : ''}
-FINAL CHECK: Ensure all panels are isolated and non-merged ${panelAspectRatio} vertical aspect ratio.`;
+[SPATIAL GUIDELINE]: Each cell must show professional depth, composition, and character orientation.
+${panelInstructions && panelInstructions.length > 0 ? `\n[PANEL-SPECIFIC VARIATIONS]: The following technical directions apply to each grid cell BUT MUST NOT override the core narrative (${prompt}):\n${panelInstructions.map((instr, idx) => `Grid ${idx + 1}: ${instr}`).join('\n')}` : ''}
+FINAL VALIDATION: All characters in all panels must be performing actions related to "${prompt}". NO WHITE BORDERS.`;
 
   const parts: any[] = [];
   roles.forEach(r => parts.push({ inlineData: { mimeType: r.mimeType, data: r.data } }));
@@ -185,7 +183,7 @@ export const editImage = async (
   const parts: any[] = [{ inlineData: { mimeType: 'image/png', data: cleanBase64 } }];
   if (refImageBase64) parts.push({ inlineData: { mimeType: 'image/png', data: refImageBase64.split(',')[1] } });
   if (styleRefImage) parts.push({ inlineData: { mimeType: 'image/png', data: styleRefImage.split(',')[1] } });
-  parts.push({ text: `EDIT TASK: Modify this ${aspectRatio} shot. REQUEST: "${editPrompt}". 保持专业分镜纵深、构图位置规范以及角色的叙事动态。` });
+  parts.push({ text: `EDIT TASK: Modify this ${aspectRatio} shot. REQUEST: "${editPrompt}". Keep cinematic depth and consistent character features.` });
   try {
     const response = await withRetry<GenerateContentResponse>(() => {
         const ai = getFreshClient();
@@ -203,21 +201,21 @@ export const generateCameraSuggestions = async (prompt: string, panelCount: numb
             const ai = getFreshClient();
             return ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
-                contents: { parts: [{ text: `你是一个世界级的电影摄影指导。请规划 ${panelCount} 个精简的分镜。
+                contents: { parts: [{ text: `你是一个世界级的电影摄影指导。请针对以下场景规划 ${panelCount} 个精简的分镜。
                 
-场景背景：${prompt}
+场景背景（核心指令）：${prompt}
 
 ${COMPACT_SCRIPT_GUIDE}
 
 输出要求：
-- 每行必须严格遵循七项简写格式。
-- 位置/朝向模块：请明确描述角色的画面占位（偏左/偏右/居中等）及正背面朝向（正对/侧对/背向镜头等）。
-- 叙事模块：请丰富描述角色具体的肢体动作和面部表情。` }] }
+1. 每一行必须严格遵循七项简写格式。
+2. 叙事(叙事内容) 必须紧扣主指令 "${prompt}"。例如如果主指令是"开坦克"，分镜必须全都在坦克内外进行。
+3. 位置/朝向：明确角色位置。` }] }
             });
         });
         const rawText = response.text || "";
         return rawText.split('\n').map(line => line.replace(/^[0-9]+[.\-、\s]*/, '').trim()).filter(line => line.length > 5).slice(0, panelCount);
-    } catch (error) { return new Array(panelCount).fill("[自然光, MCU, 平视/35mm, 镜头倾斜0°, 纵深(无前景), 画面中心/正对镜头, 叙事(角色保持静态，表情平和)]"); }
+    } catch (error) { return new Array(panelCount).fill("[自然光, MCU, 平视/35mm, 镜头倾斜0°, 纵深(无), 画面中心, 叙事(角色保持静态)]"); }
 };
 
 export const generateCameraMovement = async (prompt: string): Promise<string> => {
@@ -225,9 +223,9 @@ export const generateCameraMovement = async (prompt: string): Promise<string> =>
     try {
         const response = await withRetry<GenerateContentResponse>(() => {
             const ai = getFreshClient();
-            return ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: { parts: [{ text: `场景: ${prompt}` }] }, config: { systemInstruction: "输出精简的摄影动线（中文）。必须包含纵深调度逻辑、位置关系与角色的朝向动作描述。" } });
+            return ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: { parts: [{ text: `场景: ${prompt}` }] }, config: { systemInstruction: "输出精简的摄影动线（中文）。" } });
         });
-        return response.text || "固定镜头，纵深构图。";
+        return response.text || "固定镜头。";
     } catch { return "电影级纵深调度。"; }
 };
 
@@ -240,23 +238,23 @@ export const generateScriptLines = async (instruction: string, count: number, at
                 model: 'gemini-3-flash-preview',
                 contents: { 
                   parts: [{ 
-                    text: `你是一个影视分镜专家。请将内容拆解为 ${count} 个精简的分镜。
+                    text: `你是一个影视分镜专家。请基于以下内容拆解为 ${count} 个精简的分镜。
 
 ${COMPACT_SCRIPT_GUIDE}
 
-输入内容：${attachmentText || ''}
-附加指令：${instruction}
+核心背景：${instruction}
+输入素材：${attachmentText || ''}
 
 输出要求：
-- 严格执行七项简写格式。
-- 特别强化位置与朝向描述：对于每一个分镜，明确角色在画面中偏向哪一侧，是正对、侧对还是背对镜头。` 
+1. 严格执行七项简写格式。
+2. 每一个分镜的动作描述必须高度契合核心背景 "${instruction}"。如果是"开坦克"，严禁出现任何与坦克无关的运动。` 
                   }] 
                 }
             });
         });
         return (response.text || "").split('\n').filter(l => l.trim() && l.includes('[')).slice(0, count);
     } catch (e) {
-        return new Array(count).fill("[自然光, 中景, 平视/35mm, 镜头倾斜0°, 纵深(无), 画面中心/正对, 叙事(角色执行基本待机动作)]");
+        return new Array(count).fill("[自然光, 中景, 平视/35mm, 镜头倾斜0°, 纵深(无), 画面中心, 叙事(待机动作)]");
     }
 };
 
@@ -270,7 +268,7 @@ export const analyzeVideoToScript = async (videoBase64: string, mimeType: string
                 contents: { 
                   parts: [
                     { inlineData: { mimeType, data: videoBase64 } },
-                    { text: `分析这段视频，识别镜头切换点。对每个镜头按以下七项简写格式描述，重点捕捉角色的实际画面位置、正背面朝向、姿态细节：
+                    { text: `分析这段视频，识别镜头切换点。按以下简写格式描述每一镜：
 ${COMPACT_SCRIPT_GUIDE}` }
                   ]
                 }
@@ -278,14 +276,10 @@ ${COMPACT_SCRIPT_GUIDE}` }
         });
         return (response.text || "").split('\n').filter(l => l.trim() && l.includes('['));
     } catch (e) {
-        console.error("Video analysis failed:", e);
         throw new Error("视频反推失败。");
     }
 };
 
-/**
- * 优化后的梗概生成：极其精简，不含 Markdown 标题和元解释。
- */
 export const generateDirectorSummary = async (scripts: string[]): Promise<string> => {
     await ensureApiKey();
     try {
@@ -295,26 +289,12 @@ export const generateDirectorSummary = async (scripts: string[]): Promise<string
                 model: 'gemini-3-flash-preview', 
                 contents: { 
                     parts: [{ 
-                        text: `你是一个资深电影导演。请将以下分镜脚本内容提炼为一段极其精炼的“创作指令”（梗概）。
-                        
-要求：
-1. 严禁使用任何 Markdown 标题（如 ###）、列表 or 解释性文字。
-2. 只要 1-2 句简洁的核心叙事总结。
-3. 重点突出分镜串联后的视觉逻辑，不需要总结处理手法。
-4. 长度控制在 80 字以内。
-
-分镜列表：
-${scripts.join('\n')}` 
+                        text: `提炼以下分镜为一段极其精炼的创作指令（梗概），严禁使用列表或 Markdown 标题，控制在 60 字内：\n${scripts.join('\n')}` 
                     }] 
                 } 
             });
         });
-        
-        let result = response.text?.trim() || "空间叙事。";
-        result = result.replace(/^[\s\S]*?(总结如下|摘要|梗概|提炼)[:：]\s*/, '');
-        result = result.replace(/^[#\s\-*]+/, '');
-        
-        return result;
+        return response.text?.trim() || "空间叙事。";
     } catch { return "无法生成梗概。"; }
 };
 
@@ -323,7 +303,7 @@ export const enhancePrompt = async (rawPrompt: string): Promise<string> => {
   try {
     const response = await withRetry<GenerateContentResponse>(() => {
         const ai = getFreshClient();
-        return ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: `Enhance cinematic prompt with depth, position-based composition, and character orientation: "${rawPrompt}"` });
+        return ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: `Enhance this cinematic prompt: "${rawPrompt}"` });
     });
     return response.text || rawPrompt;
   } catch { return rawPrompt; }

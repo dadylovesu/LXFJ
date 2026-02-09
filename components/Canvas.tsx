@@ -86,12 +86,12 @@ const Node = memo(({ image, selected, onSelect, onDelete, onMouseDown, allAssets
         return '16/9';
     }, [image.aspectRatio]);
 
-    // Drag and Drop Logic for Slices
+    // Enhanced Drag and Drop Logic
     const handleSliceDragStart = (e: React.DragEvent, idx: number) => {
         e.stopPropagation();
+        e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData("sourceNodeId", image.id);
         e.dataTransfer.setData("sourceSliceIdx", idx.toString());
-        // Set visual drag image opacity
         const target = e.currentTarget as HTMLElement;
         target.style.opacity = "0.4";
     };
@@ -102,9 +102,10 @@ const Node = memo(({ image, selected, onSelect, onDelete, onMouseDown, allAssets
     };
 
     const handleSliceDragOver = (e: React.DragEvent, idx: number) => {
-        e.preventDefault();
+        e.preventDefault(); // MANDATORY for dropping
         e.stopPropagation();
-        setDragOverIdx(idx);
+        e.dataTransfer.dropEffect = 'move';
+        if (dragOverIdx !== idx) setDragOverIdx(idx);
     };
 
     const handleSliceDrop = (e: React.DragEvent, targetIdx: number) => {
@@ -113,9 +114,10 @@ const Node = memo(({ image, selected, onSelect, onDelete, onMouseDown, allAssets
         setDragOverIdx(null);
         
         const sourceId = e.dataTransfer.getData("sourceNodeId");
-        const sourceIdx = parseInt(e.dataTransfer.getData("sourceSliceIdx"));
+        const sourceIdxStr = e.dataTransfer.getData("sourceSliceIdx");
         
-        if (onSwapSlices) {
+        if (sourceId && sourceIdxStr !== "" && onSwapSlices) {
+            const sourceIdx = parseInt(sourceIdxStr);
             onSwapSlices(sourceId, sourceIdx, image.id, targetIdx);
         }
     };
@@ -192,7 +194,6 @@ const Node = memo(({ image, selected, onSelect, onDelete, onMouseDown, allAssets
                                                 <img src={sliceUrl} className="w-full h-full object-cover group-hover/slice:scale-105 transition-transform duration-700" />
                                                 <div className="absolute inset-0 bg-white/0 group-hover/slice:bg-white/5 transition-colors pointer-events-none" />
                                                 
-                                                {/* Swap Hint UI */}
                                                 {dragOverIdx === idx && (
                                                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                                                         <MonitorPlay size={24} className="text-cine-accent animate-pulse" />
